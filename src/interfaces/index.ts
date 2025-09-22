@@ -1,0 +1,1 @@
+// src/interfaces/index.ts
