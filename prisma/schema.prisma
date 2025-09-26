@@ -13,3 +13,294 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ===================== Enums (de tu SQL) =====================
+enum estado_inscripcion {
+  INSCRITO
+  CLASIFICADO
+  FINALISTA
+  PREMIADO
+  DESCALIFICADO
+}
+
+enum estado_registro {
+  BORRADOR
+  FIRMADA
+}
+
+enum estado_validacion {
+  PENDIENTE
+  VALIDADO
+}
+
+enum tipo_lista {
+  POR_AREA_Y_NIVEL
+  CLASIFICADOS
+  PREMIADOS
+  EXCEL_CERTIFICADOS
+  WEB
+}
+
+enum fuente_lista {
+  CLASIFICATORIA
+  FINAL
+}
+
+enum accion_log {
+  CREAR
+  EDITAR
+  BORRAR
+  FIRMAR
+}
+
+// ===================== Tablas =====================
+model roles {
+  id_rol  BigInt  @id @default(autoincrement())
+  nombre  String  @unique
+  usuarios usuarios[]
+}
+
+model usuarios {
+  id_usuario    BigInt  @id @default(autoincrement())
+  correo        String  @unique
+  hash_password String
+  nombre        String
+  apellido      String
+  activo        Boolean @default(true)
+  id_rol        BigInt
+  rol           roles   @relation(fields: [id_rol], references: [id_rol])
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  evaluaciones   evaluaciones[]   @relation("evaluaciones_evaluador")
+  cierres_cerrado cierres_fase[]  @relation("cierre_por")
+  cierres_validado cierres_fase[] @relation("validado_por")
+  responsables_area responsables_area[]
+  evaluadores_area evaluadores_area[]
+  listas_generadas listas_generadas[]
+  log_cambios_nota log_cambios_nota[]
+  import_csv      import_csv[]
+
+  reordenamientos reordenamientos[]
+}
+
+model areas {
+  id_area    BigInt @id @default(autoincrement())
+  nombre_area String @unique
+  activo      Boolean @default(true)
+
+  inscripciones     inscripciones[]
+  medallero_config  medallero_config[]
+  cierres_fase      cierres_fase[]
+  evaluadores_area  evaluadores_area[]
+  responsables_area responsables_area[]
+  listas_generadas  listas_generadas[]
+}
+
+model niveles {
+  id_nivel    BigInt @id @default(autoincrement())
+  nombre_nivel String @unique
+  orden        Int    @default(0)
+
+  inscripciones    inscripciones[]
+  listas_generadas listas_generadas[]
+}
+
+model competidores {
+  id_competidor BigInt @id @default(autoincrement())
+  nombres       String
+  apellidos     String
+  ci            String
+  escuela       String?
+  departamento  String?
+  activo        Boolean @default(true)
+  created_at    DateTime @default(now())
+
+  // Si tu realidad de datos lo permite:
+  // @@unique([ci])
+
+  inscripciones inscripciones[]
+}
+
+model inscripciones {
+  id_inscripcion BigInt @id @default(autoincrement())
+  id_competidor  BigInt
+  id_area        BigInt
+  id_nivel       BigInt
+  estado_inscripcion estado_inscripcion @default(INSCRITO)
+  observaciones  String?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  competidor competidores @relation(fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
+  area       areas        @relation(fields: [id_area], references: [id_area])
+  nivel      niveles      @relation(fields: [id_nivel], references: [id_nivel])
+
+  evaluaciones evaluaciones[]
+
+  @@unique([id_competidor, id_area, id_nivel], name: "uq_insc_unica")
+  @@index([id_competidor])
+  @@index([id_area])
+  @@index([id_nivel])
+}
+
+model fases {
+  id_fase    BigInt @id @default(autoincrement())
+  nombre_fase String @unique
+  orden_fase  Int
+
+  evaluaciones evaluaciones[]
+  cierres_fase cierres_fase[]
+}
+
+model evaluaciones {
+  id_evaluacion BigInt @id @default(autoincrement())
+  id_inscripcion BigInt
+  id_fase        BigInt
+  id_evaluador   BigInt
+  nota           Decimal @db.Decimal(5,2)
+  fecha_registro DateTime @default(now())
+  estado_registro estado_registro @default(BORRADOR)
+  comentario     String?
+
+  inscripcion inscripciones @relation(fields: [id_inscripcion], references: [id_inscripcion], onDelete: Cascade)
+  fase        fases         @relation(fields: [id_fase], references: [id_fase])
+  evaluador   usuarios      @relation("evaluaciones_evaluador", fields: [id_evaluador], references: [id_usuario])
+
+  log_cambios log_cambios_nota[]
+
+  @@unique([id_inscripcion, id_fase, id_evaluador], name: "uq_eval_unica")
+  @@index([id_inscripcion])
+  @@index([id_fase])
+  @@index([id_evaluador])
+}
+
+model log_cambios_nota {
+  id_log        BigInt @id @default(autoincrement())
+  id_evaluacion BigInt
+  id_usuario    BigInt
+  accion        accion_log
+  valor_anterior Decimal? @db.Decimal(5,2)
+  valor_nuevo    Decimal? @db.Decimal(5,2)
+  ts             DateTime @default(now())
+
+  evaluacion evaluaciones @relation(fields: [id_evaluacion], references: [id_evaluacion], onDelete: Cascade)
+  usuario    usuarios     @relation(fields: [id_usuario], references: [id_usuario])
+
+  @@index([id_evaluacion])
+  @@index([id_usuario])
+}
+
+model responsables_area {
+  id_responsable_area BigInt @id @default(autoincrement())
+  id_usuario BigInt
+  id_area    BigInt
+  activo     Boolean @default(true)
+
+  usuario usuarios @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+  area    areas    @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+
+  @@unique([id_usuario, id_area], name: "uq_resp_area")
+  @@index([id_usuario])
+  @@index([id_area])
+}
+
+model evaluadores_area {
+  id_evaluador_area BigInt @id @default(autoincrement())
+  id_usuario BigInt
+  id_area    BigInt
+  activo     Boolean @default(true)
+
+  usuario usuarios @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+  area    areas    @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+
+  @@unique([id_usuario, id_area], name: "uq_eval_area")
+  @@index([id_usuario])
+  @@index([id_area])
+}
+
+model medallero_config {
+  id_medallero BigInt @id @default(autoincrement())
+  id_area BigInt
+  oros    Int @default(0)
+  platas  Int @default(0)
+  bronces Int @default(0)
+  menciones Int @default(0)
+  vigente_desde DateTime? @db.Date
+  vigente_hasta DateTime? @db.Date
+
+  area areas @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+
+  @@index([id_area])
+}
+
+model cierres_fase {
+  id_cierre BigInt @id @default(autoincrement())
+  id_fase   BigInt
+  id_area   BigInt
+  cerrado_por BigInt
+  fecha_cierre   DateTime @default(now())
+  estado_validacion estado_validacion @default(PENDIENTE)
+  validado_por   BigInt?
+  fecha_validacion DateTime?
+
+  fase  fases    @relation(fields: [id_fase], references: [id_fase])
+  area  areas    @relation(fields: [id_area], references: [id_area])
+  user_cierra usuarios @relation("cierre_por", fields: [cerrado_por], references: [id_usuario])
+  user_valida usuarios? @relation("validado_por", fields: [validado_por], references: [id_usuario])
+
+  @@unique([id_fase, id_area], name: "uq_cierre_unico")
+  @@index([id_area])
+  @@index([id_fase])
+}
+
+model listas_generadas {
+  id_lista  BigInt @id @default(autoincrement())
+  tipo_lista tipo_lista
+  id_area   BigInt
+  id_nivel  BigInt?
+  fuente    fuente_lista?
+  criterios_orden  Json?
+  contenido_snapshot Json?
+  generado_por BigInt
+  fecha_generacion DateTime @default(now())
+
+  area   areas   @relation(fields: [id_area], references: [id_area])
+  nivel  niveles? @relation(fields: [id_nivel], references: [id_nivel])
+  usuario usuarios @relation(fields: [generado_por], references: [id_usuario])
+
+  reordenamientos reordenamientos[]
+
+  @@index([id_area])
+  @@index([id_nivel])
+  @@index([tipo_lista])
+}
+
+model reordenamientos {
+  id_reorden BigInt @id @default(autoincrement())
+  id_lista   BigInt
+  id_usuario BigInt
+  nueva_posicion Json
+  fecha_reorden DateTime @default(now())
+
+  lista   listas_generadas @relation(fields: [id_lista], references: [id_lista], onDelete: Cascade)
+  usuario usuarios         @relation(fields: [id_usuario], references: [id_usuario])
+
+  @@index([id_lista])
+}
+
+model import_csv {
+  id_import BigInt @id @default(autoincrement())
+  archivo_nombre String
+  total_registros Int @default(0)
+  ok Int @default(0)
+  con_error Int @default(0)
+  mapeo_campos Json?
+  ejecutado_por BigInt
+  fecha_ejecucion DateTime @default(now())
+  detalle_errores Json?
+
+  usuario usuarios @relation(fields: [ejecutado_por], references: [id_usuario])
+
+  @@index([ejecutado_por])
+}
