@@ -18,7 +18,7 @@ CREATE TYPE "public"."accion_log" AS ENUM ('CREAR', 'EDITAR', 'BORRAR', 'FIRMAR'
 
 -- CreateTable
 CREATE TABLE "public"."roles" (
-    "id_rol" BIGSERIAL NOT NULL,
+    "id_rol" SERIAL NOT NULL,
     "nombre" TEXT NOT NULL,
 
     CONSTRAINT "roles_pkey" PRIMARY KEY ("id_rol")
@@ -26,13 +26,16 @@ CREATE TABLE "public"."roles" (
 
 -- CreateTable
 CREATE TABLE "public"."usuarios" (
-    "id_usuario" BIGSERIAL NOT NULL,
+    "id_usuario" SERIAL NOT NULL,
     "correo" TEXT NOT NULL,
     "hash_password" TEXT NOT NULL,
     "nombre" TEXT NOT NULL,
     "apellido" TEXT NOT NULL,
+    "telefono" TEXT,
+    "experiencia" INTEGER,
+    "especialidad" TEXT,
     "activo" BOOLEAN NOT NULL DEFAULT true,
-    "id_rol" BIGINT NOT NULL,
+    "id_rol" INTEGER NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
@@ -41,7 +44,7 @@ CREATE TABLE "public"."usuarios" (
 
 -- CreateTable
 CREATE TABLE "public"."areas" (
-    "id_area" BIGSERIAL NOT NULL,
+    "id_area" SERIAL NOT NULL,
     "nombre_area" TEXT NOT NULL,
     "activo" BOOLEAN NOT NULL DEFAULT true,
 
@@ -50,7 +53,7 @@ CREATE TABLE "public"."areas" (
 
 -- CreateTable
 CREATE TABLE "public"."niveles" (
-    "id_nivel" BIGSERIAL NOT NULL,
+    "id_nivel" SERIAL NOT NULL,
     "nombre_nivel" TEXT NOT NULL,
     "orden" INTEGER NOT NULL DEFAULT 0,
 
@@ -59,7 +62,7 @@ CREATE TABLE "public"."niveles" (
 
 -- CreateTable
 CREATE TABLE "public"."competidores" (
-    "id_competidor" BIGSERIAL NOT NULL,
+    "id_competidor" SERIAL NOT NULL,
     "nombres" TEXT NOT NULL,
     "apellidos" TEXT NOT NULL,
     "ci" TEXT NOT NULL,
@@ -73,10 +76,10 @@ CREATE TABLE "public"."competidores" (
 
 -- CreateTable
 CREATE TABLE "public"."inscripciones" (
-    "id_inscripcion" BIGSERIAL NOT NULL,
-    "id_competidor" BIGINT NOT NULL,
-    "id_area" BIGINT NOT NULL,
-    "id_nivel" BIGINT NOT NULL,
+    "id_inscripcion" SERIAL NOT NULL,
+    "id_competidor" INTEGER NOT NULL,
+    "id_area" INTEGER NOT NULL,
+    "id_nivel" INTEGER NOT NULL,
     "estado_inscripcion" "public"."estado_inscripcion" NOT NULL DEFAULT 'INSCRITO',
     "observaciones" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -87,7 +90,7 @@ CREATE TABLE "public"."inscripciones" (
 
 -- CreateTable
 CREATE TABLE "public"."fases" (
-    "id_fase" BIGSERIAL NOT NULL,
+    "id_fase" SERIAL NOT NULL,
     "nombre_fase" TEXT NOT NULL,
     "orden_fase" INTEGER NOT NULL,
 
@@ -96,10 +99,10 @@ CREATE TABLE "public"."fases" (
 
 -- CreateTable
 CREATE TABLE "public"."evaluaciones" (
-    "id_evaluacion" BIGSERIAL NOT NULL,
-    "id_inscripcion" BIGINT NOT NULL,
-    "id_fase" BIGINT NOT NULL,
-    "id_evaluador" BIGINT NOT NULL,
+    "id_evaluacion" SERIAL NOT NULL,
+    "id_inscripcion" INTEGER NOT NULL,
+    "id_fase" INTEGER NOT NULL,
+    "id_evaluador" INTEGER NOT NULL,
     "nota" DECIMAL(5,2) NOT NULL,
     "fecha_registro" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "estado_registro" "public"."estado_registro" NOT NULL DEFAULT 'BORRADOR',
@@ -110,9 +113,9 @@ CREATE TABLE "public"."evaluaciones" (
 
 -- CreateTable
 CREATE TABLE "public"."log_cambios_nota" (
-    "id_log" BIGSERIAL NOT NULL,
-    "id_evaluacion" BIGINT NOT NULL,
-    "id_usuario" BIGINT NOT NULL,
+    "id_log" SERIAL NOT NULL,
+    "id_evaluacion" INTEGER NOT NULL,
+    "id_usuario" INTEGER NOT NULL,
     "accion" "public"."accion_log" NOT NULL,
     "valor_anterior" DECIMAL(5,2),
     "valor_nuevo" DECIMAL(5,2),
@@ -123,19 +126,18 @@ CREATE TABLE "public"."log_cambios_nota" (
 
 -- CreateTable
 CREATE TABLE "public"."responsables_area" (
-    "id_responsable_area" BIGSERIAL NOT NULL,
-    "id_usuario" BIGINT NOT NULL,
-    "id_area" BIGINT NOT NULL,
-    "activo" BOOLEAN NOT NULL DEFAULT true,
+    "id_responsable_area" SERIAL NOT NULL,
+    "id_usuario" INTEGER NOT NULL,
+    "id_area" INTEGER NOT NULL,
 
     CONSTRAINT "responsables_area_pkey" PRIMARY KEY ("id_responsable_area")
 );
 
 -- CreateTable
 CREATE TABLE "public"."evaluadores_area" (
-    "id_evaluador_area" BIGSERIAL NOT NULL,
-    "id_usuario" BIGINT NOT NULL,
-    "id_area" BIGINT NOT NULL,
+    "id_evaluador_area" SERIAL NOT NULL,
+    "id_usuario" INTEGER NOT NULL,
+    "id_area" INTEGER NOT NULL,
     "activo" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "evaluadores_area_pkey" PRIMARY KEY ("id_evaluador_area")
@@ -143,8 +145,8 @@ CREATE TABLE "public"."evaluadores_area" (
 
 -- CreateTable
 CREATE TABLE "public"."medallero_config" (
-    "id_medallero" BIGSERIAL NOT NULL,
-    "id_area" BIGINT NOT NULL,
+    "id_medallero" SERIAL NOT NULL,
+    "id_area" INTEGER NOT NULL,
     "oros" INTEGER NOT NULL DEFAULT 0,
     "platas" INTEGER NOT NULL DEFAULT 0,
     "bronces" INTEGER NOT NULL DEFAULT 0,
@@ -157,13 +159,13 @@ CREATE TABLE "public"."medallero_config" (
 
 -- CreateTable
 CREATE TABLE "public"."cierres_fase" (
-    "id_cierre" BIGSERIAL NOT NULL,
-    "id_fase" BIGINT NOT NULL,
-    "id_area" BIGINT NOT NULL,
-    "cerrado_por" BIGINT NOT NULL,
+    "id_cierre" SERIAL NOT NULL,
+    "id_fase" INTEGER NOT NULL,
+    "id_area" INTEGER NOT NULL,
+    "cerrado_por" INTEGER NOT NULL,
     "fecha_cierre" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "estado_validacion" "public"."estado_validacion" NOT NULL DEFAULT 'PENDIENTE',
-    "validado_por" BIGINT,
+    "validado_por" INTEGER,
     "fecha_validacion" TIMESTAMP(3),
 
     CONSTRAINT "cierres_fase_pkey" PRIMARY KEY ("id_cierre")
@@ -171,14 +173,14 @@ CREATE TABLE "public"."cierres_fase" (
 
 -- CreateTable
 CREATE TABLE "public"."listas_generadas" (
-    "id_lista" BIGSERIAL NOT NULL,
+    "id_lista" SERIAL NOT NULL,
     "tipo_lista" "public"."tipo_lista" NOT NULL,
-    "id_area" BIGINT NOT NULL,
-    "id_nivel" BIGINT,
+    "id_area" INTEGER NOT NULL,
+    "id_nivel" INTEGER,
     "fuente" "public"."fuente_lista",
     "criterios_orden" JSONB,
     "contenido_snapshot" JSONB,
-    "generado_por" BIGINT NOT NULL,
+    "generado_por" INTEGER NOT NULL,
     "fecha_generacion" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "listas_generadas_pkey" PRIMARY KEY ("id_lista")
@@ -186,9 +188,9 @@ CREATE TABLE "public"."listas_generadas" (
 
 -- CreateTable
 CREATE TABLE "public"."reordenamientos" (
-    "id_reorden" BIGSERIAL NOT NULL,
-    "id_lista" BIGINT NOT NULL,
-    "id_usuario" BIGINT NOT NULL,
+    "id_reorden" SERIAL NOT NULL,
+    "id_lista" INTEGER NOT NULL,
+    "id_usuario" INTEGER NOT NULL,
     "nueva_posicion" JSONB NOT NULL,
     "fecha_reorden" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -197,13 +199,13 @@ CREATE TABLE "public"."reordenamientos" (
 
 -- CreateTable
 CREATE TABLE "public"."import_csv" (
-    "id_import" BIGSERIAL NOT NULL,
+    "id_import" SERIAL NOT NULL,
     "archivo_nombre" TEXT NOT NULL,
     "total_registros" INTEGER NOT NULL DEFAULT 0,
     "ok" INTEGER NOT NULL DEFAULT 0,
     "con_error" INTEGER NOT NULL DEFAULT 0,
     "mapeo_campos" JSONB,
-    "ejecutado_por" BIGINT NOT NULL,
+    "ejecutado_por" INTEGER NOT NULL,
     "fecha_ejecucion" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "detalle_errores" JSONB,
 
