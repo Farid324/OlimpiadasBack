@@ -8,6 +8,18 @@ export class AreasController {
 
   @Get()
   async getAreas(): Promise<AreaDto[]> {
-    return this.areasService.getAreasConEstadisticas();
+    const areas = await this.areasService.getAreasConEstadisticas();
+    return areas.map(area => ({
+      id_area: Number(area.id_area),
+      nombre_area: area.nombre_area,
+      estado: String(area.estado),
+      niveles: area.nivel
+        ? [{
+            id_nivel: Number(area.nivel.id_nivel),
+            nombre_nivel: area.nivel.nombre_nivel,
+            inscritos: area.inscritos
+          }]
+        : []
+    }));
   }
 }
