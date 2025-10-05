@@ -7,6 +7,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './auth/strategies/jwt.strategy';
 import { UsersController } from './users/users.controller';
 import { UsersService } from './users/users.service';
+import { EvaluadoresModule } from './evaluadores/evaluadores.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { UsersService } from './users/users.service';
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
     }),
+    EvaluadoresModule,
   ],
   controllers: [AuthController, UsersController],
   providers: [AuthService, JwtStrategy, UsersService],
