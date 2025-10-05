@@ -29,4 +29,7 @@ export class CreateResponsableDto {
 
   @IsString()
   especialidad: string;
+  
+    @IsNumber()
+  id_area: number;
 }
