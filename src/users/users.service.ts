@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  me(id: bigint) {
+  me(id: number) {
     return this.prisma.usuarios.findUnique({
       where: { id_usuario: id },
       select: {
