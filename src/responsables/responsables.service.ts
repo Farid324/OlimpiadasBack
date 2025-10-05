@@ -130,4 +130,14 @@ export class ResponsablesService {
       data: { activo: !responsable.activo },
     });
   }
+  //Endpoint de validación rápida para frontend
+  async checkTelefono(telefono: string) {
+    const exists = await this.prisma.usuarios.findFirst({ where: { telefono } });
+    return { exists: !!exists };
+  }
+
+  async checkCi(ci: string) {
+    const exists = await this.prisma.usuarios.findFirst({ where: { ci } });
+    return { exists: !!exists };
+  }
 }
