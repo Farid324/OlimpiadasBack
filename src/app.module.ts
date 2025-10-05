@@ -1,12 +1,20 @@
 // src/app.module.ts
 import { Module } from '@nestjs/common';
 import { PrismaModule } from './prisma/prisma.module';
+
+// Auth
 import { AuthController } from './auth/controllers/auth.controller';
 import { AuthService } from './auth/services/auth.service';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './auth/strategies/jwt.strategy';
+
+// Users
 import { UsersController } from './users/users.controller';
 import { UsersService } from './users/users.service';
+
+// Nuevos módulos
+import { ResponsablesModule } from './responsables/responsables.module';
+import { AreasModule } from './areas/areas.module';
 
 @Module({
   imports: [
@@ -15,8 +23,17 @@ import { UsersService } from './users/users.service';
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
     }),
+    ResponsablesModule, // 🔹 módulo de responsables
+    AreasModule,        // 🔹 módulo de áreas
   ],
-  controllers: [AuthController, UsersController],
-  providers: [AuthService, JwtStrategy, UsersService],
+  controllers: [
+    AuthController,
+    UsersController,
+  ],
+  providers: [
+    AuthService,
+    JwtStrategy,
+    UsersService,
+  ],
 })
 export class AppModule {}
