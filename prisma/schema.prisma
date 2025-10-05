@@ -299,8 +299,4 @@ model import_csv {
   ejecutado_por  Int
   fecha_ejecucion DateTime @default(now())
   detalle_errores Json?
-
-  usuario usuarios @relation(fields: [ejecutado_por], references: [id_usuario])
-
-  @@index([ejecutado_por])
 }
