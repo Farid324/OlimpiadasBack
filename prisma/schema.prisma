@@ -68,6 +68,8 @@ model usuarios {
   telefono      String?
   experiencia   Int?
   especialidad  String?
+  institucion String?
+  ci            String? 
   activo        Boolean  @default(true)
   id_rol        Int
   rol           roles    @relation(fields: [id_rol], references: [id_rol])
@@ -193,6 +195,7 @@ model responsables_area {
   id_responsable_area Int @id @default(autoincrement()) @db.Integer
   id_usuario Int
   id_area    Int
+  activo     Boolean @default(true)
 
   usuario usuarios @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
   area    areas    @relation(fields: [id_area], references: [id_area], onDelete: Cascade)

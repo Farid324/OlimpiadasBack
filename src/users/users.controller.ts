@@ -12,8 +12,8 @@ export class UsersController {
 
   @Get('me')
   @Roles(ADMIN)
-  me(@Req() req: { user: { sub: string | number | bigint } }) {
-    const id = BigInt(req.user.sub);
+  me(@Req() req: { user: { sub: string | number } }) {
+    const id = Number(req.user.sub);
     return this.users.me(id);
   }
 }
