@@ -1,3 +1,4 @@
+// src/areas/areas.module.ts
 import { Module } from '@nestjs/common';
 import { AreasService } from './services/areas.service';
 import { AreasController } from './controllers/areas.controller';

@@ -17,10 +17,13 @@ export class AreasService {
     });
     console.log('💡 Consulta realizada, areas:', areas.length);
 
-    const mapped = areas.map(area => {
-      const nivelesMap: Record<string, { id_nivel: number; nombre_nivel: string; inscritos: number }> = {};
+    const mapped = areas.map((area) => {
+      const nivelesMap: Record<
+        string,
+        { id_nivel: number; nombre_nivel: string; inscritos: number }
+      > = {};
 
-      area.inscripciones.forEach(insc => {
+      area.inscripciones.forEach((insc) => {
         if (!insc.nivel) return;
         const nivelIdStr = insc.nivel.id_nivel.toString();
         if (!nivelesMap[nivelIdStr]) {
