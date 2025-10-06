@@ -10,5 +10,10 @@ import { UsersService } from './users.service';
 export class UsersController {
   constructor(private users: UsersService) {}
 
-  
+ @Get('me')
+  @Roles(ADMIN)
+  me(@Req() req: { user: { sub: string | number } }) {
+    const id = Number(req.user.sub);
+    return this.users.me(id);
+  } 
 }
