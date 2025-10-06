@@ -113,6 +113,7 @@ model competidores {
   ci            String
   escuela       String?
   departamento  String?
+  tutor_contacto String? //Nueva implementación para que concuerde con los criterios de aceptacion de la US.
   activo        Boolean @default(true)
   created_at    DateTime @default(now())
 
