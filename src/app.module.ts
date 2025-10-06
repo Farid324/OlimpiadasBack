@@ -7,10 +7,12 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './auth/strategies/jwt.strategy';
 import { UsersController } from './users/users.controller';
 import { UsersService } from './users/users.service';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
     PrismaModule,
+    HealthModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
