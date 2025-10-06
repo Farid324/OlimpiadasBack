@@ -8,6 +8,7 @@ import { JwtStrategy } from './auth/strategies/jwt.strategy';
 import { UsersController } from './users/users.controller';
 import { UsersService } from './users/users.service';
 import { EvaluadoresModule } from './evaluadores/evaluadores.module';
+import { AreasModule } from './areas/areas.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { EvaluadoresModule } from './evaluadores/evaluadores.module';
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
     }),
     EvaluadoresModule,
+    AreasModule,
   ],
   controllers: [AuthController, UsersController],
   providers: [AuthService, JwtStrategy, UsersService],
