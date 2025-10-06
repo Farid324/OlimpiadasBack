@@ -1,3 +1,5 @@
+// src/olimpistas/dto/registro-olimpista.dto.ts
+
 import { IsIn, IsNotEmpty, IsString, Matches } from 'class-validator';
 
 const TEXT_RX = /^[\p{L}\p{N}\s.\-']+$/u;
