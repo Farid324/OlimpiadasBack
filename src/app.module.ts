@@ -23,8 +23,7 @@ import { AreasModule } from './areas/areas.module';
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
     }),
-    ResponsablesModule, // 🔹 módulo de responsables
-    AreasModule,        // 🔹 módulo de áreas
+
   ],
   controllers: [
     AuthController,
