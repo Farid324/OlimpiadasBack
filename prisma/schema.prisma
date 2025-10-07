@@ -65,6 +65,11 @@ model roles {
   usuarios usuarios[]
 }
 
+enum ciclo_nivel {
+  PRIMARIA
+  SECUNDARIA
+}
+
 model usuarios {
   id_usuario    Int      @id @default(autoincrement()) @db.Integer
   correo        String   @unique
@@ -106,6 +111,8 @@ model areas {
   responsables_area responsables_area[]
   listas_generadas  listas_generadas[]
 
+  grupos grupos[] @relation("area_grupos")
+
   @@index([nombre_area])
 }
 
@@ -116,6 +123,7 @@ model niveles {
 
   inscripciones    inscripciones[]
   listas_generadas listas_generadas[]
+  grupos           grupos[]           @relation("nivel_grupos")
 
   @@index([nombre_nivel])
 }
@@ -128,10 +136,50 @@ model competidores {
   escuela       String?
   departamento  String?
   tutorContacto String?  @map("tutor_contacto")
+
+  nivel         ciclo_nivel?
+  grado         Int?
+  
   activo        Boolean  @default(true)
   created_at    DateTime @default(now())
+  
 
   inscripciones inscripciones[]
+
+  grupo_miembros grupo_miembros[] @relation("competidor_miembros")
+}
+
+model grupos {
+  id_grupo      Int      @id @default(autoincrement()) @db.Integer
+  nombre_equipo String
+  escuela       String
+  departamento  String
+  id_area       Int
+  id_nivel      Int
+  created_at    DateTime @default(now())
+  created_by    Int?
+
+  area     areas            @relation("area_grupos", fields: [id_area], references: [id_area])
+  nivel    niveles          @relation("nivel_grupos", fields: [id_nivel], references: [id_nivel])
+  miembros grupo_miembros[]
+
+  @@unique([nombre_equipo, id_area, id_nivel, escuela], name: "uq_grupo_unico")
+  @@index([id_area])
+  @@index([id_nivel])
+}
+
+model grupo_miembros {
+  id_grupo_miembro Int     @id @default(autoincrement()) @db.Integer
+  id_grupo         Int
+  id_competidor    Int
+  rol              String? // opcional
+
+  grupo      grupos       @relation(fields: [id_grupo], references: [id_grupo], onDelete: Cascade)
+  competidor competidores @relation("competidor_miembros", fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
+
+  @@unique([id_grupo, id_competidor], name: "uq_miembro_por_grupo")
+  @@index([id_grupo])
+  @@index([id_competidor])
 }
 
 model inscripciones {
