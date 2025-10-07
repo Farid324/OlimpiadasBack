@@ -21,7 +21,7 @@ import { BigIntSerializerInterceptor } from '../common/interceptors/bigint-seria
 
 @Controller('olimpistas')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@UseInterceptors(BigIntSerializerInterceptor) 
+@UseInterceptors(BigIntSerializerInterceptor)
 export class OlimpistasController {
   constructor(private readonly service: OlimpistasService) {}
 

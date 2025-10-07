@@ -95,7 +95,9 @@ model areas {
   evaluadores_area  evaluadores_area[]
   responsables_area responsables_area[]
   listas_generadas  listas_generadas[]
-}
+
+  @@index([nombre_area])
+} 
 
 model niveles {
   id_nivel     BigInt @id @default(autoincrement())
@@ -104,6 +106,8 @@ model niveles {
 
   inscripciones    inscripciones[]
   listas_generadas listas_generadas[]
+
+  @@index([nombre_nivel])
 }
 
 model competidores {

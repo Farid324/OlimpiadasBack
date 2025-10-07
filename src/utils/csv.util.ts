@@ -40,6 +40,8 @@ export async function parseCsvToDtos(
             r.departamento =
               map[r.departamento.toUpperCase()] ?? r.departamento;
           }
+          if (typeof r.area === 'string') r.area = r.area.trim();
+          if (typeof r.nivel === 'string') r.nivel = r.nivel.trim();
         }
         resolve(out as RegistroOlimpistaDto[]);
       });

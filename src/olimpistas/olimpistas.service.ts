@@ -1,10 +1,6 @@
 // src/olimpistas/olimpistas.service.ts
 
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegistroOlimpistaDto } from './dto/registro-olimpista.dto';
 import { splitNombreCompleto } from '../utils/name.util';
@@ -13,28 +9,36 @@ import { splitNombreCompleto } from '../utils/name.util';
 export class OlimpistasService {
   constructor(private prisma: PrismaService) {}
 
-  private toBigInt(id: string): bigint {
-    const n = BigInt(id);
-    return n;
+  private async getAreaIdByName(nombre: string): Promise<bigint> {
+    const area = await this.prisma.areas.findFirst({
+      where: {
+        nombre_area: { equals: nombre, mode: 'insensitive' },
+        activo: true,
+      },
+      select: { id_area: true },
+    });
+    if (!area)
+      throw new BadRequestException(
+        `Área no encontrada o inactiva: "${nombre}"`,
+      );
+    return area.id_area;
+  }
+
+  private async getNivelIdByName(nombre: string): Promise<bigint> {
+    const nivel = await this.prisma.niveles.findFirst({
+      where: { nombre_nivel: { equals: nombre, mode: 'insensitive' } },
+      select: { id_nivel: true },
+    });
+    if (!nivel)
+      throw new BadRequestException(`Nivel no encontrado: "${nombre}"`);
+    return nivel.id_nivel;
   }
 
   async registerOne(dto: RegistroOlimpistaDto, userId?: bigint) {
-    const idArea = this.toBigInt(dto.areaId);
-    const idNivel = this.toBigInt(dto.nivelId);
-
-    const [area, nivel] = await this.prisma.$transaction([
-      this.prisma.areas.findUnique({
-        where: { id_area: idArea },
-        select: { id_area: true },
-      }),
-      this.prisma.niveles.findUnique({
-        where: { id_nivel: idNivel },
-        select: { id_nivel: true },
-      }),
+    const [idArea, idNivel] = await Promise.all([
+      this.getAreaIdByName(dto.area),
+      this.getNivelIdByName(dto.nivel),
     ]);
-    if (!area) throw new BadRequestException(`areaId inválido: ${dto.areaId}`);
-    if (!nivel)
-      throw new BadRequestException(`nivelId inválido: ${dto.nivelId}`);
 
     const { nombres, apellidos } = splitNombreCompleto(dto.nombreCompleto);
 
@@ -60,7 +64,7 @@ export class OlimpistasService {
             apellidos,
             escuela: dto.unidadEducativa,
             departamento: dto.departamento,
-            tutorContacto: dto.tutorContacto, 
+            tutorContacto: dto.tutorContacto,
             activo: true,
           },
         });
@@ -73,6 +77,7 @@ export class OlimpistasService {
           id_nivel: idNivel,
         },
       },
+      select: { id_inscripcion: true },
     });
 
     if (!insc) {
@@ -87,21 +92,24 @@ export class OlimpistasService {
       });
       return {
         created: true,
-        competidorId: competidor.id_competidor,
         skippedInsc: false,
+        competidorId: competidor.id_competidor,
+        area: dto.area,
+        nivel: dto.nivel,
       };
     }
 
     return {
       created: false,
-      competidorId: competidor.id_competidor,
       skippedInsc: true,
+      competidorId: competidor.id_competidor,
+      area: dto.area,
+      nivel: dto.nivel,
     };
   }
 
   async registerMany(list: RegistroOlimpistaDto[], userId?: bigint) {
     if (!list?.length) throw new BadRequestException('Lista vacía.');
-
     const summary = {
       total: list.length,
       ok: 0,
@@ -109,21 +117,17 @@ export class OlimpistasService {
       skippedInsc: 0,
       errors: [] as string[],
     };
-
     for (let i = 0; i < list.length; i++) {
-      const row = list[i];
       try {
-        const res = await this.registerOne(row, userId);
+        const res = await this.registerOne(list[i], userId);
         summary.ok++;
-        if (res.skippedInsc) summary.skippedInsc++;
-        else summary.createdInsc++;
+        res.skippedInsc ? summary.skippedInsc++ : summary.createdInsc++;
       } catch (e: any) {
         summary.errors.push(
-          `Fila ${i + 1} (ci=${row?.ci}): ${e?.message ?? 'Error'}`,
+          `Fila ${i + 1} (ci=${list[i]?.ci}): ${e?.message ?? 'Error'}`,
         );
       }
     }
-
     return summary;
   }
 }

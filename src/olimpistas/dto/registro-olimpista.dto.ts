@@ -59,11 +59,11 @@ export class RegistroOlimpistaDto {
 
   @IsString()
   @IsNotEmpty()
-  areaId!: string;
+  area!: string;
 
   @IsString()
   @IsNotEmpty()
-  nivelId!: string;
+  nivel!: string;
 }
 
 export class RegistroOlimpistaBulkDto {
