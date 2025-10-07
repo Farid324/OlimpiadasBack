@@ -1,0 +1,90 @@
+// src/olimpistas/dto/registro-olimpista.dto.ts
+
+import {
+  IsIn,
+  IsNotEmpty,
+  IsString,
+  Matches,
+  IsInt,
+  Max,
+  Min,
+  IsOptional,
+} from 'class-validator';
+
+const TEXT_RX = /^[\p{L}\p{N}\s.\-']+$/u;
+const NUM_RX = /^\d+$/;
+
+export class RegistroOlimpistaDto {
+  @IsString()
+  @IsNotEmpty()
+  @Matches(TEXT_RX)
+  nombreCompleto!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Matches(NUM_RX)
+  ci!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Matches(NUM_RX)
+  tutorContacto!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @Matches(TEXT_RX)
+  unidadEducativa!: string;
+
+  @IsString()
+  @IsIn([
+    'La Paz',
+    'Pando',
+    'Beni',
+    'Santa Cruz',
+    'Chuquisaca',
+    'Oruro',
+    'Potosí',
+    'Cochabamba',
+    'Tarija',
+  ])
+  departamento!: string;
+
+  @IsOptional()
+  @IsIn([
+    '1ºP',
+    '2ºP',
+    '3ºP',
+    '4ºP',
+    '5ºP',
+    '6ºP',
+    '1ºS',
+    '2ºS',
+    '3ºS',
+    '4ºS',
+    '5ºS',
+    '6ºS',
+  ])
+  gradoEscolar?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  area!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  nivel!: string;
+
+  @IsOptional()
+  @IsIn(['Primaria', 'Secundaria'])
+  nivelCompetidor?: 'Primaria' | 'Secundaria';
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(6)
+  grado?: number;
+}
+
+export class RegistroOlimpistaBulkDto {
+  data!: RegistroOlimpistaDto[];
+}

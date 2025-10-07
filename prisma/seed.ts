@@ -147,35 +147,54 @@ async function main() {
     },
   });
 
-  await prisma.areas.upsert({
-    where: { nombre_area: 'Matemática' },
-    update: {},
-    create: { nombre_area: 'Matemática' },
-  });
-  await prisma.areas.upsert({
-    where: { nombre_area: 'Física' },
-    update: {},
-    create: { nombre_area: 'Física' },
-  });
+  console.log('Seed completado (roles, fases, admin, evaluador, responsable).');
 
-  // Relaciona responsable con el área Matemática
-  await prisma.responsables_area.createMany({
-    data: [
-      {
-        id_usuario: responsable.id_usuario,
-        id_area: areaMate.id_area,
-        activo: true,
-      },
-    ],
-    skipDuplicates: true,
-  });
+  // DEMO ÁREAS
+  const areasNombres = [
+    'Matemática',
+    'Física',
+    'Química',
+    'Biología',
+    'Lenguaje',
+  ];
+  for (const nombre of areasNombres) {
+    await prisma.areas.upsert({
+      where: { nombre_area: nombre },
+      update: { activo: true },
+      create: { nombre_area: nombre, activo: true },
+    });
+  }
 
-  console.log(
-    '✅ Seed OK: roles, fases, áreas, usuarios demo y relaciones creadas.',
-  );
+  // DEMO NIVELES
+  const nivelesNombres = [
+    '1ºP',
+    '2ºP',
+    '3ºP',
+    '4ºP',
+    '5ºP',
+    '6ºP',
+    '1ºS',
+    '2ºS',
+    '3ºS',
+    '4ºS',
+    '5ºS',
+    '6ºS',
+  ];
+
+  // Orden sugerido: 1..12
+  for (let i = 0; i < nivelesNombres.length; i++) {
+    const nombre_nivel = nivelesNombres[i];
+    await prisma.niveles.upsert({
+      where: { nombre_nivel },
+      update: { orden: i + 1 },
+      create: { nombre_nivel, orden: i + 1 },
+    });
+  }
+
+  console.log('Seed de áreas y niveles completado.');
 }
 
-(async () => {
+void (async () => {
   try {
     await main();
   } catch (e) {
