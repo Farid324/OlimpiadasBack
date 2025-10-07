@@ -9,6 +9,5 @@ import { PrismaModule } from 'src/prisma/prisma.module';
   imports: [PrismaModule],
   controllers: [AreasController],
   providers: [AreasService, PrismaService],
-
 })
 export class AreasModule {}
