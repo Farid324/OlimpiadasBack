@@ -35,6 +35,47 @@ async function main() {
     create: { nombre_fase: 'FINAL', orden_fase: 2 },
   });
 
+  //Areas
+  const areasNombres = [
+    'Matemática',
+    'Física',
+    'Química',
+    'Biología',
+    'Lenguaje',
+  ];
+  for (const nombre of areasNombres) {
+    await prisma.areas.upsert({
+      where: { nombre_area: nombre },
+      update: { activo: true },
+      create: { nombre_area: nombre, activo: true },
+    });
+  }
+
+  //Niveles
+  const nivelesNombres = [
+    '1ºP',
+    '2ºP',
+    '3ºP',
+    '4ºP',
+    '5ºP',
+    '6ºP',
+    '1ºS',
+    '2ºS',
+    '3ºS',
+    '4ºS',
+    '5ºS',
+    '6ºS',
+  ];
+  for (let i = 0; i < nivelesNombres.length; i++) {
+    const nombre_nivel = nivelesNombres[i];
+    await prisma.niveles.upsert({
+      where: { nombre_nivel },
+      update: { orden: i + 1 },
+      create: { nombre_nivel, orden: i + 1 },
+    });
+  }
+  console.log('Seed de áreas y niveles completado.');
+
   // Admin
   const email = process.env.ADMIN_EMAIL ?? 'admin@olimpiadas.edu';
   const pass = process.env.ADMIN_PASSWORD ?? 'olimpiadas2024';
