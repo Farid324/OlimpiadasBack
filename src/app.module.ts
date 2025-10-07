@@ -19,11 +19,15 @@ import { ResponsablesModule } from './responsables/responsables.module';
 //Olimpistas
 import { OlimpistasModule } from './olimpistas/olimpistas.module';
 
+//Grupos Olimpistas
+import { GruposModule } from './grupos/grupos.module';
+
 @Module({
   imports: [
     PrismaModule,
     AreasModule,
     OlimpistasModule,
+    GruposModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
