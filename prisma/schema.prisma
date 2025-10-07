@@ -60,13 +60,13 @@ enum estado_area {
 
 // ===================== Tablas =====================
 model roles {
-  id_rol   Int   @id @default(autoincrement()) @db.Integer
-  nombre   String @unique
+  id_rol   Int        @id @default(autoincrement()) @db.Integer
+  nombre   String     @unique
   usuarios usuarios[]
 }
 
 model usuarios {
-  id_usuario    Int   @id @default(autoincrement()) @db.Integer
+  id_usuario    Int      @id @default(autoincrement()) @db.Integer
   correo        String   @unique
   hash_password String
   nombre        String
@@ -74,29 +74,29 @@ model usuarios {
   telefono      String?
   experiencia   Int?
   especialidad  String?
-  institucion String?
-  ci            String? 
+  institucion   String?
+  ci            String?
   activo        Boolean  @default(true)
   id_rol        Int
   rol           roles    @relation(fields: [id_rol], references: [id_rol])
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
-  evaluaciones     evaluaciones[]   @relation("evaluaciones_evaluador")
-  cierres_cerrado  cierres_fase[]   @relation("cierre_por")
-  cierres_validado cierres_fase[]   @relation("validado_por")
+  evaluaciones      evaluaciones[]      @relation("evaluaciones_evaluador")
+  cierres_cerrado   cierres_fase[]      @relation("cierre_por")
+  cierres_validado  cierres_fase[]      @relation("validado_por")
   responsables_area responsables_area[]
-  evaluadores_area evaluadores_area[]
-  listas_generadas listas_generadas[]
-  log_cambios_nota log_cambios_nota[]
-  import_csv       import_csv[]
-  reordenamientos  reordenamientos[]
+  evaluadores_area  evaluadores_area[]
+  listas_generadas  listas_generadas[]
+  log_cambios_nota  log_cambios_nota[]
+  import_csv        import_csv[]
+  reordenamientos   reordenamientos[]
 }
 
 model areas {
-  id_area     Int    @id @default(autoincrement()) @db.Integer
-  nombre_area String @unique
-  activo      Boolean @default(true)
+  id_area     Int         @id @default(autoincrement()) @db.Integer
+  nombre_area String      @unique
+  activo      Boolean     @default(true)
   estado      estado_area @default(EVALUANDO)
 
   inscripciones     inscripciones[]
@@ -105,6 +105,8 @@ model areas {
   evaluadores_area  evaluadores_area[]
   responsables_area responsables_area[]
   listas_generadas  listas_generadas[]
+
+  @@index([nombre_area])
 }
 
 model niveles {
@@ -114,30 +116,33 @@ model niveles {
 
   inscripciones    inscripciones[]
   listas_generadas listas_generadas[]
+
+  @@index([nombre_nivel])
 }
 
 model competidores {
-  id_competidor Int    @id @default(autoincrement()) @db.Integer
+  id_competidor Int      @id @default(autoincrement()) @db.Integer
   nombres       String
   apellidos     String
   ci            String
   escuela       String?
   departamento  String?
-  activo        Boolean @default(true)
+  tutorContacto String?  @map("tutor_contacto")
+  activo        Boolean  @default(true)
   created_at    DateTime @default(now())
 
   inscripciones inscripciones[]
 }
 
 model inscripciones {
-  id_inscripcion    Int @id @default(autoincrement()) @db.Integer
-  id_competidor     Int
-  id_area           Int
-  id_nivel          Int
+  id_inscripcion     Int                @id @default(autoincrement()) @db.Integer
+  id_competidor      Int
+  id_area            Int
+  id_nivel           Int
   estado_inscripcion estado_inscripcion @default(INSCRITO)
-  observaciones     String?
-  created_at        DateTime @default(now())
-  updated_at        DateTime @updatedAt
+  observaciones      String?
+  created_at         DateTime           @default(now())
+  updated_at         DateTime           @updatedAt
 
   competidor competidores @relation(fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
   area       areas        @relation(fields: [id_area], references: [id_area])
@@ -152,7 +157,7 @@ model inscripciones {
 }
 
 model fases {
-  id_fase    Int    @id @default(autoincrement()) @db.Integer
+  id_fase     Int    @id @default(autoincrement()) @db.Integer
   nombre_fase String @unique
   orden_fase  Int
 
@@ -161,14 +166,14 @@ model fases {
 }
 
 model evaluaciones {
-  id_evaluacion Int @id @default(autoincrement()) @db.Integer
-  id_inscripcion Int
-  id_fase        Int
-  id_evaluador   Int
-  nota           Decimal @db.Decimal(5,2)
-  fecha_registro DateTime @default(now())
+  id_evaluacion   Int             @id @default(autoincrement()) @db.Integer
+  id_inscripcion  Int
+  id_fase         Int
+  id_evaluador    Int
+  nota            Decimal         @db.Decimal(5, 2)
+  fecha_registro  DateTime        @default(now())
   estado_registro estado_registro @default(BORRADOR)
-  comentario     String?
+  comentario      String?
 
   inscripcion inscripciones @relation(fields: [id_inscripcion], references: [id_inscripcion], onDelete: Cascade)
   fase        fases         @relation(fields: [id_fase], references: [id_fase])
@@ -183,13 +188,13 @@ model evaluaciones {
 }
 
 model log_cambios_nota {
-  id_log         Int @id @default(autoincrement()) @db.Integer
+  id_log         Int        @id @default(autoincrement()) @db.Integer
   id_evaluacion  Int
   id_usuario     Int
   accion         accion_log
-  valor_anterior Decimal? @db.Decimal(5,2)
-  valor_nuevo    Decimal? @db.Decimal(5,2)
-  ts             DateTime @default(now())
+  valor_anterior Decimal?   @db.Decimal(5, 2)
+  valor_nuevo    Decimal?   @db.Decimal(5, 2)
+  ts             DateTime   @default(now())
 
   evaluacion evaluaciones @relation(fields: [id_evaluacion], references: [id_evaluacion], onDelete: Cascade)
   usuario    usuarios     @relation(fields: [id_usuario], references: [id_usuario])
@@ -199,10 +204,10 @@ model log_cambios_nota {
 }
 
 model responsables_area {
-  id_responsable_area Int @id @default(autoincrement()) @db.Integer
-  id_usuario Int
-  id_area    Int
-  activo     Boolean @default(true)
+  id_responsable_area Int     @id @default(autoincrement()) @db.Integer
+  id_usuario          Int
+  id_area             Int
+  activo              Boolean @default(true)
 
   usuario usuarios @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
   area    areas    @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
@@ -213,10 +218,10 @@ model responsables_area {
 }
 
 model evaluadores_area {
-  id_evaluador_area Int @id @default(autoincrement()) @db.Integer
-  id_usuario Int
-  id_area    Int
-  activo     Boolean @default(true)
+  id_evaluador_area Int     @id @default(autoincrement()) @db.Integer
+  id_usuario        Int
+  id_area           Int
+  activo            Boolean @default(true)
 
   usuario usuarios @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
   area    areas    @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
@@ -227,12 +232,12 @@ model evaluadores_area {
 }
 
 model medallero_config {
-  id_medallero Int @id @default(autoincrement()) @db.Integer
-  id_area Int
-  oros    Int @default(0)
-  platas  Int @default(0)
-  bronces Int @default(0)
-  menciones Int @default(0)
+  id_medallero  Int       @id @default(autoincrement()) @db.Integer
+  id_area       Int
+  oros          Int       @default(0)
+  platas        Int       @default(0)
+  bronces       Int       @default(0)
+  menciones     Int       @default(0)
   vigente_desde DateTime? @db.Date
   vigente_hasta DateTime? @db.Date
 
@@ -242,18 +247,18 @@ model medallero_config {
 }
 
 model cierres_fase {
-  id_cierre       Int @id @default(autoincrement()) @db.Integer
-  id_fase         Int
-  id_area         Int
-  cerrado_por     Int
-  fecha_cierre    DateTime @default(now())
+  id_cierre         Int               @id @default(autoincrement()) @db.Integer
+  id_fase           Int
+  id_area           Int
+  cerrado_por       Int
+  fecha_cierre      DateTime          @default(now())
   estado_validacion estado_validacion @default(PENDIENTE)
-  validado_por    Int?
-  fecha_validacion DateTime?
+  validado_por      Int?
+  fecha_validacion  DateTime?
 
-  fase  fases    @relation(fields: [id_fase], references: [id_fase])
-  area  areas    @relation(fields: [id_area], references: [id_area])
-  user_cierra usuarios @relation("cierre_por", fields: [cerrado_por], references: [id_usuario])
+  fase        fases     @relation(fields: [id_fase], references: [id_fase])
+  area        areas     @relation(fields: [id_area], references: [id_area])
+  user_cierra usuarios  @relation("cierre_por", fields: [cerrado_por], references: [id_usuario])
   user_valida usuarios? @relation("validado_por", fields: [validado_por], references: [id_usuario])
 
   @@unique([id_fase, id_area], name: "uq_cierre_unico")
@@ -262,18 +267,18 @@ model cierres_fase {
 }
 
 model listas_generadas {
-  id_lista   Int @id @default(autoincrement()) @db.Integer
-  tipo_lista tipo_lista
-  id_area    Int
-  id_nivel   Int?
-  fuente     fuente_lista?
-  criterios_orden   Json?
+  id_lista           Int           @id @default(autoincrement()) @db.Integer
+  tipo_lista         tipo_lista
+  id_area            Int
+  id_nivel           Int?
+  fuente             fuente_lista?
+  criterios_orden    Json?
   contenido_snapshot Json?
-  generado_por Int
-  fecha_generacion DateTime @default(now())
+  generado_por       Int
+  fecha_generacion   DateTime      @default(now())
 
-  area   areas   @relation(fields: [id_area], references: [id_area])
-  nivel  niveles? @relation(fields: [id_nivel], references: [id_nivel])
+  area    areas    @relation(fields: [id_area], references: [id_area])
+  nivel   niveles? @relation(fields: [id_nivel], references: [id_nivel])
   usuario usuarios @relation(fields: [generado_por], references: [id_usuario])
 
   reordenamientos reordenamientos[]
@@ -284,11 +289,11 @@ model listas_generadas {
 }
 
 model reordenamientos {
-  id_reorden   Int @id @default(autoincrement()) @db.Integer
-  id_lista     Int
-  id_usuario   Int
+  id_reorden     Int      @id @default(autoincrement()) @db.Integer
+  id_lista       Int
+  id_usuario     Int
   nueva_posicion Json
-  fecha_reorden DateTime @default(now())
+  fecha_reorden  DateTime @default(now())
 
   lista   listas_generadas @relation(fields: [id_lista], references: [id_lista], onDelete: Cascade)
   usuario usuarios         @relation(fields: [id_usuario], references: [id_usuario])
@@ -297,13 +302,13 @@ model reordenamientos {
 }
 
 model import_csv {
-  id_import     Int @id @default(autoincrement()) @db.Integer
-  archivo_nombre String
-  total_registros Int @default(0)
-  ok             Int @default(0)
-  con_error      Int @default(0)
-  mapeo_campos   Json?
-  ejecutado_por  Int
+  id_import       Int      @id @default(autoincrement()) @db.Integer
+  archivo_nombre  String
+  total_registros Int      @default(0)
+  ok              Int      @default(0)
+  con_error       Int      @default(0)
+  mapeo_campos    Json?
+  ejecutado_por   Int
   fecha_ejecucion DateTime @default(now())
   detalle_errores Json?
 
