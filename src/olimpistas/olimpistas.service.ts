@@ -218,4 +218,80 @@ export class OlimpistasService {
 
     return summary;
   }
+
+  /**
+   * GET /olimpistas
+   * Devuelve filas normalizadas para el FE:
+   * id, nombreCompleto, area, nivel, puntuacion(null), unidadEducativa, departamento
+   */
+  async listOlimpistas(params: { area?: string; q?: string }) {
+    const { area, q } = params ?? {};
+
+    const where: any = {
+      ...(area
+        ? { area: { nombre_area: { equals: area, mode: 'insensitive' } } }
+        : {}),
+      ...(q
+        ? {
+            OR: [
+              { competidor: { nombres: { contains: q, mode: 'insensitive' } } },
+              {
+                competidor: { apellidos: { contains: q, mode: 'insensitive' } },
+              },
+              { competidor: { escuela: { contains: q, mode: 'insensitive' } } },
+              {
+                competidor: {
+                  departamento: { contains: q, mode: 'insensitive' },
+                },
+              },
+              { competidor: { ci: { contains: q, mode: 'insensitive' } } },
+              { area: { nombre_area: { contains: q, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
+
+    const insc = await this.prisma.inscripciones.findMany({
+      where,
+      include: {
+        competidor: true,
+        area: true,
+        nivel: true,
+      },
+      orderBy: { id_inscripcion: 'desc' },
+    });
+
+    const rows = insc.map((it) => ({
+      id: it.id_inscripcion,
+      nombreCompleto:
+        `${it.competidor.nombres} ${it.competidor.apellidos}`.trim(),
+      area: it.area.nombre_area,
+      nivel: it.nivel.nombre_nivel,
+      puntuacion: null as number | null,
+      unidadEducativa: it.competidor.escuela ?? '',
+      departamento: it.competidor.departamento ?? '',
+    }));
+
+    return rows;
+  }
+
+  /**
+   * GET /olimpistas/areas-counters
+   * Devuelve [{ nombre_area, total }]
+   */
+  async getAreasCounters() {
+    const data = await this.prisma.areas.findMany({
+      where: { activo: true },
+      select: {
+        nombre_area: true,
+        _count: { select: { inscripciones: true } },
+      },
+      orderBy: { nombre_area: 'asc' },
+    });
+
+    return data.map((a) => ({
+      nombre_area: a.nombre_area,
+      total: a._count.inscripciones,
+    }));
+  }
 }
