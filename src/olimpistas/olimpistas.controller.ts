@@ -16,7 +16,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { RegistroOlimpistaDto } from './dto/registro-olimpista.dto';
 import { OlimpistasService } from './olimpistas.service';
-import { BigIntSerializerInterceptor } from '../common/interceptors/bigint-serializer.interceptor';
+import { BigIntSerializerInterceptor } from 'src/common/interceptors/bigint-serializer.interceptor';
 
 @Controller('olimpistas')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -42,7 +42,7 @@ export class OlimpistasController {
         file.buffer,
         file.originalname ?? 'upload.csv',
         {
-          userId: req.user?.sub ? BigInt(req.user.sub) : undefined,
+          userId: req.user?.sub ? Number(req.user.sub) : undefined,
           dryRun: false,
         },
       );
@@ -51,17 +51,17 @@ export class OlimpistasController {
     if (Array.isArray(body)) {
       return this.service.registerMany(
         body as RegistroOlimpistaDto[],
-        req.user?.sub ? BigInt(req.user.sub) : undefined,
+        req.user?.sub ? Number(req.user.sub) : undefined,
       );
     } else if (body?.data && Array.isArray(body.data)) {
       return this.service.registerMany(
         body.data as RegistroOlimpistaDto[],
-        req.user?.sub ? BigInt(req.user.sub) : undefined,
+        req.user?.sub ? Number(req.user.sub) : undefined,
       );
     } else {
       return this.service.registerOne(
         body as RegistroOlimpistaDto,
-        req.user?.sub ? BigInt(req.user.sub) : undefined,
+        req.user?.sub ? Number(req.user.sub) : undefined,
       );
     }
   }

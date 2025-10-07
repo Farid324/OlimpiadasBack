@@ -6,13 +6,13 @@ import { RegistroOlimpistaDto } from './dto/registro-olimpista.dto';
 import { splitNombreCompleto } from '../common/utils/name.util';
 import { parseCsvToDtos } from '../common/utils/csv.util';
 
-type ImportOptions = { userId?: bigint; dryRun?: boolean };
+type ImportOptions = { userId?: number; dryRun?: boolean };
 
 @Injectable()
 export class OlimpistasService {
   constructor(private prisma: PrismaService) {}
 
-  private async getAreaIdByName(nombre: string): Promise<bigint> {
+  private async getAreaIdByName(nombre: string): Promise<number> {
     const area = await this.prisma.areas.findFirst({
       where: {
         nombre_area: { equals: nombre, mode: 'insensitive' },
@@ -27,7 +27,7 @@ export class OlimpistasService {
     return area.id_area;
   }
 
-  private async getNivelIdByName(nombre: string): Promise<bigint> {
+  private async getNivelIdByName(nombre: string): Promise<number> {
     const nivel = await this.prisma.niveles.findFirst({
       where: { nombre_nivel: { equals: nombre, mode: 'insensitive' } },
       select: { id_nivel: true },
@@ -37,7 +37,7 @@ export class OlimpistasService {
     return nivel.id_nivel;
   }
 
-  async registerOne(dto: RegistroOlimpistaDto, userId?: bigint) {
+  async registerOne(dto: RegistroOlimpistaDto, userId?: number) {
     const [idArea, idNivel] = await Promise.all([
       this.getAreaIdByName(dto.area),
       this.getNivelIdByName(dto.nivel),
@@ -111,7 +111,7 @@ export class OlimpistasService {
     };
   }
 
-  async registerMany(list: RegistroOlimpistaDto[], userId?: bigint) {
+  async registerMany(list: RegistroOlimpistaDto[], userId?: number) {
     if (!list?.length) throw new BadRequestException('Lista vacía.');
     const summary = {
       total: list.length,
@@ -192,7 +192,7 @@ export class OlimpistasService {
         ok: summary.ok,
         con_error: summary.errors.length,
         mapeo_campos: { by: 'name', required },
-        ejecutado_por: opts.userId ?? BigInt(0),
+        ejecutado_por: opts.userId ?? 0,
         detalle_errores: summary.errors.length ? summary.errors : undefined,
       },
     });
