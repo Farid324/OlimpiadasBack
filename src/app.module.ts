@@ -15,6 +15,7 @@ import { AreasModule } from './areas/areas.module';
 
 // Nuevos módulos
 import { ResponsablesModule } from './responsables/responsables.module';
+import { EvaluadoresModule } from './evaluadores/evaluadores.module';
 
 //Olimpistas
 import { OlimpistasModule } from './olimpistas/olimpistas.module';
