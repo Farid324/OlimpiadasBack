@@ -5,6 +5,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 export class AreasService {
   constructor(private prisma: PrismaService) {}
 
+  findAll() {
+    return this.prisma.areas.findMany({
+      where: { activo: true },
+      orderBy: { nombre_area: 'asc' },
+    });
+  }
+  
   async getAreasConEstadisticas() {
     console.log('💡 Iniciando consulta a Prisma...');
     const areas = await this.prisma.areas.findMany({
