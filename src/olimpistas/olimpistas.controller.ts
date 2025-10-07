@@ -38,10 +38,14 @@ export class OlimpistasController {
     if (contentType.includes('multipart/form-data')) {
       if (!file)
         throw new BadRequestException('Archivo CSV requerido en campo "file".');
-      const rows = await parseCsvToDtos(file.buffer);
-      return this.service.registerMany(
-        rows,
-        req.user?.sub ? BigInt(req.user.sub) : undefined,
+
+      return this.service.registerCsv(
+        file.buffer,
+        file.originalname ?? 'upload.csv',
+        {
+          userId: req.user?.sub ? BigInt(req.user.sub) : undefined,
+          dryRun: false,
+        },
       );
     }
 

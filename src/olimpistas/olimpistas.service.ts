@@ -4,6 +4,9 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegistroOlimpistaDto } from './dto/registro-olimpista.dto';
 import { splitNombreCompleto } from '../utils/name.util';
+import { parseCsvToDtos } from '../utils/csv.util';
+
+type ImportOptions = { userId?: bigint; dryRun?: boolean };
 
 @Injectable()
 export class OlimpistasService {
@@ -128,6 +131,72 @@ export class OlimpistasService {
         );
       }
     }
+    return summary;
+  }
+
+  async registerCsv(
+    buffer: Buffer,
+    originalName: string,
+    opts: ImportOptions = {},
+  ) {
+    const rows = await parseCsvToDtos(buffer);
+
+    const required = [
+      'nombreCompleto',
+      'ci',
+      'tutorContacto',
+      'unidadEducativa',
+      'departamento',
+      'gradoEscolar',
+      'area',
+      'nivel',
+    ];
+    const missingColumns = required.filter(
+      (k) => !Object.keys(rows[0] ?? {}).includes(k),
+    );
+    if (missingColumns.length) {
+      throw new BadRequestException(
+        `Faltan columnas: ${missingColumns.join(', ')}`,
+      );
+    }
+
+    if (opts.dryRun) {
+      const summary = {
+        total: rows.length,
+        ok: 0,
+        createdInsc: 0,
+        skippedInsc: 0,
+        errors: [] as string[],
+      };
+      for (let i = 0; i < rows.length; i++) {
+        try {
+          await this.getAreaIdByName(rows[i].area);
+          await this.getNivelIdByName(rows[i].nivel);
+          splitNombreCompleto(rows[i].nombreCompleto);
+          summary.ok++;
+        } catch (e: any) {
+          summary.errors.push(
+            `Fila ${i + 1} (ci=${rows[i]?.ci}): ${e?.message ?? 'Error'}`,
+          );
+        }
+      }
+      return { ...summary, dryRun: true };
+    }
+
+    const summary = await this.registerMany(rows, opts.userId);
+
+    await this.prisma.import_csv.create({
+      data: {
+        archivo_nombre: originalName,
+        total_registros: summary.total,
+        ok: summary.ok,
+        con_error: summary.errors.length,
+        mapeo_campos: { by: 'name', required },
+        ejecutado_por: opts.userId ?? BigInt(0),
+        detalle_errores: summary.errors.length ? summary.errors : undefined,
+      },
+    });
+
     return summary;
   }
 }
