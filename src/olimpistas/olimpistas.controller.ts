@@ -9,6 +9,8 @@ import {
   UseGuards,
   UseInterceptors,
   Req,
+  Get,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -17,6 +19,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RegistroOlimpistaDto } from './dto/registro-olimpista.dto';
 import { OlimpistasService } from './olimpistas.service';
 import { BigIntSerializerInterceptor } from 'src/common/interceptors/bigint-serializer.interceptor';
+import { GetOlimpistasQueryDto } from './dto/get-olimpistas.query';
 
 @Controller('olimpistas')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -64,5 +67,17 @@ export class OlimpistasController {
         req.user?.sub ? Number(req.user.sub) : undefined,
       );
     }
+  }
+
+  @Get()
+  @Roles('ADMINISTRADOR')
+  list(@Query() query: GetOlimpistasQueryDto) {
+    return this.service.listOlimpistas({ area: query.area, q: query.q });
+  }
+
+  @Get('areas-counters')
+  @Roles('ADMINISTRADOR')
+  areasCounters() {
+    return this.service.getAreasCounters();
   }
 }
