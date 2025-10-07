@@ -19,6 +19,13 @@ export async function parseCsvToDtos(
       .on('end', () => {
         for (const r of out) {
           if (typeof r.departamento === 'string') {
+          }
+          if (r['nivelcompetidor']) r['nivelCompetidor'] = r['nivelcompetidor'];
+          if (r['grado_escolar']) r['gradoEscolar'] = r['grado_escolar'];
+          if (r['grado']) r['grado'] = Number(r['grado']);
+        }
+        for (const r of out) {
+          if (typeof r.departamento === 'string') {
             r.departamento = r.departamento.trim();
             const map: Record<string, string> = {
               'LA PAZ': 'La Paz',
