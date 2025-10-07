@@ -15,7 +15,7 @@ import { AreasModule } from './areas/areas.module';
 
 // Nuevos módulos
 import { ResponsablesModule } from './responsables/responsables.module';
-
+import { EvaluadoresModule } from './evaluadores/evaluadores.module';
 
 @Module({
   imports: [
@@ -25,17 +25,11 @@ import { ResponsablesModule } from './responsables/responsables.module';
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
     }),
+    EvaluadoresModule,
     ResponsablesModule, // 🔹 módulo de responsables
-    AreasModule,        // 🔹 módulo de áreas
+    AreasModule, // 🔹 módulo de áreas
   ],
-  controllers: [
-    AuthController,
-    UsersController,
-  ],
-  providers: [
-    AuthService,
-    JwtStrategy,
-    UsersService,
-  ],
+  controllers: [AuthController, UsersController],
+  providers: [AuthService, JwtStrategy, UsersService],
 })
 export class AppModule {}

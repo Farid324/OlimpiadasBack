@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ADMIN } from '../../auth/constants';
+
 @Controller('areas')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(ADMIN)
@@ -13,12 +14,9 @@ export class AreasController {
 
   @Get()
   async getAreas() {
-    console.log('💡 Llamada al Controller recibida'); // <-- LOG
+    console.log('💡 Llamada al Controller recibida');
     const areas = await this.areasService.getAreasConEstadisticas();
-    console.log('💡 Datos devueltos por el servicio:', areas); // <-- LOG
+    console.log('💡 Datos devueltos por el servicio:', areas);
     return areas;
-  }
-  findAll() {
-    return this.areasService.findAll();
   }
 }

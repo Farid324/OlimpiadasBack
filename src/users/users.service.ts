@@ -5,7 +5,8 @@ import { PrismaService } from '../prisma/prisma.service';
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
-me(id: number) {
+
+  me(id: number) {
     return this.prisma.usuarios.findUnique({
       where: { id_usuario: id },
       select: {
