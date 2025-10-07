@@ -16,26 +16,22 @@ import { AreasModule } from './areas/areas.module';
 // Nuevos módulos
 import { ResponsablesModule } from './responsables/responsables.module';
 
+//Olimpistas
+import { OlimpistasModule } from './olimpistas/olimpistas.module';
 
 @Module({
   imports: [
     PrismaModule,
     AreasModule,
+    OlimpistasModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
     }),
     ResponsablesModule, // 🔹 módulo de responsables
-    AreasModule,        // 🔹 módulo de áreas
+    AreasModule, // 🔹 módulo de áreas
   ],
-  controllers: [
-    AuthController,
-    UsersController,
-  ],
-  providers: [
-    AuthService,
-    JwtStrategy,
-    UsersService,
-  ],
+  controllers: [AuthController, UsersController],
+  providers: [AuthService, JwtStrategy, UsersService],
 })
 export class AppModule {}
