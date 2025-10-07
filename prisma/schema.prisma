@@ -6,7 +6,6 @@
 // prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
-  //output   = "../generated/prisma"
 }
 
 datasource db {
@@ -14,7 +13,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ===================== Enums (de tu SQL) =====================
+// ===================== Enums =====================
 enum estado_inscripcion {
   INSCRITO
   CLASIFICADO
@@ -53,41 +52,52 @@ enum accion_log {
   FIRMAR
 }
 
+enum estado_area {
+  EVALUANDO
+  CLASIFICANDO
+  COMPLETADO
+}
+
 // ===================== Tablas =====================
 model roles {
-  id_rol  BigInt  @id @default(autoincrement())
-  nombre  String  @unique
+  id_rol   Int   @id @default(autoincrement()) @db.Integer
+  nombre   String @unique
   usuarios usuarios[]
 }
 
 model usuarios {
-  id_usuario    BigInt  @id @default(autoincrement())
-  correo        String  @unique
+  id_usuario    Int   @id @default(autoincrement()) @db.Integer
+  correo        String   @unique
   hash_password String
   nombre        String
   apellido      String
-  activo        Boolean @default(true)
-  id_rol        BigInt
-  rol           roles   @relation(fields: [id_rol], references: [id_rol])
+  telefono      String?
+  experiencia   Int?
+  especialidad  String?
+  institucion String?
+  ci            String? 
+  activo        Boolean  @default(true)
+  id_rol        Int
+  rol           roles    @relation(fields: [id_rol], references: [id_rol])
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 
-  evaluaciones   evaluaciones[]   @relation("evaluaciones_evaluador")
-  cierres_cerrado cierres_fase[]  @relation("cierre_por")
-  cierres_validado cierres_fase[] @relation("validado_por")
+  evaluaciones     evaluaciones[]   @relation("evaluaciones_evaluador")
+  cierres_cerrado  cierres_fase[]   @relation("cierre_por")
+  cierres_validado cierres_fase[]   @relation("validado_por")
   responsables_area responsables_area[]
   evaluadores_area evaluadores_area[]
   listas_generadas listas_generadas[]
   log_cambios_nota log_cambios_nota[]
-  import_csv      import_csv[]
-
-  reordenamientos reordenamientos[]
+  import_csv       import_csv[]
+  reordenamientos  reordenamientos[]
 }
 
 model areas {
-  id_area    BigInt @id @default(autoincrement())
+  id_area     Int    @id @default(autoincrement()) @db.Integer
   nombre_area String @unique
   activo      Boolean @default(true)
+  estado      estado_area @default(EVALUANDO)
 
   inscripciones     inscripciones[]
   medallero_config  medallero_config[]
@@ -98,7 +108,7 @@ model areas {
 }
 
 model niveles {
-  id_nivel    BigInt @id @default(autoincrement())
+  id_nivel     Int    @id @default(autoincrement()) @db.Integer
   nombre_nivel String @unique
   orden        Int    @default(0)
 
@@ -107,7 +117,7 @@ model niveles {
 }
 
 model competidores {
-  id_competidor BigInt @id @default(autoincrement())
+  id_competidor Int    @id @default(autoincrement()) @db.Integer
   nombres       String
   apellidos     String
   ci            String
@@ -116,21 +126,18 @@ model competidores {
   activo        Boolean @default(true)
   created_at    DateTime @default(now())
 
-  // Si tu realidad de datos lo permite:
-  // @@unique([ci])
-
   inscripciones inscripciones[]
 }
 
 model inscripciones {
-  id_inscripcion BigInt @id @default(autoincrement())
-  id_competidor  BigInt
-  id_area        BigInt
-  id_nivel       BigInt
+  id_inscripcion    Int @id @default(autoincrement()) @db.Integer
+  id_competidor     Int
+  id_area           Int
+  id_nivel          Int
   estado_inscripcion estado_inscripcion @default(INSCRITO)
-  observaciones  String?
-  created_at     DateTime @default(now())
-  updated_at     DateTime @updatedAt
+  observaciones     String?
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
 
   competidor competidores @relation(fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
   area       areas        @relation(fields: [id_area], references: [id_area])
@@ -145,7 +152,7 @@ model inscripciones {
 }
 
 model fases {
-  id_fase    BigInt @id @default(autoincrement())
+  id_fase    Int    @id @default(autoincrement()) @db.Integer
   nombre_fase String @unique
   orden_fase  Int
 
@@ -154,10 +161,10 @@ model fases {
 }
 
 model evaluaciones {
-  id_evaluacion BigInt @id @default(autoincrement())
-  id_inscripcion BigInt
-  id_fase        BigInt
-  id_evaluador   BigInt
+  id_evaluacion Int @id @default(autoincrement()) @db.Integer
+  id_inscripcion Int
+  id_fase        Int
+  id_evaluador   Int
   nota           Decimal @db.Decimal(5,2)
   fecha_registro DateTime @default(now())
   estado_registro estado_registro @default(BORRADOR)
@@ -176,10 +183,10 @@ model evaluaciones {
 }
 
 model log_cambios_nota {
-  id_log        BigInt @id @default(autoincrement())
-  id_evaluacion BigInt
-  id_usuario    BigInt
-  accion        accion_log
+  id_log         Int @id @default(autoincrement()) @db.Integer
+  id_evaluacion  Int
+  id_usuario     Int
+  accion         accion_log
   valor_anterior Decimal? @db.Decimal(5,2)
   valor_nuevo    Decimal? @db.Decimal(5,2)
   ts             DateTime @default(now())
@@ -192,9 +199,9 @@ model log_cambios_nota {
 }
 
 model responsables_area {
-  id_responsable_area BigInt @id @default(autoincrement())
-  id_usuario BigInt
-  id_area    BigInt
+  id_responsable_area Int @id @default(autoincrement()) @db.Integer
+  id_usuario Int
+  id_area    Int
   activo     Boolean @default(true)
 
   usuario usuarios @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
@@ -206,9 +213,9 @@ model responsables_area {
 }
 
 model evaluadores_area {
-  id_evaluador_area BigInt @id @default(autoincrement())
-  id_usuario BigInt
-  id_area    BigInt
+  id_evaluador_area Int @id @default(autoincrement()) @db.Integer
+  id_usuario Int
+  id_area    Int
   activo     Boolean @default(true)
 
   usuario usuarios @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
@@ -220,8 +227,8 @@ model evaluadores_area {
 }
 
 model medallero_config {
-  id_medallero BigInt @id @default(autoincrement())
-  id_area BigInt
+  id_medallero Int @id @default(autoincrement()) @db.Integer
+  id_area Int
   oros    Int @default(0)
   platas  Int @default(0)
   bronces Int @default(0)
@@ -235,13 +242,13 @@ model medallero_config {
 }
 
 model cierres_fase {
-  id_cierre BigInt @id @default(autoincrement())
-  id_fase   BigInt
-  id_area   BigInt
-  cerrado_por BigInt
-  fecha_cierre   DateTime @default(now())
+  id_cierre       Int @id @default(autoincrement()) @db.Integer
+  id_fase         Int
+  id_area         Int
+  cerrado_por     Int
+  fecha_cierre    DateTime @default(now())
   estado_validacion estado_validacion @default(PENDIENTE)
-  validado_por   BigInt?
+  validado_por    Int?
   fecha_validacion DateTime?
 
   fase  fases    @relation(fields: [id_fase], references: [id_fase])
@@ -255,14 +262,14 @@ model cierres_fase {
 }
 
 model listas_generadas {
-  id_lista  BigInt @id @default(autoincrement())
+  id_lista   Int @id @default(autoincrement()) @db.Integer
   tipo_lista tipo_lista
-  id_area   BigInt
-  id_nivel  BigInt?
-  fuente    fuente_lista?
-  criterios_orden  Json?
+  id_area    Int
+  id_nivel   Int?
+  fuente     fuente_lista?
+  criterios_orden   Json?
   contenido_snapshot Json?
-  generado_por BigInt
+  generado_por Int
   fecha_generacion DateTime @default(now())
 
   area   areas   @relation(fields: [id_area], references: [id_area])
@@ -277,9 +284,9 @@ model listas_generadas {
 }
 
 model reordenamientos {
-  id_reorden BigInt @id @default(autoincrement())
-  id_lista   BigInt
-  id_usuario BigInt
+  id_reorden   Int @id @default(autoincrement()) @db.Integer
+  id_lista     Int
+  id_usuario   Int
   nueva_posicion Json
   fecha_reorden DateTime @default(now())
 
@@ -290,13 +297,13 @@ model reordenamientos {
 }
 
 model import_csv {
-  id_import BigInt @id @default(autoincrement())
+  id_import     Int @id @default(autoincrement()) @db.Integer
   archivo_nombre String
   total_registros Int @default(0)
-  ok Int @default(0)
-  con_error Int @default(0)
-  mapeo_campos Json?
-  ejecutado_por BigInt
+  ok             Int @default(0)
+  con_error      Int @default(0)
+  mapeo_campos   Json?
+  ejecutado_por  Int
   fecha_ejecucion DateTime @default(now())
   detalle_errores Json?
 
