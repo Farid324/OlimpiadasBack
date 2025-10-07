@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RegistroOlimpistaDto } from './dto/registro-olimpista.dto';
 import { splitNombreCompleto } from '../common/utils/name.util';
 import { parseCsvToDtos } from '../common/utils/csv.util';
+import { resolveNivelYGrado } from '../common/utils/grade.util';
 
 type ImportOptions = { userId?: number; dryRun?: boolean };
 
@@ -49,6 +50,12 @@ export class OlimpistasService {
       where: { ci: dto.ci },
     });
 
+    const escolar = resolveNivelYGrado({
+      nivelCompetidor: dto.nivelCompetidor as any,
+      grado: dto.grado as any,
+      gradoEscolar: dto.gradoEscolar,
+    });
+
     const competidor = existing
       ? await this.prisma.competidores.update({
           where: { id_competidor: existing.id_competidor },
@@ -58,6 +65,12 @@ export class OlimpistasService {
             escuela: dto.unidadEducativa,
             departamento: dto.departamento,
             tutorContacto: dto.tutorContacto,
+            nivel: escolar.nivel
+              ? escolar.nivel === 'Primaria'
+                ? 'PRIMARIA'
+                : 'SECUNDARIA'
+              : undefined,
+            grado: escolar.grado ?? undefined,
           },
         })
       : await this.prisma.competidores.create({
@@ -69,6 +82,12 @@ export class OlimpistasService {
             departamento: dto.departamento,
             tutorContacto: dto.tutorContacto,
             activo: true,
+            nivel: escolar.nivel
+              ? escolar.nivel === 'Primaria'
+                ? 'PRIMARIA'
+                : 'SECUNDARIA'
+              : undefined,
+            grado: escolar.grado ?? undefined,
           },
         });
 

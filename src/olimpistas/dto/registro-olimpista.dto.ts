@@ -1,6 +1,15 @@
 // src/olimpistas/dto/registro-olimpista.dto.ts
 
-import { IsIn, IsNotEmpty, IsString, Matches } from 'class-validator';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsString,
+  Matches,
+  IsInt,
+  Max,
+  Min,
+  IsOptional,
+} from 'class-validator';
 
 const TEXT_RX = /^[\p{L}\p{N}\s.\-']+$/u;
 const NUM_RX = /^\d+$/;
@@ -40,7 +49,7 @@ export class RegistroOlimpistaDto {
   ])
   departamento!: string;
 
-  @IsString()
+  @IsOptional()
   @IsIn([
     '1ºP',
     '2ºP',
@@ -55,7 +64,7 @@ export class RegistroOlimpistaDto {
     '5ºS',
     '6ºS',
   ])
-  gradoEscolar!: string;
+  gradoEscolar?: string;
 
   @IsString()
   @IsNotEmpty()
@@ -64,6 +73,16 @@ export class RegistroOlimpistaDto {
   @IsString()
   @IsNotEmpty()
   nivel!: string;
+
+  @IsOptional()
+  @IsIn(['Primaria', 'Secundaria'])
+  nivelCompetidor?: 'Primaria' | 'Secundaria';
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(6)
+  grado?: number;
 }
 
 export class RegistroOlimpistaBulkDto {
