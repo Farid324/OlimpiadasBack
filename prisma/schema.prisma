@@ -129,39 +129,38 @@ model niveles {
 }
 
 model tutores {
-  id_tutor        Int       @id @default(autoincrement()) @db.Integer
-  nombre_completo String
-  ci              String?   @unique
-  correo          String?
-  telefono        String    @unique
+  id_tutor         Int      @id @default(autoincrement()) @db.Integer
+  nombre_completo  String
+  ci               String?  @unique
+  correo           String?
+  telefono         String   @unique
   unidad_educativa String?
-  activo          Boolean   @default(true)
-  created_at      DateTime  @default(now())
+  activo           Boolean  @default(true)
+  created_at       DateTime @default(now())
 
-  competidores    competidores[]
+  competidores competidores[]
 
   @@index([telefono])
   @@index([nombre_completo])
 }
 
 model competidores {
-  id_competidor Int      @id @default(autoincrement()) @db.Integer
+  id_competidor Int     @id @default(autoincrement()) @db.Integer
   nombres       String
   apellidos     String
   ci            String
   escuela       String?
   departamento  String?
-  tutorContacto String?  @map("tutor_contacto")
+  tutorContacto String? @map("tutor_contacto")
 
-  id_tutor      Int?
-  tutor         tutores?  @relation(fields: [id_tutor], references: [id_tutor])
+  id_tutor Int?
+  tutor    tutores? @relation(fields: [id_tutor], references: [id_tutor])
 
-  nivel         ciclo_nivel?
-  grado         Int?
+  nivel ciclo_nivel?
+  grado Int?
 
-  activo        Boolean  @default(true)
-  created_at    DateTime @default(now())
-  
+  activo     Boolean  @default(true)
+  created_at DateTime @default(now())
 
   inscripciones inscripciones[]
 
