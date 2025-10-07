@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
-import { AreasService } from './areas.service';
-import { AreasController } from './areas.controller';
-import { PrismaModule } from '../prisma/prisma.module';
+import { AreasService } from './services/areas.service';
+import { AreasController } from './controllers/areas.controller';
+import { PrismaService } from '../prisma/prisma.service';
+import { PrismaModule } from 'src/prisma/prisma.module';
 
 @Module({
   imports: [PrismaModule],
   controllers: [AreasController],
-  providers: [AreasService],
+  providers: [AreasService, PrismaService],
+
 })
 export class AreasModule {}

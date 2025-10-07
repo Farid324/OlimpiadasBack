@@ -16,6 +16,9 @@ CREATE TYPE "public"."fuente_lista" AS ENUM ('CLASIFICATORIA', 'FINAL');
 -- CreateEnum
 CREATE TYPE "public"."accion_log" AS ENUM ('CREAR', 'EDITAR', 'BORRAR', 'FIRMAR');
 
+-- CreateEnum
+CREATE TYPE "public"."estado_area" AS ENUM ('EVALUANDO', 'CLASIFICANDO', 'COMPLETADO');
+
 -- CreateTable
 CREATE TABLE "public"."roles" (
     "id_rol" SERIAL NOT NULL,
@@ -34,6 +37,8 @@ CREATE TABLE "public"."usuarios" (
     "telefono" TEXT,
     "experiencia" INTEGER,
     "especialidad" TEXT,
+    "institucion" TEXT,
+    "ci" TEXT,
     "activo" BOOLEAN NOT NULL DEFAULT true,
     "id_rol" INTEGER NOT NULL,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -47,6 +52,7 @@ CREATE TABLE "public"."areas" (
     "id_area" SERIAL NOT NULL,
     "nombre_area" TEXT NOT NULL,
     "activo" BOOLEAN NOT NULL DEFAULT true,
+    "estado" "public"."estado_area" NOT NULL DEFAULT 'EVALUANDO',
 
     CONSTRAINT "areas_pkey" PRIMARY KEY ("id_area")
 );
@@ -129,6 +135,7 @@ CREATE TABLE "public"."responsables_area" (
     "id_responsable_area" SERIAL NOT NULL,
     "id_usuario" INTEGER NOT NULL,
     "id_area" INTEGER NOT NULL,
+    "activo" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "responsables_area_pkey" PRIMARY KEY ("id_responsable_area")
 );

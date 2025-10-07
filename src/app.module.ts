@@ -11,14 +11,16 @@ import { JwtStrategy } from './auth/strategies/jwt.strategy';
 // Users
 import { UsersController } from './users/users.controller';
 import { UsersService } from './users/users.service';
+import { AreasModule } from './areas/areas.module';
 
 // Nuevos módulos
 import { ResponsablesModule } from './responsables/responsables.module';
-import { AreasModule } from './areas/areas.module';
+
 
 @Module({
   imports: [
     PrismaModule,
+    AreasModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },

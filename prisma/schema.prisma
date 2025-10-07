@@ -52,6 +52,12 @@ enum accion_log {
   FIRMAR
 }
 
+enum estado_area {
+  EVALUANDO
+  CLASIFICANDO
+  COMPLETADO
+}
+
 // ===================== Tablas =====================
 model roles {
   id_rol   Int   @id @default(autoincrement()) @db.Integer
@@ -91,6 +97,7 @@ model areas {
   id_area     Int    @id @default(autoincrement()) @db.Integer
   nombre_area String @unique
   activo      Boolean @default(true)
+  estado      estado_area @default(EVALUANDO)
 
   inscripciones     inscripciones[]
   medallero_config  medallero_config[]
