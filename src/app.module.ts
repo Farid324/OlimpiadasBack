@@ -8,7 +8,7 @@ import { JwtStrategy } from './auth/strategies/jwt.strategy';
 import { UsersController } from './users/users.controller';
 import { UsersService } from './users/users.service';
 import { EvaluadoresModule } from './evaluadores/evaluadores.module';
-import { AreasModule } from './areas/controllers/areas.module';
+import { AreasModule } from './areas/areas.module';
 
 @Module({
   imports: [
