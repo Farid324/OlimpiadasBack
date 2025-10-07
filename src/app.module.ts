@@ -22,12 +22,16 @@ import { OlimpistasModule } from './olimpistas/olimpistas.module';
 //Grupos Olimpistas
 import { GruposModule } from './grupos/grupos.module';
 
+//Tutores
+import { TutoresModule } from './tutores/tutores.module';
+
 @Module({
   imports: [
     PrismaModule,
     AreasModule,
     OlimpistasModule,
     GruposModule,
+    TutoresModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
