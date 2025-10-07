@@ -62,3 +62,4 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # archivos tests "Regsitro de olimpistas, tutores, grupo de olimpistas"
 olimpistas_mix.csv
 olimpistas_ok.csv
+miembros_grupo.csv
