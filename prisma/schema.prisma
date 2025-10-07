@@ -128,6 +128,22 @@ model niveles {
   @@index([nombre_nivel])
 }
 
+model tutores {
+  id_tutor        Int       @id @default(autoincrement()) @db.Integer
+  nombre_completo String
+  ci              String?   @unique
+  correo          String?
+  telefono        String    @unique
+  unidad_educativa String?
+  activo          Boolean   @default(true)
+  created_at      DateTime  @default(now())
+
+  competidores    competidores[]
+
+  @@index([telefono])
+  @@index([nombre_completo])
+}
+
 model competidores {
   id_competidor Int      @id @default(autoincrement()) @db.Integer
   nombres       String
@@ -137,9 +153,12 @@ model competidores {
   departamento  String?
   tutorContacto String?  @map("tutor_contacto")
 
+  id_tutor      Int?
+  tutor         tutores?  @relation(fields: [id_tutor], references: [id_tutor])
+
   nivel         ciclo_nivel?
   grado         Int?
-  
+
   activo        Boolean  @default(true)
   created_at    DateTime @default(now())
   
