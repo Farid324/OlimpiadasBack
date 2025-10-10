@@ -29,6 +29,7 @@ lerna-debug.log*
 *.sublime-workspace
 
 # IDE - VSCode
+.vscode
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
@@ -56,3 +57,9 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /generated/prisma
+
+
+# archivos tests "Regsitro de olimpistas, tutores, grupo de olimpistas"
+olimpistas_mix.csv
+olimpistas_ok.csv
+miembros_grupo.csv
