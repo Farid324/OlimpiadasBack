@@ -1,24 +1,42 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Query,
+  Param,
+  UsePipes,
+  ValidationPipe,
+} from '@nestjs/common';
 import { EvaluadoresService } from './evaluadores.service';
 import { CreateEvaluadorDto } from './dto/create-evaluador.dto';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
-import { ADMIN } from '../auth/constants';
+import { QueryEvaluadorDto } from './dto/query-evaluador.dto';
 
 @Controller('evaluadores')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(ADMIN)
+@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
 export class EvaluadoresController {
-  constructor(private service: EvaluadoresService) {}
+  constructor(private readonly evaluadoresService: EvaluadoresService) {}
 
   @Get()
-  async findAll(@Query('q') q?: string) {
-    return this.service.findAll(q);
+  async findAll(@Query() query: QueryEvaluadorDto) {
+    return this.evaluadoresService.findAll(query);
   }
 
   @Post()
-  async create(@Body() dto: CreateEvaluadorDto) {
-    return this.service.create(dto);
+  async create(
+    @Body()
+    dto: CreateEvaluadorDto & { nombreCompleto?: string; id_areas?: number[] },
+  ) {
+    return this.evaluadoresService.create(dto);
+  }
+
+  @Get('check-telefono/:telefono')
+  async existsByTelefono(@Param('telefono') telefono: string) {
+    return this.evaluadoresService.existsByTelefono(telefono);
+  }
+
+  @Get('check-ci/:ci')
+  async existsByCi(@Param('ci') ci: string) {
+    return this.evaluadoresService.existsByCi(ci);
   }
 }
