@@ -140,4 +140,9 @@ export class ResponsablesService {
     const exists = await this.prisma.usuarios.findFirst({ where: { ci } });
     return { exists: !!exists };
   }
+
+  async checkCorreo(correo: string) {
+  const exists = await this.prisma.usuarios.findFirst({ where: { correo } });
+  return { exists: !!exists };
+}
 }

@@ -44,4 +44,9 @@ checkCi(@Param('ci') ci: string) {
   return this.service.checkCi(ci);
 }
 
+@Get('check-correo/:correo')
+checkCorreo(@Param('correo') correo: string) {
+  return this.service.checkCorreo(correo);
+}
+
 }
