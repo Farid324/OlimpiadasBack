@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Query, Delete, UseGuards } from '@nestjs/common';
 import { ResponsablesService } from './responsables.service';
 import { CreateResponsableDto } from './dto/create-responsable.dto';
 import { UpdateResponsableDto } from './dto/update-responsable.dto';
@@ -29,24 +29,28 @@ export class ResponsablesController {
     return this.service.update(Number(id), dto);
   }
 
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.service.delete(Number(id));
+  }
+
   @Patch(':id/toggle')
   toggle(@Param('id') id: string) {
     return this.service.toggleActivo(Number(id));
   }
 
   @Get('check-telefono/:telefono')
-checkTelefono(@Param('telefono') telefono: string) {
-  return this.service.checkTelefono(telefono);
-}
+  checkTelefono(@Param('telefono') telefono: string) {
+    return this.service.checkTelefono(telefono);
+  }
 
-@Get('check-ci/:ci')
-checkCi(@Param('ci') ci: string) {
-  return this.service.checkCi(ci);
-}
+  @Get('check-ci/:ci')
+  checkCi(@Param('ci') ci: string) {
+    return this.service.checkCi(ci);
+  }
 
-@Get('check-correo/:correo')
-checkCorreo(@Param('correo') correo: string) {
-  return this.service.checkCorreo(correo);
-}
-
+  @Get('check-correo/:correo')
+  checkCorreo(@Param('correo') correo: string) {
+    return this.service.checkCorreo(correo);
+  }
 }

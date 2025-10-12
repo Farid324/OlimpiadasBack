@@ -1,4 +1,3 @@
-// src/responsables/responsables.service.ts
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateResponsableDto } from './dto/create-responsable.dto';
@@ -11,7 +10,7 @@ export class ResponsablesService {
   constructor(private prisma: PrismaService) {}
 
   async create(dto: CreateResponsableDto) {
-    //Validar duplicados: correo, CI o teléfono
+    // Validar duplicados
     const exists = await this.prisma.usuarios.findFirst({
       where: {
         OR: [
@@ -23,21 +22,13 @@ export class ResponsablesService {
     });
 
     if (exists) {
-      if (exists.correo === dto.correo) {
-        throw new BadRequestException('El correo ya está registrado');
-      }
-      if (exists.ci === dto.ci) {
-        throw new BadRequestException('El CI ya está registrado');
-      }
-      if (exists.telefono === dto.telefono) {
-        throw new BadRequestException('El teléfono ya está registrado');
-      }
+      if (exists.correo === dto.correo) throw new BadRequestException('El correo ya está registrado');
+      if (exists.ci === dto.ci) throw new BadRequestException('El CI ya está registrado');
+      if (exists.telefono === dto.telefono) throw new BadRequestException('El teléfono ya está registrado');
     }
 
-    //Password inicial por defecto
     const hashedPassword = await bcrypt.hash('123456', 10);
 
-    //Crear usuario
     const usuario = await this.prisma.usuarios.create({
       data: {
         nombre: dto.nombre,
@@ -49,11 +40,10 @@ export class ResponsablesService {
         experiencia: dto.experiencia,
         especialidad: dto.especialidad,
         ci: dto.ci,
-        id_rol: 3, // ID de Responsable de Área (ajustar según tu seed)
+        id_rol: 3, // Rol Responsable de Área
       },
     });
 
-    //Crear relación en responsables_area
     await this.prisma.responsables_area.create({
       data: {
         id_usuario: usuario.id_usuario,
@@ -83,7 +73,7 @@ export class ResponsablesService {
     });
     if (!responsable) throw new NotFoundException('Responsable no encontrado');
 
-    //Validar duplicados en update
+    // Validar duplicados
     if (dto.correo || dto.ci || dto.telefono) {
       const exists = await this.prisma.usuarios.findFirst({
         where: {
@@ -101,22 +91,58 @@ export class ResponsablesService {
       });
 
       if (exists) {
-        if (dto.correo && exists.correo === dto.correo) {
+        if (dto.correo && exists.correo === dto.correo)
           throw new BadRequestException('El correo ya está registrado');
-        }
-        if (dto.ci && exists.ci === dto.ci) {
+        if (dto.ci && exists.ci === dto.ci)
           throw new BadRequestException('El CI ya está registrado');
-        }
-        if (dto.telefono && exists.telefono === dto.telefono) {
+        if (dto.telefono && exists.telefono === dto.telefono)
           throw new BadRequestException('El teléfono ya está registrado');
-        }
       }
     }
 
-    return this.prisma.usuarios.update({
+    // Actualizar usuario
+    const updated = await this.prisma.usuarios.update({
       where: { id_usuario: id },
-      data: { ...dto },
+      data: {
+        nombre: dto.nombre,
+        apellido: dto.apellido,
+        correo: dto.correo,
+        telefono: dto.telefono,
+        ci: dto.ci,
+        institucion: dto.institucion,
+        especialidad: dto.especialidad,
+        experiencia: dto.experiencia,
+      },
     });
+
+    // Actualizar área si se envía
+    if (dto.id_area) {
+      await this.prisma.responsables_area.updateMany({
+        where: { id_usuario: id },
+        data: { id_area: dto.id_area },
+      });
+    }
+
+    return updated;
+  }
+
+  async delete(id: number) {
+    const responsable = await this.prisma.usuarios.findUnique({
+      where: { id_usuario: id },
+    });
+    if (!responsable) throw new NotFoundException('Responsable no encontrado');
+
+    // Eliminar la relación primero
+    await this.prisma.responsables_area.deleteMany({
+      where: { id_usuario: id },
+    });
+
+    // Luego eliminar el usuario
+    await this.prisma.usuarios.delete({
+      where: { id_usuario: id },
+    });
+
+    return { message: 'Responsable eliminado correctamente' };
   }
 
   async toggleActivo(id: number) {
@@ -130,7 +156,7 @@ export class ResponsablesService {
       data: { activo: !responsable.activo },
     });
   }
-  //Endpoint de validación rápida para frontend
+
   async checkTelefono(telefono: string) {
     const exists = await this.prisma.usuarios.findFirst({ where: { telefono } });
     return { exists: !!exists };
@@ -142,7 +168,7 @@ export class ResponsablesService {
   }
 
   async checkCorreo(correo: string) {
-  const exists = await this.prisma.usuarios.findFirst({ where: { correo } });
-  return { exists: !!exists };
-}
+    const exists = await this.prisma.usuarios.findFirst({ where: { correo } });
+    return { exists: !!exists };
+  }
 }
