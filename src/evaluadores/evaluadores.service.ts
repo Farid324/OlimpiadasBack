@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { QueryEvaluadorDto } from './dto/query-evaluador.dto';
 import { CreateEvaluadorDto } from './dto/create-evaluador.dto';
+import { UpdateEvaluadorDto } from './dto/update-evaluador.dto'; // ⬅️ nuevo
 
 function formatPrismaError(err: any): string {
   if (err?.code) {
@@ -85,7 +86,6 @@ export class EvaluadoresService {
   /** Helper: Obtiene el id_rol del rol 'EVALUADOR' desde la tabla "roles" */
   private async getEvaluadorRoleId(): Promise<number> {
     try {
-      // Consulta directa a la tabla "roles" (tal como está en tu BD)
       const rows = await this.prisma.$queryRawUnsafe<{ id_rol: number }[]>(
         `SELECT id_rol FROM "roles" WHERE nombre = 'EVALUADOR' LIMIT 1`
       );
@@ -96,7 +96,6 @@ export class EvaluadoresService {
       throw new BadRequestException(`Error leyendo tabla "roles": ${e?.message ?? e}`);
     }
 
-    // Si no existe el registro con nombre = 'EVALUADOR'
     throw new NotFoundException(
       'No se encontró el rol "EVALUADOR" en la tabla "roles". Verifica que exista ese registro.'
     );
@@ -184,8 +183,8 @@ export class EvaluadoresService {
           especialidad,
           experiencia,
           activo: typeof activo === 'boolean' ? activo : true,
-          hash_password: 'temporal', // cumple con tu esquema
-          id_rol: idRolEvaluador,    // FK real en tu tabla usuarios
+          hash_password: 'temporal',
+          id_rol: idRolEvaluador,
         },
         select: { id_usuario: true },
       });
@@ -234,5 +233,148 @@ export class EvaluadoresService {
       select: { id_usuario: true },
     });
     return { exists: !!found };
+  }
+
+  /** ====================== */
+  /** PASO 3: UPDATE y DELETE */
+  /** ====================== */
+
+  /** PATCH /evaluadores/:id */
+  async update(id: number, dto: UpdateEvaluadorDto & { nombreCompleto?: string; id_areas?: number[] }) {
+    try {
+      // Normalizar nombre/apellido si llega nombreCompleto
+      let nombre = (dto as any).nombre as string | undefined;
+      let apellido = (dto as any).apellido as string | undefined;
+      if (dto.nombreCompleto && (!nombre || !apellido)) {
+        const p = dto.nombreCompleto.trim().split(/\s+/);
+        if (p.length < 2) throw new BadRequestException('nombreCompleto debe incluir al menos nombre y apellido');
+        if (p.length === 4) {
+          nombre = p.slice(0, 2).join(' ');
+          apellido = p.slice(2).join(' ');
+        } else if (p.length === 3) {
+          nombre = p[0];
+          apellido = p.slice(1).join(' ');
+        } else {
+          nombre = p[0];
+          apellido = p.slice(1).join(' ');
+        }
+      }
+
+      // Chequear duplicados (excluyendo el propio id)
+      if (dto.correo) {
+        const dupCorreo = await this.prisma.usuarios.findFirst({
+          where: { correo: dto.correo, id_usuario: { not: id } },
+          select: { id_usuario: true },
+        });
+        if (dupCorreo) throw new BadRequestException('El correo ya está registrado en otro usuario');
+      }
+      if (dto.telefono) {
+        const dupTel = await this.prisma.usuarios.findFirst({
+          where: { telefono: dto.telefono, id_usuario: { not: id } },
+          select: { id_usuario: true },
+        });
+        if (dupTel) throw new BadRequestException('El teléfono ya está registrado en otro usuario');
+      }
+      if (dto.ci) {
+        const dupCi = await this.prisma.usuarios.findFirst({
+          where: { ci: dto.ci, id_usuario: { not: id } },
+          select: { id_usuario: true },
+        });
+        if (dupCi) throw new BadRequestException('El CI ya está registrado en otro usuario');
+      }
+
+      // Validar áreas si llegan
+      if (dto.id_areas) {
+        await this.assertAreasExisten(dto.id_areas);
+      }
+
+      // Data parcial (solo campos presentes)
+      const data: any = {};
+      if (typeof nombre === 'string' && nombre.trim()) data.nombre = nombre.trim();
+      if (typeof apellido === 'string' && apellido.trim()) data.apellido = apellido.trim();
+      if (dto.correo != null) data.correo = dto.correo;
+      if (dto.telefono != null) data.telefono = dto.telefono;
+      if (dto.ci != null) data.ci = dto.ci;
+      if (dto.institucion != null) data.institucion = dto.institucion;
+      if (dto.especialidad != null) data.especialidad = dto.especialidad;
+      if (dto.experiencia != null) data.experiencia = dto.experiencia;
+
+      const select = {
+        id_usuario: true,
+        nombre: true,
+        apellido: true,
+        correo: true,
+        telefono: true,
+        ci: true,
+        institucion: true,
+        especialidad: true,
+        experiencia: true,
+        activo: true,
+        evaluadores_area: {
+          select: { area: { select: { id_area: true, nombre_area: true } } },
+        },
+      };
+
+      return await this.prisma.$transaction(async (tx) => {
+        // Verificar existencia
+        const exists = await tx.usuarios.findUnique({ where: { id_usuario: id }, select: { id_usuario: true } });
+        if (!exists) throw new NotFoundException('Evaluador no encontrado');
+
+        // Actualizar datos básicos
+        if (Object.keys(data).length > 0) {
+          await tx.usuarios.update({ where: { id_usuario: id }, data });
+        }
+
+        // Actualizar áreas (si llegaron)
+        if (dto.id_areas) {
+          await tx.evaluadores_area.deleteMany({ where: { id_usuario: id } });
+          if (dto.id_areas.length) {
+            await tx.evaluadores_area.createMany({
+              data: dto.id_areas.map((id_area) => ({ id_usuario: id, id_area })),
+              skipDuplicates: true,
+            });
+          }
+        }
+
+        // Devolver actualizado
+        return tx.usuarios.findUnique({ where: { id_usuario: id }, select });
+      });
+    } catch (err: any) {
+      if (err instanceof PrismaClientKnownRequestError) {
+        throw new BadRequestException(formatPrismaError(err));
+      }
+      if (err?.response?.message) throw err;
+      throw new BadRequestException(formatPrismaError(err) || 'No se pudo actualizar el evaluador');
+    }
+  }
+
+  /** DELETE /evaluadores/:id */
+  async remove(id: number) {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Si no existe, lanzará error en delete/update
+        // 1) quitar vínculos de áreas
+        await tx.evaluadores_area.deleteMany({ where: { id_usuario: id } });
+
+        // 2) intentar borrado físico
+        try {
+          await tx.usuarios.delete({ where: { id_usuario: id } });
+          return { ok: true, deleted: true };
+        } catch (e: any) {
+          // Si hay FK, pasa a baja lógica
+          if (e?.code === 'P2003') {
+            await tx.usuarios.update({ where: { id_usuario: id }, data: { activo: false } });
+            return { ok: true, deleted: false, softDeleted: true };
+          }
+          throw e;
+        }
+      });
+    } catch (err: any) {
+      if (err instanceof PrismaClientKnownRequestError) {
+        throw new BadRequestException(formatPrismaError(err));
+      }
+      if (err?.response?.message) throw err;
+      throw new BadRequestException(formatPrismaError(err) || 'No se pudo eliminar el evaluador');
+    }
   }
 }

@@ -1,42 +1,44 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Query,
-  Param,
-  UsePipes,
-  ValidationPipe,
+  Controller, Get, Post, Body, Patch, Param, Query, Delete,
+  UseGuards, ParseIntPipe,
 } from '@nestjs/common';
 import { EvaluadoresService } from './evaluadores.service';
 import { CreateEvaluadorDto } from './dto/create-evaluador.dto';
-import { QueryEvaluadorDto } from './dto/query-evaluador.dto';
+import { UpdateEvaluadorDto } from './dto/update-evaluador.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { ADMIN } from '../auth/constants';
 
 @Controller('evaluadores')
-@UsePipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(ADMIN)
 export class EvaluadoresController {
-  constructor(private readonly evaluadoresService: EvaluadoresService) {}
-
-  @Get()
-  async findAll(@Query() query: QueryEvaluadorDto) {
-    return this.evaluadoresService.findAll(query);
-  }
+  constructor(private readonly service: EvaluadoresService) {}
 
   @Post()
-  async create(
-    @Body()
-    dto: CreateEvaluadorDto & { nombreCompleto?: string; id_areas?: number[] },
+  create(@Body() dto: CreateEvaluadorDto) {
+    return this.service.create(dto);
+  }
+
+  // Soporte a búsquedas por q / telefono / ci (el front lo usa para duplicados)
+  @Get()
+  findAll(@Query() query: { q?: string; telefono?: string; ci?: string }) {
+    return this.service.findAll(query);
+  }
+
+  // 🔹 Necesario para "Editar"
+  @Patch(':id')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateEvaluadorDto,
   ) {
-    return this.evaluadoresService.create(dto);
+    return this.service.update(id, dto);
   }
 
-  @Get('check-telefono/:telefono')
-  async existsByTelefono(@Param('telefono') telefono: string) {
-    return this.evaluadoresService.existsByTelefono(telefono);
-  }
-
-  @Get('check-ci/:ci')
-  async existsByCi(@Param('ci') ci: string) {
-    return this.evaluadoresService.existsByCi(ci);
+  // 🔹 Necesario para "Eliminar"
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.service.remove(id);
   }
 }
