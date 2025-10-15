@@ -12,7 +12,7 @@ async function bootstrap() {
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Authorization',
   });
-  
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -23,6 +23,7 @@ async function bootstrap() {
     }),
   );
   app.useGlobalInterceptors(new BigIntSerializerInterceptor());
+  console.log('[DBG] App DATABASE_URL =', process.env.DATABASE_URL);
   await app.listen(process.env.PORT || 3001);
   console.log(`[API] http://localhost:${process.env.PORT || 3001}`);
 }
