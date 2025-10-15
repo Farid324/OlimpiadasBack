@@ -3,6 +3,7 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  ArrayMinSize,
   IsIn,
   IsNotEmpty,
   IsOptional,
@@ -101,6 +102,7 @@ export class CreateGrupoDto {
 
   @IsArray()
   @ValidateNested({ each: true })
+  @ArrayMinSize(2)
   @Type(() => MiembroGrupoDto)
   miembros!: MiembroGrupoDto[];
 

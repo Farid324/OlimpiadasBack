@@ -225,8 +225,9 @@ export class GruposService {
   }
 
   async registerGrupo(dto: CreateGrupoDto, userId?: number) {
-    if (!dto.miembros?.length)
-      throw new BadRequestException('El grupo debe tener al menos 1 miembro.');
+    if (!dto.miembros || dto.miembros.length < 2) {
+      throw new BadRequestException('El grupo debe tener al menos 2 miembros.');
+    }
 
     const [idArea, idNivel] = await Promise.all([
       this.getAreaIdByName(dto.area),
