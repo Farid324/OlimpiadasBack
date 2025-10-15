@@ -126,13 +126,15 @@ export class OlimpistasService {
       );
     }
 
+    const ueNorm = (dto.unidadEducativa || '').trim().replace(/\s+/g, ' ');
+
     const competidor = existing
       ? await this.prisma.competidores.update({
           where: { id_competidor: existing.id_competidor },
           data: {
             nombres,
             apellidos,
-            escuela: dto.unidadEducativa,
+            escuela: ueNorm,
             departamento: dto.departamento,
             tutorContacto: dto.tutorContacto,
             id_tutor: tutor.id_tutor,
@@ -149,7 +151,7 @@ export class OlimpistasService {
             ci: dto.ci,
             nombres,
             apellidos,
-            escuela: dto.unidadEducativa,
+            escuela: ueNorm,
             departamento: dto.departamento,
             tutorContacto: dto.tutorContacto,
             id_tutor: tutor.id_tutor,

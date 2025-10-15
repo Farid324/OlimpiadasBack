@@ -9,6 +9,7 @@ import {
   Max,
   Min,
   IsOptional,
+  MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 
@@ -40,7 +41,10 @@ export class RegistroOlimpistaDto {
 
   @IsString()
   @IsNotEmpty()
-  @Matches(TEXT_RX)
+  @MaxLength(80, { message: 'Unidad Educativa: máximo 80 caracteres.' })
+  @Matches(/^[\p{L}\s.'-]+$/u, {
+    message: 'Unidad Educativa solo permite letras, espacios y (.’-).',
+  })
   unidadEducativa!: string;
 
   @IsString()
