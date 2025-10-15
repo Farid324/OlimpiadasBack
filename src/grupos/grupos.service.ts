@@ -11,6 +11,51 @@ import { NotFoundException } from '@nestjs/common';
 export class GruposService {
   constructor(private prisma: PrismaService) {}
 
+  async checkMiembroPorCI(ci: string) {
+    const comp = await this.prisma.competidores.findFirst({
+      where: { ci },
+      select: { id_competidor: true, nombres: true, apellidos: true },
+    });
+
+    if (!comp) {
+      return { exists: false, inGroup: false, group: null };
+    }
+
+    const miembro = await this.prisma.grupo_miembros.findFirst({
+      where: { id_competidor: comp.id_competidor },
+      select: {
+        id_grupo_miembro: true,
+        id_grupo: true,
+        grupo: {
+          select: {
+            id_grupo: true,
+            nombre_equipo: true,
+            escuela: true,
+            departamento: true,
+            id_area: true,
+            id_nivel: true,
+          },
+        },
+      },
+    });
+
+    return {
+      exists: true,
+      inGroup: Boolean(miembro),
+      competitor: comp,
+      group: miembro
+        ? {
+            id_grupo: miembro.grupo.id_grupo,
+            nombre: miembro.grupo.nombre_equipo, // ← mapeo aquí
+            escuela: miembro.grupo.escuela,
+            departamento: miembro.grupo.departamento,
+            id_area: miembro.grupo.id_area,
+            id_nivel: miembro.grupo.id_nivel,
+          }
+        : null,
+    };
+  }
+
   private async getAreaIdByName(nombre: string): Promise<number> {
     const area = await this.prisma.areas.findFirst({
       where: {
@@ -173,20 +218,49 @@ export class GruposService {
           summary.skippedInsc++;
         }
 
+        const miembroEnOtro = await this.prisma.grupo_miembros.findFirst({
+          where: { id_competidor: c.id_competidor },
+          select: {
+            id_grupo: true,
+            grupo: { select: { id_grupo: true, nombre_equipo: true } },
+          },
+        });
+
+        if (miembroEnOtro && miembroEnOtro.grupo.id_grupo !== grupo.id_grupo) {
+          throw new BadRequestException(
+            `El olimpista con CI ${m.ci} ya pertenece al grupo “${miembroEnOtro.grupo.nombre_equipo}”.`,
+          );
+        }
+
         const existingLink = await this.prisma.grupo_miembros.findFirst({
           where: { id_grupo: grupo.id_grupo, id_competidor: c.id_competidor },
           select: { id_grupo_miembro: true },
         });
 
         if (!existingLink) {
-          await this.prisma.grupo_miembros.create({
-            data: {
-              id_grupo: grupo.id_grupo,
-              id_competidor: c.id_competidor,
-              rol: 'MIEMBRO',
-            },
-          });
-          summary.linked++;
+          try {
+            await this.prisma.grupo_miembros.create({
+              data: {
+                id_grupo: grupo.id_grupo,
+                id_competidor: c.id_competidor,
+                rol: 'MIEMBRO',
+              },
+            });
+            summary.linked++;
+          } catch (e: any) {
+            // Si otra petición ganó la carrera y violó la unique:
+            if (
+              e.code === 'P2002' &&
+              String(e.meta?.target || '').includes(
+                'uq_competidor_en_un_solo_grupo',
+              )
+            ) {
+              throw new BadRequestException(
+                'El olimpista ya pertenece a un grupo existente.',
+              );
+            }
+            throw e;
+          }
         } else {
           summary.skippedLink++;
         }

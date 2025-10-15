@@ -195,6 +195,7 @@ model grupo_miembros {
   grupo      grupos       @relation(fields: [id_grupo], references: [id_grupo], onDelete: Cascade)
   competidor competidores @relation("competidor_miembros", fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
 
+  @@unique([id_competidor], name: "uq_competidor_en_un_solo_grupo")
   @@unique([id_grupo, id_competidor], name: "uq_miembro_por_grupo")
   @@index([id_grupo])
   @@index([id_competidor])
