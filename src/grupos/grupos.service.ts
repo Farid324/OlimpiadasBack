@@ -6,6 +6,7 @@ import { CreateGrupoDto, MiembroGrupoDto } from './dto/create-grupo.dto';
 import { splitNombreCompleto } from '../common/utils/name.util';
 import { resolveNivelYGrado } from '../common/utils/grade.util';
 import { NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class GruposService {
@@ -81,6 +82,91 @@ export class GruposService {
     return nivel.id_nivel;
   }
 
+  private async resolveTutorId(dto: CreateGrupoDto): Promise<number | null> {
+    if (dto.tutorId) {
+      const exists = await this.prisma.tutores.findUnique({
+        where: { id_tutor: dto.tutorId },
+        select: { id_tutor: true },
+      });
+      if (!exists) {
+        throw new BadRequestException(`Tutor con id ${dto.tutorId} no existe`);
+      }
+      return dto.tutorId;
+    }
+
+    if (dto.tutorTelefono) {
+      const found = await this.prisma.tutores.findUnique({
+        where: { telefono: dto.tutorTelefono },
+        select: { id_tutor: true },
+      });
+      if (found) return found.id_tutor;
+
+      if (dto.tutorPayload) {
+        if (!dto.tutorPayload.telefono) {
+          throw new BadRequestException(
+            'tutorPayload.telefono es requerido para crear el tutor.',
+          );
+        }
+        if (dto.tutorPayload.telefono !== dto.tutorTelefono) {
+          throw new BadRequestException(
+            'tutorPayload.telefono debe coincidir con tutorTelefono.',
+          );
+        }
+
+        const upserted = await this.prisma.tutores.upsert({
+          where: { telefono: dto.tutorTelefono },
+          create: {
+            nombre_completo: dto.tutorPayload.nombreCompleto,
+            ci: dto.tutorPayload.ci ?? null,
+            correo: dto.tutorPayload.correo ?? null,
+            telefono: dto.tutorPayload.telefono,
+            unidad_educativa: dto.tutorPayload.unidadEducativa ?? null,
+          },
+          update: {
+            nombre_completo: dto.tutorPayload.nombreCompleto,
+            ci: dto.tutorPayload.ci ?? null,
+            correo: dto.tutorPayload.correo ?? null,
+            unidad_educativa: dto.tutorPayload.unidadEducativa ?? null,
+          },
+          select: { id_tutor: true },
+        });
+        return upserted.id_tutor;
+      }
+
+      throw new BadRequestException(
+        `No existe tutor con teléfono ${dto.tutorTelefono}`,
+      );
+    }
+
+    if (dto.tutorPayload) {
+      if (!dto.tutorPayload.telefono) {
+        throw new BadRequestException(
+          'tutorPayload.telefono es requerido para crear el tutor.',
+        );
+      }
+      const upserted = await this.prisma.tutores.upsert({
+        where: { telefono: dto.tutorPayload.telefono },
+        create: {
+          nombre_completo: dto.tutorPayload.nombreCompleto,
+          ci: dto.tutorPayload.ci ?? null,
+          correo: dto.tutorPayload.correo ?? null,
+          telefono: dto.tutorPayload.telefono,
+          unidad_educativa: dto.tutorPayload.unidadEducativa ?? null,
+        },
+        update: {
+          nombre_completo: dto.tutorPayload.nombreCompleto,
+          ci: dto.tutorPayload.ci ?? null,
+          correo: dto.tutorPayload.correo ?? null,
+          unidad_educativa: dto.tutorPayload.unidadEducativa ?? null,
+        },
+        select: { id_tutor: true },
+      });
+      return upserted.id_tutor;
+    }
+
+    return null;
+  }
+
   private async upsertCompetidorDesdeMiembro(
     m: MiembroGrupoDto,
     escuela: string,
@@ -146,8 +232,32 @@ export class GruposService {
       this.getAreaIdByName(dto.area),
       this.getNivelIdByName(dto.nivel),
     ]);
+    const idTutor = await this.resolveTutorId(dto);
+    if (!idTutor)
+      throw new BadRequestException(
+        'El grupo debe estar vinculado a un tutor.',
+      );
 
     const fallbackGrupoNivel = dto.nivel;
+    const updateData: Prisma.gruposUpdateInput = {
+      departamento: dto.departamento,
+      created_by: userId ?? null,
+      area: { connect: { id_area: idArea } },
+      nivel: { connect: { id_nivel: idNivel } },
+      ...(idTutor
+        ? { tutor: { connect: { id_tutor: idTutor } } }
+        : { tutor: { disconnect: true } }),
+    };
+
+    const createData: Prisma.gruposCreateInput = {
+      nombre_equipo: dto.nombreEquipo,
+      escuela: dto.unidadEducativa,
+      departamento: dto.departamento,
+      created_by: userId ?? null,
+      area: { connect: { id_area: idArea } },
+      nivel: { connect: { id_nivel: idNivel } },
+      ...(idTutor ? { tutor: { connect: { id_tutor: idTutor } } } : {}),
+    };
 
     const grupo = await this.prisma.grupos.upsert({
       where: {
@@ -158,18 +268,8 @@ export class GruposService {
           escuela: dto.unidadEducativa,
         },
       },
-      update: {
-        departamento: dto.departamento,
-        created_by: userId,
-      },
-      create: {
-        nombre_equipo: dto.nombreEquipo,
-        escuela: dto.unidadEducativa,
-        departamento: dto.departamento,
-        id_area: idArea,
-        id_nivel: idNivel,
-        created_by: userId,
-      },
+      update: updateData,
+      create: createData,
       select: { id_grupo: true },
     });
 
@@ -287,6 +387,14 @@ export class GruposService {
       include: {
         area: { select: { nombre_area: true } },
         nivel: { select: { nombre_nivel: true } },
+        tutor: {
+          select: {
+            id_tutor: true,
+            nombre_completo: true,
+            telefono: true,
+            correo: true,
+          },
+        },
         miembros: {
           include: {
             competidor: {

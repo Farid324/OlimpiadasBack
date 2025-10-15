@@ -13,6 +13,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { CreateTutorDto } from '../../tutores/dto/create-tutor.dto';
 
 const TEXT_RX = /^[\p{L}\p{N}\s.\-']+$/u;
 const NUM_RX = /^\d+$/;
@@ -112,4 +113,18 @@ export class CreateGrupoDto {
   @Min(1)
   @Max(6)
   grado?: number;
+
+  @IsOptional()
+  @IsInt()
+  tutorId?: number;
+
+  @IsNotEmpty()
+  @IsString()
+  @Matches(/^\d{7,12}$/, { message: 'Teléfono inválido para tutor' })
+  tutorTelefono?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateTutorDto)
+  tutorPayload?: CreateTutorDto;
 }
