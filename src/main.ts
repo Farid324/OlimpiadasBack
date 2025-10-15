@@ -19,6 +19,7 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
       transform: true,
       transformOptions: { enableImplicitConversion: true },
+      disableErrorMessages: false,
     }),
   );
   app.useGlobalInterceptors(new BigIntSerializerInterceptor());

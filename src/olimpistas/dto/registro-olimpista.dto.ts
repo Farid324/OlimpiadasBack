@@ -10,6 +10,7 @@ import {
   Min,
   IsOptional,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 const TEXT_RX = /^[\p{L}\p{N}\s.\-']+$/u;
 const NUM_RX = /^\d+$/;
@@ -28,6 +29,13 @@ export class RegistroOlimpistaDto {
   @IsString()
   @IsNotEmpty()
   @Matches(NUM_RX)
+  @Transform(({ value }) => (value ?? '').toString().trim())
+  @IsNotEmpty({
+    message: 'Debe registrar un tutor antes de asociar un olimpista.',
+  })
+  @Matches(/^\d{7,12}$/, {
+    message: 'El contacto del tutor debe tener entre 7 y 12 dígitos.',
+  })
   tutorContacto!: string;
 
   @IsString()

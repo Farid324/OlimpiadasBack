@@ -56,6 +56,25 @@ export class OlimpistasService {
       gradoEscolar: dto.gradoEscolar,
     });
 
+    const tutor = await this.prisma.tutores.findUnique({
+      where: { telefono: dto.tutorContacto },
+      select: { id_tutor: true },
+    });
+
+    if (!tutor) {
+      throw new BadRequestException(
+        'Debe registrar un tutor antes de asociar un olimpista.',
+      );
+    }
+
+    const nivelCanon = escolar.nivel; 
+    const gradoCanon = escolar.grado ?? dto.grado;
+    if (!nivelCanon) {
+      throw new BadRequestException(
+        `Nivel no encontrado: "${dto.nivel ?? dto.gradoEscolar ?? ''}"`,
+      );
+    }
+
     const competidor = existing
       ? await this.prisma.competidores.update({
           where: { id_competidor: existing.id_competidor },
@@ -65,6 +84,7 @@ export class OlimpistasService {
             escuela: dto.unidadEducativa,
             departamento: dto.departamento,
             tutorContacto: dto.tutorContacto,
+            id_tutor: tutor.id_tutor,
             nivel: escolar.nivel
               ? escolar.nivel === 'Primaria'
                 ? 'PRIMARIA'
@@ -81,6 +101,7 @@ export class OlimpistasService {
             escuela: dto.unidadEducativa,
             departamento: dto.departamento,
             tutorContacto: dto.tutorContacto,
+            id_tutor: tutor.id_tutor,
             activo: true,
             nivel: escolar.nivel
               ? escolar.nivel === 'Primaria'
