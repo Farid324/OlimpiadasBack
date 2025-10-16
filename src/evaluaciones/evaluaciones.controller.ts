@@ -1,40 +1,80 @@
+// src/evaluaciones-admin/evaluaciones-admin.controller.ts
 import {
-  Body,
   Controller,
   Get,
-  Param,
-  ParseIntPipe,
-  Post,
+  Query,
   UseGuards,
+  Patch,
+  Body,
+  Post,
+  Req,
+  Param,
 } from '@nestjs/common';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { CurrentUser } from 'src/common/decorators/current-user.decorator';
-import { EvaluacionesService } from './evaluaciones.service';
-import { RegistrarNotaDto } from './dto/registrar-nota.dto';
-import type { JwtPayload } from '../interfaces/jwt-payload.interface';
-import type { Evaluacion } from './entities/evaluacion.entity';
+import { EvaluacionesAdminService } from './evaluaciones.service';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { ADMIN } from '../auth/constants';
 
-@Controller('evaluaciones')
+@Controller('admin/evaluaciones')
 @UseGuards(JwtAuthGuard, RolesGuard)
-export class EvaluacionesController {
-  constructor(private readonly evaluacionesService: EvaluacionesService) {}
+@Roles(ADMIN)
+export class EvaluacionesAdminController {
+  constructor(private service: EvaluacionesAdminService) {}
 
-  @Get('mis-asignados')
-  async getMisAsignados(
-    @CurrentUser() user: JwtPayload,
-  ): Promise<Evaluacion[]> {
-    const idUsuario = parseInt(user.sub, 10); // convertir string a number
-    return this.evaluacionesService.obtenerAsignados(idUsuario);
+  // GET /admin/evaluaciones?search=juan&filtro=PENDIENTE
+  @Get()
+  async listarCompetidores(
+    @Req() req: any,
+    @Query('search') search?: string,
+    @Query('filtro') filtro?: 'PENDIENTE' | 'EVALUADO' | 'TODOS',
+  ) {
+    // Ejemplo: obtener id de áreas administradas
+    const idUsuario = Number(req.user.sub);
+
+    const areas = await this.service['prisma'].responsables_area.findMany({
+      where: { id_usuario: idUsuario },
+      select: { id_area: true },
+    });
+    const idAreas = areas.map((a) => a.id_area);
+
+    return this.service.listarCompetidores({ search, idAreas, filtro });
   }
 
-  @Post(':id/nota')
+  // POST /admin/evaluaciones/nota
+  @Post('nota')
   async registrarNota(
-    @Param('id', ParseIntPipe) idEvaluacion: number,
-    @CurrentUser() user: JwtPayload,
-    @Body() dto: RegistrarNotaDto,
-  ): Promise<Evaluacion> {
-    const idUsuario = parseInt(user.sub, 10);
-    return this.evaluacionesService.registrarNota(idEvaluacion, idUsuario, dto);
+    @Req() req: any,
+    @Body()
+    body: { idInscripcion: number; nota: number },
+  ) {
+    const idEvaluador = Number(req.user.sub);
+    return this.service.registrarNota({
+      idInscripcion: body.idInscripcion,
+      idEvaluador,
+      nota: body.nota,
+    });
+  }
+
+  // PATCH /admin/evaluaciones/nota
+  @Patch('nota')
+  async editarNota(
+    @Req() req: any,
+    @Body()
+    body: { idEvaluacion: number; nuevaNota: number },
+  ) {
+    const idUsuario = Number(req.user.sub);
+    return this.service.editarNota({
+      idEvaluacion: body.idEvaluacion,
+      idUsuario,
+      nuevaNota: body.nuevaNota,
+    });
+  }
+
+  // evaluaciones-admin.controller.ts
+  @Get(':idEvaluacion/logs')
+  obtenerLogs(@Param('idEvaluacion') idEvaluacion: string) {
+    const id = Number(idEvaluacion);
+    return this.service.obtenerLogsCambios(id);
   }
 }
