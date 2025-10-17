@@ -23,6 +23,7 @@ import { TutoresModule } from './tutores/tutores.module';
 // NUEVOS
 import { NivelesModule } from './niveles/niveles.module';
 import { ReportesModule } from './reportes/reportes.module';
+import { EvaluacionesAdminModule } from './evaluaciones/evaluaciones.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { ReportesModule } from './reportes/reportes.module';
 
     NivelesModule,
     ReportesModule,
+    EvaluacionesAdminModule,
 
     JwtModule.register({
       secret: process.env.JWT_SECRET,
