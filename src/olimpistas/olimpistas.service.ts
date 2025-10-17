@@ -29,20 +29,85 @@ export class OlimpistasService {
   }
 
   private async getNivelIdByName(nombre: string): Promise<number> {
-    const nivel = await this.prisma.niveles.findFirst({
-      where: { nombre_nivel: { equals: nombre, mode: 'insensitive' } },
-      select: { id_nivel: true },
+    const raw = (nombre ?? '').toString();
+    const s = raw.trim().toLowerCase();
+
+    const canon =
+      s === 'primaria'
+        ? 'Primaria'
+        : s === 'secundaria'
+          ? 'Secundaria'
+          : s === 'primaria '
+            ? 'Primaria'
+            : s === ' secundaria'
+              ? 'Secundaria'
+              : s === 'primaria.'
+                ? 'Primaria'
+                : s === 'secundaria.'
+                  ? 'Secundaria'
+                  : null;
+
+    console.log('[DBG] getNivelIdByName input=', raw, 'canon=', canon);
+
+    if (canon) {
+      const nivel = await this.prisma.niveles.findFirst({
+        where: { nombre_nivel: { equals: canon, mode: 'insensitive' } },
+        select: { id_nivel: true, nombre_nivel: true },
+      });
+      if (nivel) {
+        console.log('[DBG] nivel match (equals):', nivel);
+        return nivel.id_nivel;
+      }
+    }
+
+    const nivelAlt = await this.prisma.niveles.findFirst({
+      where: { nombre_nivel: { contains: s, mode: 'insensitive' } },
+      select: { id_nivel: true, nombre_nivel: true },
     });
-    if (!nivel)
-      throw new BadRequestException(`Nivel no encontrado: "${nombre}"`);
-    return nivel.id_nivel;
+    if (nivelAlt) {
+      console.log('[DBG] nivel match (contains):', nivelAlt);
+      return nivelAlt.id_nivel;
+    }
+
+    const all = await this.prisma.niveles.findMany({
+      select: { id_nivel: true, nombre_nivel: true },
+      orderBy: { id_nivel: 'asc' },
+    });
+    const disponibles = all
+      .map((n) => `${n.id_nivel}:${n.nombre_nivel}`)
+      .join(', ');
+
+    throw new BadRequestException(
+      `Nivel no encontrado: "${raw}". Niveles disponibles en BD: [${disponibles}]`,
+    );
   }
 
   async registerOne(dto: RegistroOlimpistaDto, userId?: number) {
-    const [idArea, idNivel] = await Promise.all([
-      this.getAreaIdByName(dto.area),
-      this.getNivelIdByName(dto.nivel),
-    ]);
+    const idArea = await this.getAreaIdByName(dto.area);
+
+    const escolar = resolveNivelYGrado({
+      nivelCompetidor: dto.nivel as any,
+      grado: dto.grado as any,
+      gradoEscolar: dto.gradoEscolar,
+    });
+
+    let nivelCanon = escolar.nivel as 'Primaria' | 'Secundaria' | undefined;
+    let gradoCanon: number | undefined = escolar.grado ?? dto.grado;
+
+    if (!nivelCanon && typeof dto.nivel === 'string') {
+      const m = /(\d+)\s*º\s*([pPsS])/.exec(dto.nivel.trim());
+      if (m) {
+        gradoCanon = Number(m[1]);
+        nivelCanon = m[2].toLowerCase() === 'p' ? 'Primaria' : 'Secundaria';
+      }
+    }
+
+    if (!nivelCanon) {
+      throw new BadRequestException(
+        `Nivel no encontrado: "${dto.nivel ?? dto.gradoEscolar ?? ''}"`,
+      );
+    }
+    const idNivel = await this.getNivelIdByName(nivelCanon);
 
     const { nombres, apellidos } = splitNombreCompleto(dto.nombreCompleto);
 
@@ -50,11 +115,18 @@ export class OlimpistasService {
       where: { ci: dto.ci },
     });
 
-    const escolar = resolveNivelYGrado({
-      nivelCompetidor: dto.nivelCompetidor as any,
-      grado: dto.grado as any,
-      gradoEscolar: dto.gradoEscolar,
+    const tutor = await this.prisma.tutores.findUnique({
+      where: { telefono: dto.tutorContacto },
+      select: { id_tutor: true },
     });
+
+    if (!tutor) {
+      throw new BadRequestException(
+        'Debe registrar un tutor antes de asociar un olimpista.',
+      );
+    }
+
+    const ueNorm = (dto.unidadEducativa || '').trim().replace(/\s+/g, ' ');
 
     const competidor = existing
       ? await this.prisma.competidores.update({
@@ -62,9 +134,10 @@ export class OlimpistasService {
           data: {
             nombres,
             apellidos,
-            escuela: dto.unidadEducativa,
+            escuela: ueNorm,
             departamento: dto.departamento,
             tutorContacto: dto.tutorContacto,
+            id_tutor: tutor.id_tutor,
             nivel: escolar.nivel
               ? escolar.nivel === 'Primaria'
                 ? 'PRIMARIA'
@@ -78,9 +151,10 @@ export class OlimpistasService {
             ci: dto.ci,
             nombres,
             apellidos,
-            escuela: dto.unidadEducativa,
+            escuela: ueNorm,
             departamento: dto.departamento,
             tutorContacto: dto.tutorContacto,
+            id_tutor: tutor.id_tutor,
             activo: true,
             nivel: escolar.nivel
               ? escolar.nivel === 'Primaria'
@@ -117,7 +191,7 @@ export class OlimpistasService {
         skippedInsc: false,
         competidorId: competidor.id_competidor,
         area: dto.area,
-        nivel: dto.nivel,
+        nivel: nivelCanon,
       };
     }
 
@@ -126,7 +200,7 @@ export class OlimpistasService {
       skippedInsc: true,
       competidorId: competidor.id_competidor,
       area: dto.area,
-      nivel: dto.nivel,
+      nivel: nivelCanon,
     };
   }
 

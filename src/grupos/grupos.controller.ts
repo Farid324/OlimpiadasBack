@@ -9,6 +9,9 @@ import {
   UploadedFile,
   UseGuards,
   UseInterceptors,
+  Get,
+  Param,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -18,12 +21,17 @@ import { GruposService } from './grupos.service';
 import { CreateGrupoDto } from './dto/create-grupo.dto';
 import { parseCsvToDtos } from '../common/utils/csv.util';
 
-import { Get, Param } from '@nestjs/common';
 
 @Controller('grupos')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class GruposController {
   constructor(private readonly service: GruposService) {}
+
+  @Get('check-miembro')
+  async checkMiembro(@Query('ci') ci?: string) {
+    if (!ci) throw new BadRequestException('Parámetro "ci" es requerido');
+    return this.service.checkMiembroPorCI(ci.trim());
+  }
 
   @Get(':id')
   @Roles('ADMINISTRADOR')

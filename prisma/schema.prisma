@@ -139,6 +139,7 @@ model tutores {
   created_at       DateTime @default(now())
 
   competidores competidores[]
+  grupos       grupos[]
 
   @@index([telefono])
   @@index([nombre_completo])
@@ -177,6 +178,9 @@ model grupos {
   created_at    DateTime @default(now())
   created_by    Int?
 
+  id_tutor Int?
+
+  tutor    tutores? @relation(fields: [id_tutor], references: [id_tutor])
   area     areas            @relation("area_grupos", fields: [id_area], references: [id_area])
   nivel    niveles          @relation("nivel_grupos", fields: [id_nivel], references: [id_nivel])
   miembros grupo_miembros[]
@@ -184,17 +188,19 @@ model grupos {
   @@unique([nombre_equipo, id_area, id_nivel, escuela], name: "uq_grupo_unico")
   @@index([id_area])
   @@index([id_nivel])
+  @@index([id_tutor])
 }
 
 model grupo_miembros {
   id_grupo_miembro Int     @id @default(autoincrement()) @db.Integer
   id_grupo         Int
   id_competidor    Int
-  rol              String? // opcional
+  rol              String? 
 
   grupo      grupos       @relation(fields: [id_grupo], references: [id_grupo], onDelete: Cascade)
   competidor competidores @relation("competidor_miembros", fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
 
+  @@unique([id_competidor], name: "uq_competidor_en_un_solo_grupo")
   @@unique([id_grupo, id_competidor], name: "uq_miembro_por_grupo")
   @@index([id_grupo])
   @@index([id_competidor])

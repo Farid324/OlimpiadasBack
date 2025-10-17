@@ -6,10 +6,56 @@ import { CreateGrupoDto, MiembroGrupoDto } from './dto/create-grupo.dto';
 import { splitNombreCompleto } from '../common/utils/name.util';
 import { resolveNivelYGrado } from '../common/utils/grade.util';
 import { NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class GruposService {
   constructor(private prisma: PrismaService) {}
+
+  async checkMiembroPorCI(ci: string) {
+    const comp = await this.prisma.competidores.findFirst({
+      where: { ci },
+      select: { id_competidor: true, nombres: true, apellidos: true },
+    });
+
+    if (!comp) {
+      return { exists: false, inGroup: false, group: null };
+    }
+
+    const miembro = await this.prisma.grupo_miembros.findFirst({
+      where: { id_competidor: comp.id_competidor },
+      select: {
+        id_grupo_miembro: true,
+        id_grupo: true,
+        grupo: {
+          select: {
+            id_grupo: true,
+            nombre_equipo: true,
+            escuela: true,
+            departamento: true,
+            id_area: true,
+            id_nivel: true,
+          },
+        },
+      },
+    });
+
+    return {
+      exists: true,
+      inGroup: Boolean(miembro),
+      competitor: comp,
+      group: miembro
+        ? {
+            id_grupo: miembro.grupo.id_grupo,
+            nombre: miembro.grupo.nombre_equipo, // ← mapeo aquí
+            escuela: miembro.grupo.escuela,
+            departamento: miembro.grupo.departamento,
+            id_area: miembro.grupo.id_area,
+            id_nivel: miembro.grupo.id_nivel,
+          }
+        : null,
+    };
+  }
 
   private async getAreaIdByName(nombre: string): Promise<number> {
     const area = await this.prisma.areas.findFirst({
@@ -34,6 +80,91 @@ export class GruposService {
     if (!nivel)
       throw new BadRequestException(`Nivel no encontrado: "${nombre}"`);
     return nivel.id_nivel;
+  }
+
+  private async resolveTutorId(dto: CreateGrupoDto): Promise<number | null> {
+    if (dto.tutorId) {
+      const exists = await this.prisma.tutores.findUnique({
+        where: { id_tutor: dto.tutorId },
+        select: { id_tutor: true },
+      });
+      if (!exists) {
+        throw new BadRequestException(`Tutor con id ${dto.tutorId} no existe`);
+      }
+      return dto.tutorId;
+    }
+
+    if (dto.tutorTelefono) {
+      const found = await this.prisma.tutores.findUnique({
+        where: { telefono: dto.tutorTelefono },
+        select: { id_tutor: true },
+      });
+      if (found) return found.id_tutor;
+
+      if (dto.tutorPayload) {
+        if (!dto.tutorPayload.telefono) {
+          throw new BadRequestException(
+            'tutorPayload.telefono es requerido para crear el tutor.',
+          );
+        }
+        if (dto.tutorPayload.telefono !== dto.tutorTelefono) {
+          throw new BadRequestException(
+            'tutorPayload.telefono debe coincidir con tutorTelefono.',
+          );
+        }
+
+        const upserted = await this.prisma.tutores.upsert({
+          where: { telefono: dto.tutorTelefono },
+          create: {
+            nombre_completo: dto.tutorPayload.nombreCompleto,
+            ci: dto.tutorPayload.ci ?? null,
+            correo: dto.tutorPayload.correo ?? null,
+            telefono: dto.tutorPayload.telefono,
+            unidad_educativa: dto.tutorPayload.unidadEducativa ?? null,
+          },
+          update: {
+            nombre_completo: dto.tutorPayload.nombreCompleto,
+            ci: dto.tutorPayload.ci ?? null,
+            correo: dto.tutorPayload.correo ?? null,
+            unidad_educativa: dto.tutorPayload.unidadEducativa ?? null,
+          },
+          select: { id_tutor: true },
+        });
+        return upserted.id_tutor;
+      }
+
+      throw new BadRequestException(
+        `No existe tutor con teléfono ${dto.tutorTelefono}`,
+      );
+    }
+
+    if (dto.tutorPayload) {
+      if (!dto.tutorPayload.telefono) {
+        throw new BadRequestException(
+          'tutorPayload.telefono es requerido para crear el tutor.',
+        );
+      }
+      const upserted = await this.prisma.tutores.upsert({
+        where: { telefono: dto.tutorPayload.telefono },
+        create: {
+          nombre_completo: dto.tutorPayload.nombreCompleto,
+          ci: dto.tutorPayload.ci ?? null,
+          correo: dto.tutorPayload.correo ?? null,
+          telefono: dto.tutorPayload.telefono,
+          unidad_educativa: dto.tutorPayload.unidadEducativa ?? null,
+        },
+        update: {
+          nombre_completo: dto.tutorPayload.nombreCompleto,
+          ci: dto.tutorPayload.ci ?? null,
+          correo: dto.tutorPayload.correo ?? null,
+          unidad_educativa: dto.tutorPayload.unidadEducativa ?? null,
+        },
+        select: { id_tutor: true },
+      });
+      return upserted.id_tutor;
+    }
+
+    return null;
   }
 
   private async upsertCompetidorDesdeMiembro(
@@ -94,15 +225,40 @@ export class GruposService {
   }
 
   async registerGrupo(dto: CreateGrupoDto, userId?: number) {
-    if (!dto.miembros?.length)
-      throw new BadRequestException('El grupo debe tener al menos 1 miembro.');
+    if (!dto.miembros || dto.miembros.length < 2) {
+      throw new BadRequestException('El grupo debe tener al menos 2 miembros.');
+    }
 
     const [idArea, idNivel] = await Promise.all([
       this.getAreaIdByName(dto.area),
       this.getNivelIdByName(dto.nivel),
     ]);
+    const idTutor = await this.resolveTutorId(dto);
+    if (!idTutor)
+      throw new BadRequestException(
+        'El grupo debe estar vinculado a un tutor.',
+      );
 
     const fallbackGrupoNivel = dto.nivel;
+    const updateData: Prisma.gruposUpdateInput = {
+      departamento: dto.departamento,
+      created_by: userId ?? null,
+      area: { connect: { id_area: idArea } },
+      nivel: { connect: { id_nivel: idNivel } },
+      ...(idTutor
+        ? { tutor: { connect: { id_tutor: idTutor } } }
+        : { tutor: { disconnect: true } }),
+    };
+
+    const createData: Prisma.gruposCreateInput = {
+      nombre_equipo: dto.nombreEquipo,
+      escuela: dto.unidadEducativa,
+      departamento: dto.departamento,
+      created_by: userId ?? null,
+      area: { connect: { id_area: idArea } },
+      nivel: { connect: { id_nivel: idNivel } },
+      ...(idTutor ? { tutor: { connect: { id_tutor: idTutor } } } : {}),
+    };
 
     const grupo = await this.prisma.grupos.upsert({
       where: {
@@ -113,18 +269,8 @@ export class GruposService {
           escuela: dto.unidadEducativa,
         },
       },
-      update: {
-        departamento: dto.departamento,
-        created_by: userId,
-      },
-      create: {
-        nombre_equipo: dto.nombreEquipo,
-        escuela: dto.unidadEducativa,
-        departamento: dto.departamento,
-        id_area: idArea,
-        id_nivel: idNivel,
-        created_by: userId,
-      },
+      update: updateData,
+      create: createData,
       select: { id_grupo: true },
     });
 
@@ -173,20 +319,49 @@ export class GruposService {
           summary.skippedInsc++;
         }
 
+        const miembroEnOtro = await this.prisma.grupo_miembros.findFirst({
+          where: { id_competidor: c.id_competidor },
+          select: {
+            id_grupo: true,
+            grupo: { select: { id_grupo: true, nombre_equipo: true } },
+          },
+        });
+
+        if (miembroEnOtro && miembroEnOtro.grupo.id_grupo !== grupo.id_grupo) {
+          throw new BadRequestException(
+            `El olimpista con CI ${m.ci} ya pertenece al grupo “${miembroEnOtro.grupo.nombre_equipo}”.`,
+          );
+        }
+
         const existingLink = await this.prisma.grupo_miembros.findFirst({
           where: { id_grupo: grupo.id_grupo, id_competidor: c.id_competidor },
           select: { id_grupo_miembro: true },
         });
 
         if (!existingLink) {
-          await this.prisma.grupo_miembros.create({
-            data: {
-              id_grupo: grupo.id_grupo,
-              id_competidor: c.id_competidor,
-              rol: 'MIEMBRO',
-            },
-          });
-          summary.linked++;
+          try {
+            await this.prisma.grupo_miembros.create({
+              data: {
+                id_grupo: grupo.id_grupo,
+                id_competidor: c.id_competidor,
+                rol: 'MIEMBRO',
+              },
+            });
+            summary.linked++;
+          } catch (e: any) {
+            // Si otra petición ganó la carrera y violó la unique:
+            if (
+              e.code === 'P2002' &&
+              String(e.meta?.target || '').includes(
+                'uq_competidor_en_un_solo_grupo',
+              )
+            ) {
+              throw new BadRequestException(
+                'El olimpista ya pertenece a un grupo existente.',
+              );
+            }
+            throw e;
+          }
         } else {
           summary.skippedLink++;
         }
@@ -213,6 +388,14 @@ export class GruposService {
       include: {
         area: { select: { nombre_area: true } },
         nivel: { select: { nombre_nivel: true } },
+        tutor: {
+          select: {
+            id_tutor: true,
+            nombre_completo: true,
+            telefono: true,
+            correo: true,
+          },
+        },
         miembros: {
           include: {
             competidor: {
