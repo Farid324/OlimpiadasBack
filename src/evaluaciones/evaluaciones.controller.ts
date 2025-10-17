@@ -12,24 +12,25 @@ import {
 } from '@nestjs/common';
 import { EvaluacionesAdminService } from './evaluaciones.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { RolesGuard } from '../common/guards/roles.guard';
-import { Roles } from '../common/decorators/roles.decorator';
-import { ADMIN } from '../auth/constants';
+import { JwtPayload } from 'src/interfaces/jwt-payload.interface';
+import { Request } from 'express';
+
+// ✅ Declaración de request tipado
+interface RequestWithUser extends Request {
+  user: JwtPayload;
+}
 
 @Controller('admin/evaluaciones')
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(ADMIN)
+@UseGuards(JwtAuthGuard)
 export class EvaluacionesAdminController {
   constructor(private service: EvaluacionesAdminService) {}
 
-  // GET /admin/evaluaciones?search=juan&filtro=PENDIENTE
-  @Get()
+  @Get('lista')
   async listarCompetidores(
-    @Req() req: any,
+    @Req() req: RequestWithUser,
     @Query('search') search?: string,
     @Query('filtro') filtro?: 'PENDIENTE' | 'EVALUADO' | 'TODOS',
   ) {
-    // Ejemplo: obtener id de áreas administradas
     const idUsuario = Number(req.user.sub);
 
     const areas = await this.service['prisma'].responsables_area.findMany({
@@ -41,12 +42,10 @@ export class EvaluacionesAdminController {
     return this.service.listarCompetidores({ search, idAreas, filtro });
   }
 
-  // POST /admin/evaluaciones/nota
   @Post('nota')
   async registrarNota(
-    @Req() req: any,
-    @Body()
-    body: { idInscripcion: number; nota: number },
+    @Req() req: RequestWithUser,
+    @Body() body: { idInscripcion: number; nota: number },
   ) {
     const idEvaluador = Number(req.user.sub);
     return this.service.registrarNota({
@@ -56,12 +55,10 @@ export class EvaluacionesAdminController {
     });
   }
 
-  // PATCH /admin/evaluaciones/nota
   @Patch('nota')
   async editarNota(
-    @Req() req: any,
-    @Body()
-    body: { idEvaluacion: number; nuevaNota: number },
+    @Req() req: RequestWithUser,
+    @Body() body: { idEvaluacion: number; nuevaNota: number },
   ) {
     const idUsuario = Number(req.user.sub);
     return this.service.editarNota({
@@ -71,10 +68,16 @@ export class EvaluacionesAdminController {
     });
   }
 
-  // evaluaciones-admin.controller.ts
   @Get(':idEvaluacion/logs')
   obtenerLogs(@Param('idEvaluacion') idEvaluacion: string) {
     const id = Number(idEvaluacion);
     return this.service.obtenerLogsCambios(id);
+  }
+
+  @Get('mis-competidores')
+  async obtenerCompetidoresDeMisAreas(@Req() req: RequestWithUser) {
+    const idEvaluador = Number(req.user.sub);
+    console.log('Evaluador autenticado:', idEvaluador);
+    return this.service.obtenerCompetidoresDeEvaluador(idEvaluador);
   }
 }
