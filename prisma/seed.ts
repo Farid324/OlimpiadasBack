@@ -13,6 +13,18 @@ async function main() {
     create: { nombre: 'ADMINISTRADOR' },
   });
 
+  //niveles
+  await prisma.niveles.upsert({
+    where: { nombre_nivel: 'Primaria' },
+    update: {},
+    create: { nombre_nivel: 'Primaria', orden: 1 },
+  });
+  await prisma.niveles.upsert({
+    where: { nombre_nivel: 'Secundaria' },
+    update: {},
+    create: { nombre_nivel: 'Secundaria', orden: 2 },
+  });
+
   const evalRole = await prisma.roles.upsert({
     where: { nombre: 'EVALUADOR' },
     update: {},
