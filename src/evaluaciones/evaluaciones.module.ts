@@ -1,10 +1,12 @@
+// src/evaluaciones/evaluaciones.module.ts
 import { Module } from '@nestjs/common';
-import { EvaluacionesController } from './evaluaciones.controller';
-import { EvaluacionesService } from './evaluaciones.service';
-import { PrismaService } from '../prisma/prisma.service';
+import { PrismaModule } from '../prisma/prisma.module';
+import { EvaluacionesAdminController } from './evaluaciones.controller';
+import { EvaluacionesAdminService } from './evaluaciones.service';
 
 @Module({
-  controllers: [EvaluacionesController],
-  providers: [EvaluacionesService, PrismaService],
+  imports: [PrismaModule],
+  controllers: [EvaluacionesAdminController],
+  providers: [EvaluacionesAdminService],
 })
-export class EvaluacionesModule {}
+export class EvaluacionesAdminModule {}
