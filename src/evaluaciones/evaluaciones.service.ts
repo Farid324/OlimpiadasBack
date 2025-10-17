@@ -1,91 +1,136 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { PrismaService } from 'prisma/prisma.service';
-import { RegistrarNotaDto } from './dto/registrar-nota.dto';
+// src/evaluaciones-admin/evaluaciones-admin.service.ts
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
-export class EvaluacionesService {
+export class EvaluacionesAdminService {
   constructor(private prisma: PrismaService) {}
 
-  // 📋 Obtener lista de olimpistas asignados a un evaluador
-  async obtenerAsignados(idEvaluador: number) {
-    return this.prisma.evaluaciones.findMany({
-      where: { id_evaluador: idEvaluador },
-      include: {
-        inscripcion: {
-          include: { competidor: true, area: true, nivel: true },
+  // 🔍 Listar y buscar competidores
+  async listarCompetidores({
+    search,
+    idAreas,
+    filtro,
+  }: {
+    search?: string;
+    idAreas: number[];
+    filtro?: 'PENDIENTE' | 'EVALUADO' | 'TODOS';
+  }) {
+    return this.prisma.inscripciones.findMany({
+      where: {
+        id_area: { in: idAreas },
+        competidor: {
+          OR: search
+            ? [
+                { nombres: { contains: search, mode: 'insensitive' } },
+                { apellidos: { contains: search, mode: 'insensitive' } },
+                { ci: { contains: search, mode: 'insensitive' } },
+                { escuela: { contains: search, mode: 'insensitive' } },
+              ]
+            : undefined,
         },
-        fase: true,
+        ...(filtro === 'PENDIENTE'
+          ? { evaluaciones: { none: {} } }
+          : filtro === 'EVALUADO'
+            ? { evaluaciones: { some: {} } }
+            : {}),
       },
-      orderBy: { id_evaluacion: 'asc' },
+      select: {
+        id_inscripcion: true,
+        estado_inscripcion: true,
+        area: { select: { nombre_area: true } },
+        nivel: { select: { nombre_nivel: true } },
+        competidor: {
+          select: {
+            id_competidor: true,
+            nombres: true,
+            apellidos: true,
+            ci: true,
+            escuela: true,
+            departamento: true,
+          },
+        },
+        evaluaciones: {
+          select: {
+            id_evaluacion: true,
+            nota: true,
+            estado_registro: true,
+          },
+        },
+      },
+      orderBy: [{ id_area: 'asc' }, { id_nivel: 'asc' }],
     });
   }
 
-  // 📝 Registrar o editar nota
-  async registrarNota(
-    idEvaluacion: number,
-    idUsuario: number,
-    dto: RegistrarNotaDto,
-  ) {
+  // 📝 Registrar una nueva nota
+  async registrarNota({
+    idInscripcion,
+    idEvaluador,
+    nota,
+  }: {
+    idInscripcion: number;
+    idEvaluador: number;
+    nota: number;
+  }) {
+    const inscripcion = await this.prisma.inscripciones.findUnique({
+      where: { id_inscripcion: idInscripcion },
+    });
+    if (!inscripcion) throw new NotFoundException('Inscripción no encontrada');
+
+    return this.prisma.evaluaciones.create({
+      data: {
+        id_inscripcion: idInscripcion,
+        id_fase: 1, // Ejemplo, si tenés fases separadas
+        id_evaluador: idEvaluador,
+        nota,
+        estado_registro: 'FIRMADA',
+      },
+    });
+  }
+
+  // ✏️ Editar una nota (registrando log)
+  async editarNota({
+    idEvaluacion,
+    idUsuario,
+    nuevaNota,
+  }: {
+    idEvaluacion: number;
+    idUsuario: number;
+    nuevaNota: number;
+  }) {
     const evaluacion = await this.prisma.evaluaciones.findUnique({
       where: { id_evaluacion: idEvaluacion },
     });
-
     if (!evaluacion) throw new NotFoundException('Evaluación no encontrada');
-    if (evaluacion.id_evaluador !== idUsuario)
-      throw new ForbiddenException('No puedes modificar esta evaluación');
 
     const notaAnterior = evaluacion.nota;
-    const nuevaNota = dto.nota;
 
-    // ✅ Actualiza la nota
     const actualizada = await this.prisma.evaluaciones.update({
-      where: { id_evaluacion },
-      data: {
-        nota: nuevaNota,
-        comentario: dto.comentario || null,
-        fecha_registro: new Date(),
-        estado_registro: 'FINALIZADO',
-      },
+      where: { id_evaluacion: idEvaluacion },
+      data: { nota: nuevaNota },
     });
 
-    // 💾 Registra log de cambios
     await this.prisma.log_cambios_nota.create({
       data: {
-        id_evaluacion,
+        id_evaluacion: idEvaluacion,
         id_usuario: idUsuario,
-        accion: notaAnterior === null ? 'CREAR' : 'EDITAR',
+        accion: 'EDITAR',
         valor_anterior: notaAnterior,
         valor_nuevo: nuevaNota,
       },
     });
 
-    // ⚖️ Actualiza la clasificación del competidor
-    await this.actualizarClasificacion(actualizada.id_inscripcion);
-
     return actualizada;
   }
-
-  // ⚖️ Calcula CLASIFICADO / NO_CLASIFICADO automáticamente
-  private async actualizarClasificacion(idInscripcion: number) {
-    const evaluaciones = await this.prisma.evaluaciones.findMany({
-      where: { id_inscripcion: idInscripcion },
-      select: { nota: true },
-    });
-
-    const promedio =
-      evaluaciones.reduce((acc, e) => acc + Number(e.nota || 0), 0) /
-      evaluaciones.length;
-
-    await this.prisma.inscripciones.update({
-      where: { id_inscripcion: idInscripcion },
-      data: {
-        puntaje_clasificacion: promedio,
-        clasificacion: promedio >= 70 ? 'CLASIFICADO' : 'NO_CLASIFICADO',
+  async obtenerLogsCambios(idEvaluacion: number) {
+    return this.prisma.log_cambios_nota.findMany({
+      where: { id_evaluacion: idEvaluacion },
+      include: {
+        usuario: {
+          select: { id_usuario: true, nombre: true, apellido: true, rol: true },
+        },
       },
+      orderBy: { ts: 'desc' },
     });
   }
 }
