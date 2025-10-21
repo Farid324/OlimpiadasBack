@@ -72,7 +72,7 @@ export class ClasificadosService {
         salida.push({
           id_inscripcion: it.id_inscripcion,
           posicion,
-          nombreCompleto: ${it.competidor.nombres} ${it.competidor.apellidos}.trim(),
+          nombreCompleto: `${it.competidor.nombres} ${it.competidor.apellidos}`.trim(),
           area: it.area.nombre_area,
           nivel: it.nivel.nombre_nivel,
           puntaje: Number(it.puntaje_clasificacion ?? 0),
