@@ -59,3 +59,47 @@ export class ClasificadosService {
       if (arr) arr.push(it);
       else groups.set(k, [it]);
     }
+
+    // IMPORTANTE: tipar el array de salida para evitar never[]
+    const salida: Row[] = [];
+
+    for (const [, grupo] of groups) {
+      let pos = 0;
+      for (const it of grupo) {
+        const esClasificado = it.clasificacion === 'CLASIFICADO';
+        const posicion = esClasificado ? (++pos) : null;
+
+        salida.push({
+          id_inscripcion: it.id_inscripcion,
+          posicion,
+          nombreCompleto: ${it.competidor.nombres} ${it.competidor.apellidos}.trim(),
+          area: it.area.nombre_area,
+          nivel: it.nivel.nombre_nivel,
+          puntaje: Number(it.puntaje_clasificacion ?? 0),
+          unidadEducativa: it.competidor.escuela ?? '',
+          departamento: it.competidor.departamento ?? '',
+        });
+      }
+    }
+
+    return salida;
+  }
+
+  /** Resumen para cards (por ahora solo contamos clasificados) */
+  async resumen(f: Filtros) {
+    const base = this.buildWhere({ id_area: f.id_area, id_nivel: f.id_nivel });
+
+    const clasificados = await this.prisma.inscripciones.count({
+      where: { ...base, clasificacion: 'CLASIFICADO' as any },
+    });
+
+    return {
+      clasificados,
+      oro: 0,
+      plata: 0,
+      bronce: 0,
+      menciones: 0,
+      totalPremiados: 0,
+    };
+  }
+}
