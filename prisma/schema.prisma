@@ -14,6 +14,13 @@ datasource db {
 }
 
 // ===================== Enums =====================
+// NUEVO
+enum clasificacion_estado {
+  CLASIFICADO
+  NO_CLASIFICADO
+  DESCALIFICADO
+}
+
 enum estado_inscripcion {
   INSCRITO
   CLASIFICADO
@@ -216,6 +223,10 @@ model inscripciones {
   created_at         DateTime           @default(now())
   updated_at         DateTime           @updatedAt
 
+  // NUEVOS CAMPOS para la fase clasificatoria
+  puntaje_clasificacion Decimal?              @db.Decimal(5, 2)
+  clasificacion         clasificacion_estado? @default(NO_CLASIFICADO)
+
   competidor competidores @relation(fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
   area       areas        @relation(fields: [id_area], references: [id_area])
   nivel      niveles      @relation(fields: [id_nivel], references: [id_nivel])
@@ -226,7 +237,10 @@ model inscripciones {
   @@index([id_competidor])
   @@index([id_area])
   @@index([id_nivel])
+  @@index([id_area, id_nivel, clasificacion])
+  @@index([id_area, id_nivel, puntaje_clasificacion])
 }
+
 
 model fases {
   id_fase     Int    @id @default(autoincrement()) @db.Integer
