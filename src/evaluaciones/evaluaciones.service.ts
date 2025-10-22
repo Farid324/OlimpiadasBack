@@ -6,6 +6,51 @@ import { PrismaService } from '../prisma/prisma.service';
 export class EvaluacionesAdminService {
   constructor(private prisma: PrismaService) {}
 
+  async obtenerCompetidoresDeEvaluador(idEvaluador: number) {
+    const areasEvaluadorConsola = await this.prisma.responsables_area.findMany({
+      where: { id_usuario: idEvaluador },
+      select: { id_area: true },
+    });
+    console.log('ÁREAS DEL EVALUADOR:', areasEvaluadorConsola);
+    // 1️⃣ Obtener las áreas del evaluador
+    const areasEvaluador = await this.prisma.responsables_area.findMany({
+      where: { id_usuario: idEvaluador },
+      select: { id_area: true },
+    });
+
+    const idAreas = areasEvaluador.map((a) => a.id_area);
+
+    if (idAreas.length === 0) return [];
+
+    // 2️⃣ Buscar inscripciones en esas áreas
+    const inscripciones = await this.prisma.inscripciones.findMany({
+      where: {
+        id_area: { in: idAreas },
+      },
+      select: {
+        id_inscripcion: true,
+        competidor: {
+          select: {
+            id_competidor: true,
+            nombres: true,
+            apellidos: true,
+            ci: true,
+            escuela: true,
+          },
+        },
+        area: {
+          select: {
+            id_area: true,
+            nombre_area: true,
+          },
+        },
+        //estado: true,
+      },
+    });
+
+    return inscripciones;
+  }
+
   // 🔍 Listar y buscar competidores
   async listarCompetidores({
     search,
@@ -132,5 +177,62 @@ export class EvaluacionesAdminService {
       },
       orderBy: { ts: 'desc' },
     });
+  }
+  async getResumenEvaluador(idEvaluador: number) {
+    // 1️⃣ Obtener áreas donde el evaluador tiene asignaciones
+    const areasAsignadas = await this.prisma.evaluadores_area.findMany({
+      where: { id_usuario: idEvaluador, activo: true },
+      select: { id_area: true },
+    });
+    const areaIds = areasAsignadas.map((a) => a.id_area);
+
+    if (areaIds.length === 0) {
+      return { total: 0, pendientes: 0, evaluados: 0, clasificados: 0 };
+    }
+
+    // 2️⃣ Total competidores en esas áreas
+    const total = await this.prisma.competidores.count({
+      where: {
+        activo: true,
+        inscripciones: {
+          some: { id_area: { in: areaIds } },
+        },
+      },
+    });
+
+    // 3️⃣ Pendientes: evaluaciones sin nota
+    const pendientes = await this.prisma.evaluaciones.count({
+      where: {
+        id_evaluador: idEvaluador,
+        nota: { equals: undefined },
+        inscripcion: {
+          id_area: { in: areaIds },
+        },
+      },
+    });
+
+    // 4️⃣ Evaluados: con nota
+    const evaluados = await this.prisma.evaluaciones.count({
+      where: {
+        id_evaluador: idEvaluador,
+        nota: { not: { equals: undefined } },
+        inscripcion: {
+          id_area: { in: areaIds },
+        },
+      },
+    });
+
+    // 5️⃣ Clasificados (ejemplo: nota >= 60)
+    const clasificados = await this.prisma.evaluaciones.count({
+      where: {
+        id_evaluador: idEvaluador,
+        nota: { gte: 60 },
+        inscripcion: {
+          id_area: { in: areaIds },
+        },
+      },
+    });
+
+    return { total, pendientes, evaluados, clasificados };
   }
 }
