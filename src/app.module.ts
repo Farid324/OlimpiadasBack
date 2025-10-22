@@ -24,6 +24,9 @@ import { TutoresModule } from './tutores/tutores.module';
 import { NivelesModule } from './niveles/niveles.module';
 import { ReportesModule } from './reportes/reportes.module';
 
+// ⬇️ IMPORTA TU MÓDULO AQUÍ
+import { ControlFasesModule } from './controlFases/controlFases.module';
+
 @Module({
   imports: [
     PrismaModule,
@@ -34,8 +37,10 @@ import { ReportesModule } from './reportes/reportes.module';
     EvaluadoresModule,
     ResponsablesModule,
 
-    NivelesModule,   //nuevo
-    ReportesModule,  //nuevo
+    NivelesModule,
+    ReportesModule,
+
+    ControlFasesModule, // ⬅️ AÑADIDO
 
     JwtModule.register({
       secret: process.env.JWT_SECRET,
@@ -46,4 +51,3 @@ import { ReportesModule } from './reportes/reportes.module';
   providers: [AuthService, JwtStrategy, UsersService],
 })
 export class AppModule {}
-
