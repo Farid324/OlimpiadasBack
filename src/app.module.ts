@@ -20,6 +20,10 @@ import { OlimpistasModule } from './olimpistas/olimpistas.module';
 import { GruposModule } from './grupos/grupos.module';
 import { TutoresModule } from './tutores/tutores.module';
 
+// NUEVOS
+import { NivelesModule } from './niveles/niveles.module';
+import { ReportesModule } from './reportes/reportes.module';
+
 @Module({
   imports: [
     PrismaModule,
@@ -29,6 +33,10 @@ import { TutoresModule } from './tutores/tutores.module';
     TutoresModule,
     EvaluadoresModule,
     ResponsablesModule,
+
+    NivelesModule,   //nuevo
+    ReportesModule,  //nuevo
+
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
@@ -38,3 +46,4 @@ import { TutoresModule } from './tutores/tutores.module';
   providers: [AuthService, JwtStrategy, UsersService],
 })
 export class AppModule {}
+

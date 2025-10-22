@@ -1,4 +1,4 @@
-//src/reportes/reportes.ts
+//src/reportes/reportes.module.ts
 
 import { Module } from '@nestjs/common';
 import { ClasificadosController } from './clasificados.controller';
