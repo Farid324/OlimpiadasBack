@@ -15,6 +15,22 @@ datasource db {
 
 // ===================== Enums =====================
 // NUEVO
+enum phase_type {
+  CLASIFICACION
+  FINAL
+}
+
+enum phase_status {
+  EN_PROCESO
+  CERRADA
+  VALIDADA
+}
+
+enum phase_event_type {
+  CLOSE
+  VALIDATE
+}
+
 enum clasificacion_estado {
   CLASIFICADO
   NO_CLASIFICADO
@@ -271,6 +287,35 @@ model evaluaciones {
   @@index([id_inscripcion])
   @@index([id_fase])
   @@index([id_evaluador])
+}
+
+model phases_state {
+  id_state     BigInt   @id @default(autoincrement())
+  id_area      BigInt
+  id_nivel     BigInt
+  type         phase_type
+  status       phase_status   @default(EN_PROCESO)
+  locked_at    DateTime?      // cuando se cerrro la fase (HU-16)
+  closed_by    BigInt?        // id_usuario que cerro la o las fases
+  validated_at DateTime?      // cuándo se validó (HU-17)
+  validated_by BigInt?        // id_usuario que lo valido
+  created_at   DateTime       @default(now())
+  updated_at   DateTime       @updatedAt
+
+  @@unique([id_area, id_nivel, type], name: "ux_phase_uniqueness")
+  @@index([id_area, id_nivel, type, status], name: "ix_phase_status")
+}
+
+model phases_events {
+  id_event   BigInt          @id @default(autoincrement())
+  id_state   BigInt
+  event      phase_event_type
+  actor_id   BigInt
+  message    String?        
+  metadata   Json?
+  created_at DateTime        @default(now())
+
+  // @@index([id_state], name: "ix_events_state")
 }
 
 model log_cambios_nota {
