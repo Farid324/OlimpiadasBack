@@ -1,7 +1,8 @@
 // prisma/seed.ts
-import 'dotenv/config'; // ← asegura que carguen ADMIN_EMAIL, etc. al ejecutar con tsx
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { ciclo_nivel } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -11,18 +12,6 @@ async function main() {
     where: { nombre: 'ADMINISTRADOR' },
     update: {},
     create: { nombre: 'ADMINISTRADOR' },
-  });
-
-  //niveles
-  await prisma.niveles.upsert({
-    where: { nombre_nivel: 'Primaria' },
-    update: {},
-    create: { nombre_nivel: 'Primaria', orden: 1 },
-  });
-  await prisma.niveles.upsert({
-    where: { nombre_nivel: 'Secundaria' },
-    update: {},
-    create: { nombre_nivel: 'Secundaria', orden: 2 },
   });
 
   const evalRole = await prisma.roles.upsert({
@@ -37,6 +26,18 @@ async function main() {
     create: { nombre: 'RESPONSABLE_DE_AREA' },
   });
 
+  // Niveles
+  const primaria = await prisma.niveles.upsert({
+    where: { nombre_nivel: 'Primaria' },
+    update: {},
+    create: { nombre_nivel: 'Primaria', orden: 1 },
+  });
+  const secundaria = await prisma.niveles.upsert({
+    where: { nombre_nivel: 'Secundaria' },
+    update: {},
+    create: { nombre_nivel: 'Secundaria', orden: 2 },
+  });
+
   // Fases
   await prisma.fases.upsert({
     where: { nombre_fase: 'CLASIFICATORIA' },
@@ -49,20 +50,19 @@ async function main() {
     create: { nombre_fase: 'FINAL', orden_fase: 2 },
   });
 
-  // ------- Áreas (necesarias para HU-05) -------
+  // Áreas
   const areaMate = await prisma.areas.upsert({
     where: { nombre_area: 'Matemática' },
     update: {},
     create: { nombre_area: 'Matemática', activo: true },
   });
-
   const areaFisica = await prisma.areas.upsert({
     where: { nombre_area: 'Física' },
     update: {},
     create: { nombre_area: 'Física', activo: true },
   });
 
-  // ------- Admin -------
+  // Admin
   const emailAdmin = process.env.ADMIN_EMAIL ?? 'admin@olimpiadas.edu';
   const passAdmin = process.env.ADMIN_PASSWORD ?? 'olimpiadas2024';
   const hashAdmin = await bcrypt.hash(passAdmin, 10);
@@ -86,7 +86,7 @@ async function main() {
     },
   });
 
-  // Evaluador (demo)
+  // Evaluador demo
   const evalEmail = process.env.EVAL_EMAIL ?? 'eval.math@olimpiadas.edu';
   const evalPass = process.env.EVAL_PASSWORD ?? 'olimpiadas2024';
   const evalHash = await bcrypt.hash(evalPass, 10);
@@ -114,7 +114,6 @@ async function main() {
     },
   });
 
-  // Relaciona evaluador con 2 áreas (Matemática y Física)
   await prisma.evaluadores_area.createMany({
     data: [
       {
@@ -131,7 +130,7 @@ async function main() {
     skipDuplicates: true,
   });
 
-  // ------- Responsable (demo) -------
+  // Responsable demo
   const respEmail = process.env.RESP_EMAIL ?? 'resp.math@olimpiadas.edu';
   const respPass = process.env.RESP_PASSWORD ?? 'olimpiadas2024';
   const respHash = await bcrypt.hash(respPass, 10);
@@ -159,18 +158,6 @@ async function main() {
     },
   });
 
-  await prisma.areas.upsert({
-    where: { nombre_area: 'Matemática' },
-    update: {},
-    create: { nombre_area: 'Matemática' },
-  });
-  await prisma.areas.upsert({
-    where: { nombre_area: 'Física' },
-    update: {},
-    create: { nombre_area: 'Física' },
-  });
-
-  // Relaciona responsable con el área Matemática
   await prisma.responsables_area.createMany({
     data: [
       {
@@ -182,9 +169,224 @@ async function main() {
     skipDuplicates: true,
   });
 
-  console.log(
-    '✅ Seed OK: roles, fases, áreas, usuarios demo y relaciones creadas.',
-  );
+  // ========================================================================
+  // NUEVA SECCIÓN: COMPETIDORES + INSCRIPCIONES DE EJEMPLO
+  // ========================================================================
+
+  // Limpieza previa
+  await prisma.inscripciones.deleteMany({
+    where: {
+      competidor: {
+        ci: {
+          in: [
+            'CI0001',
+            'CI0002',
+            'CI0003',
+            'CI0004',
+            'CI0005',
+            'CI0006',
+            'CI0007',
+            'CI0008',
+          ],
+        },
+      },
+    },
+  });
+  await prisma.competidores.deleteMany({
+    where: {
+      ci: {
+        in: [
+          'CI0001',
+          'CI0002',
+          'CI0003',
+          'CI0004',
+          'CI0005',
+          'CI0006',
+          'CI0007',
+          'CI0008',
+        ],
+      },
+    },
+  });
+
+  // Insertar competidores
+  const dataCompetidores = [
+    {
+      nombres: 'María',
+      apellidos: 'González López',
+      ci: 'CI0001',
+      escuela: 'Colegio San Andrés',
+      departamento: 'La Paz',
+      nivel: ciclo_nivel.SECUNDARIA,
+    },
+    {
+      nombres: 'Carlos',
+      apellidos: 'Mamani Quispe',
+      ci: 'CI0002',
+      escuela: 'Unidad Educativa Nacional',
+      departamento: 'Cochabamba',
+      nivel: ciclo_nivel.SECUNDARIA,
+    },
+    {
+      nombres: 'Ana',
+      apellidos: 'Silva Torrez',
+      ci: 'CI0003',
+      escuela: 'Colegio Bolívar',
+      departamento: 'Santa Cruz',
+      nivel: ciclo_nivel.SECUNDARIA,
+    },
+    {
+      nombres: 'Pedro',
+      apellidos: 'Vargas Nina',
+      ci: 'CI0004',
+      escuela: 'Colegio Técnico',
+      departamento: 'La Paz',
+      nivel: ciclo_nivel.SECUNDARIA,
+    },
+    {
+      nombres: 'Lucía',
+      apellidos: 'Rojas Pérez',
+      ci: 'CI0005',
+      escuela: 'Colegio 6 de Agosto',
+      departamento: 'Oruro',
+      nivel: ciclo_nivel.SECUNDARIA,
+    },
+    {
+      nombres: 'Jaime',
+      apellidos: 'Ortega Cruz',
+      ci: 'CI0006',
+      escuela: 'Colegio Don Bosco',
+      departamento: 'Tarija',
+      nivel: ciclo_nivel.SECUNDARIA,
+    },
+    {
+      nombres: 'Sonia',
+      apellidos: 'Medina Flores',
+      ci: 'CI0007',
+      escuela: 'Colegio Marista',
+      departamento: 'La Paz',
+      nivel: ciclo_nivel.SECUNDARIA,
+    },
+    {
+      nombres: 'Diego',
+      apellidos: 'Álvarez Soto',
+      ci: 'CI0008',
+      escuela: 'Esc. Manuela Gandarillas',
+      departamento: 'Cochabamba',
+      nivel: ciclo_nivel.PRIMARIA,
+    },
+  ];
+
+  await prisma.competidores.createMany({
+    data: dataCompetidores,
+    skipDuplicates: true,
+  });
+  const compList = await prisma.competidores.findMany({
+    where: { ci: { in: dataCompetidores.map((c) => c.ci) } },
+  });
+
+  const getId = (ci: string) =>
+    compList.find((c) => c.ci === ci)?.id_competidor!;
+  const now = new Date();
+
+  await prisma.inscripciones.createMany({
+    data: [
+      // Matemática / Secundaria
+      {
+        id_competidor: getId('CI0001'),
+        id_area: areaMate.id_area,
+        id_nivel: secundaria.id_nivel,
+        estado_inscripcion: 'INSCRITO',
+        observaciones: null,
+        created_at: now,
+        updated_at: now,
+        puntaje_clasificacion: 95.5,
+        clasificacion: 'CLASIFICADO',
+      },
+      {
+        id_competidor: getId('CI0002'),
+        id_area: areaMate.id_area,
+        id_nivel: secundaria.id_nivel,
+        estado_inscripcion: 'INSCRITO',
+        observaciones: null,
+        created_at: now,
+        updated_at: now,
+        puntaje_clasificacion: 93.0,
+        clasificacion: 'CLASIFICADO',
+      },
+      {
+        id_competidor: getId('CI0003'),
+        id_area: areaMate.id_area,
+        id_nivel: secundaria.id_nivel,
+        estado_inscripcion: 'INSCRITO',
+        observaciones: null,
+        created_at: now,
+        updated_at: now,
+        puntaje_clasificacion: 92.0,
+        clasificacion: 'CLASIFICADO',
+      },
+      {
+        id_competidor: getId('CI0005'),
+        id_area: areaMate.id_area,
+        id_nivel: secundaria.id_nivel,
+        estado_inscripcion: 'INSCRITO',
+        observaciones: null,
+        created_at: now,
+        updated_at: now,
+        puntaje_clasificacion: 45.0,
+        clasificacion: 'NO_CLASIFICADO',
+      },
+      {
+        id_competidor: getId('CI0006'),
+        id_area: areaMate.id_area,
+        id_nivel: secundaria.id_nivel,
+        estado_inscripcion: 'INSCRITO',
+        observaciones: null,
+        created_at: now,
+        updated_at: now,
+        puntaje_clasificacion: 50.5,
+        clasificacion: 'NO_CLASIFICADO',
+      },
+      {
+        id_competidor: getId('CI0007'),
+        id_area: areaMate.id_area,
+        id_nivel: secundaria.id_nivel,
+        estado_inscripcion: 'INSCRITO',
+        observaciones: null,
+        created_at: now,
+        updated_at: now,
+        puntaje_clasificacion: 70.0,
+        clasificacion: 'DESCALIFICADO',
+      },
+      // Física / Secundaria
+      {
+        id_competidor: getId('CI0004'),
+        id_area: areaFisica.id_area,
+        id_nivel: secundaria.id_nivel,
+        estado_inscripcion: 'INSCRITO',
+        observaciones: null,
+        created_at: now,
+        updated_at: now,
+        puntaje_clasificacion: 89.5,
+        clasificacion: 'CLASIFICADO',
+      },
+      // Matemática / Primaria
+      {
+        id_competidor: getId('CI0008'),
+        id_area: areaMate.id_area,
+        id_nivel: primaria.id_nivel,
+        estado_inscripcion: 'INSCRITO',
+        observaciones: null,
+        created_at: now,
+        updated_at: now,
+        puntaje_clasificacion: 77.0,
+        clasificacion: 'CLASIFICADO',
+      },
+    ],
+    skipDuplicates: true,
+  });
+
+  console.log('✅ Seed OK: competidores e inscripciones cargados.');
 }
 
 (async () => {
