@@ -1,3 +1,4 @@
+//src/controlFases/controlFases.controller.ts
 import { Controller, Get } from '@nestjs/common';
 import { ControlFasesService } from './controlFases.service';
 import { ControlFasesResponse } from './controlFases.types';
