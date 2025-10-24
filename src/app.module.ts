@@ -19,6 +19,8 @@ import { EvaluadoresModule } from './evaluadores/evaluadores.module';
 import { OlimpistasModule } from './olimpistas/olimpistas.module';
 import { GruposModule } from './grupos/grupos.module';
 import { TutoresModule } from './tutores/tutores.module';
+import { FasesModule } from './fases/fases.module';
+import { FasesController } from './fases/fases.controller';
 
 // NUEVOS
 import { NivelesModule } from './niveles/niveles.module';
@@ -41,13 +43,14 @@ import { ControlFasesModule } from './controlFases/controlFases.module';
     ReportesModule,
 
     ControlFasesModule, // ⬅️ AÑADIDO
+    FasesModule,
 
     JwtModule.register({
       secret: process.env.JWT_SECRET,
       signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
     }),
   ],
-  controllers: [AuthController, UsersController],
+  controllers: [AuthController, UsersController, FasesController],
   providers: [AuthService, JwtStrategy, UsersService],
 })
 export class AppModule {}
