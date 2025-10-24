@@ -33,10 +33,11 @@ export class EvaluacionesAdminController {
   ) {
     const idUsuario = Number(req.user.sub);
 
-    const areas = await this.service['prisma'].responsables_area.findMany({
+    const areas = await this.service['prisma'].evaluadores_area.findMany({
       where: { id_usuario: idUsuario },
       select: { id_area: true },
     });
+    console.log('Evaluador areas:', areas);
     const idAreas = areas.map((a) => a.id_area);
 
     return this.service.listarCompetidores({ search, idAreas, filtro });

@@ -7,22 +7,24 @@ export class EvaluacionesAdminService {
   constructor(private prisma: PrismaService) {}
 
   async obtenerCompetidoresDeEvaluador(idEvaluador: number) {
-    const areasEvaluadorConsola = await this.prisma.responsables_area.findMany({
+    console.log('🔹 [SERVICIO] Evaluador autenticado:', idEvaluador);
+
+    // 1️⃣ Obtener las áreas asignadas al evaluador
+    const areasEvaluador = await this.prisma.evaluadores_area.findMany({
       where: { id_usuario: idEvaluador },
       select: { id_area: true },
     });
-    console.log('ÁREAS DEL EVALUADOR:', areasEvaluadorConsola);
-    // 1️⃣ Obtener las áreas del evaluador
-    const areasEvaluador = await this.prisma.responsables_area.findMany({
-      where: { id_usuario: idEvaluador },
-      select: { id_area: true },
-    });
+    console.log('🔹 [SERVICIO] ÁREAS DEL EVALUADOR:', areasEvaluador);
 
     const idAreas = areasEvaluador.map((a) => a.id_area);
 
-    if (idAreas.length === 0) return [];
+    if (idAreas.length === 0) {
+      console.log('⚠️ [SERVICIO] El evaluador no tiene áreas asignadas.');
+      return [];
+    }
 
-    // 2️⃣ Buscar inscripciones en esas áreas
+    // 2️⃣ Buscar las inscripciones en esas áreas
+    console.log('🔹 [SERVICIO] Buscando inscripciones en áreas:', idAreas);
     const inscripciones = await this.prisma.inscripciones.findMany({
       where: {
         id_area: { in: idAreas },
@@ -44,9 +46,14 @@ export class EvaluacionesAdminService {
             nombre_area: true,
           },
         },
-        //estado: true,
       },
     });
+
+    console.log(
+      '✅ [SERVICIO] Inscripciones encontradas:',
+      inscripciones.length,
+    );
+    console.log('📋 [SERVICIO] Detalle de las inscripciones:', inscripciones);
 
     return inscripciones;
   }
