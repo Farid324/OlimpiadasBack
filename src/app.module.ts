@@ -34,8 +34,8 @@ import { ReportesModule } from './reportes/reportes.module';
     EvaluadoresModule,
     ResponsablesModule,
 
-    NivelesModule,   //nuevo
-    ReportesModule,  //nuevo
+    NivelesModule,
+    ReportesModule,
 
     JwtModule.register({
       secret: process.env.JWT_SECRET,
@@ -46,4 +46,3 @@ import { ReportesModule } from './reportes/reportes.module';
   providers: [AuthService, JwtStrategy, UsersService],
 })
 export class AppModule {}
-
