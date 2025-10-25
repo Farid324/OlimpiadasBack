@@ -10,6 +10,6 @@ export class NivelesController {
   @Get()
   async findAll() {
     const list = await this.nivelesService.findAll();
-    return list.map(n => ({ id: n.id_nivel, nombre: n.nombre_nivel }));
+    return list.map((n) => ({ id: n.id_nivel, nombre: n.nombre_nivel }));
   }
 }

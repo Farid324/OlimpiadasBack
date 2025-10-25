@@ -3,7 +3,12 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ClasificadosService } from './clasificados.service';
 
-type EstadoFiltro = 'CLASIFICADO' | 'NO_CLASIFICADO' | 'DESCALIFICADO' | 'TODOS' | undefined;
+type EstadoFiltro =
+  | 'CLASIFICADO'
+  | 'NO_CLASIFICADO'
+  | 'DESCALIFICADO'
+  | 'TODOS'
+  | undefined;
 
 @Controller('reportes/clasificados')
 export class ClasificadosController {
@@ -35,4 +40,3 @@ export class ClasificadosController {
     });
   }
 }
-

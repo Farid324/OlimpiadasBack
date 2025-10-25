@@ -1,5 +1,4 @@
 //src/reportes/clasificados.service.ts
-
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -25,9 +24,9 @@ export class ClasificadosService {
 
   private buildWhere(f: Filtros): Prisma.inscripcionesWhereInput {
     const where: Prisma.inscripcionesWhereInput = {};
-    if (f.id_area)  where.id_area  = f.id_area;
+    if (f.id_area) where.id_area = f.id_area;
     if (f.id_nivel) where.id_nivel = f.id_nivel;
-    if (f.estado)   where.clasificacion = f.estado as any;
+    if (f.estado) where.clasificacion = { equals: f.estado };
     return where;
   }
 
@@ -39,8 +38,8 @@ export class ClasificadosService {
       where,
       include: {
         competidor: true,
-        area:       true,
-        nivel:      true,
+        area: true,
+        nivel: true,
       },
       orderBy: [
         { id_area: 'asc' },
@@ -51,7 +50,7 @@ export class ClasificadosService {
     });
 
     // Tipamos correctamente el Map de agrupación
-    type Item = typeof items[number];
+    type Item = (typeof items)[number];
     const groups = new Map<string, Item[]>();
     for (const it of items) {
       const k = `${it.id_area}|${it.id_nivel}`;
@@ -67,12 +66,13 @@ export class ClasificadosService {
       let pos = 0;
       for (const it of grupo) {
         const esClasificado = it.clasificacion === 'CLASIFICADO';
-        const posicion = esClasificado ? (++pos) : null;
+        const posicion = esClasificado ? ++pos : null;
 
         salida.push({
           id_inscripcion: it.id_inscripcion,
           posicion,
-          nombreCompleto: `${it.competidor.nombres} ${it.competidor.apellidos}`.trim(),
+          nombreCompleto:
+            `${it.competidor.nombres} ${it.competidor.apellidos}`.trim(),
           area: it.area.nombre_area,
           nivel: it.nivel.nombre_nivel,
           puntaje: Number(it.puntaje_clasificacion ?? 0),
@@ -90,7 +90,10 @@ export class ClasificadosService {
     const base = this.buildWhere({ id_area: f.id_area, id_nivel: f.id_nivel });
 
     const clasificados = await this.prisma.inscripciones.count({
-      where: { ...base, clasificacion: 'CLASIFICADO' as any },
+      where: {
+        ...base,
+        clasificacion: { equals: 'CLASIFICADO' },
+      },
     });
 
     return {
