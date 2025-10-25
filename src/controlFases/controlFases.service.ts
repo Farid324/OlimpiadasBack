@@ -3,6 +3,8 @@
 import { Injectable } from '@nestjs/common';
 import { ControlFasesResponse, AccionColor } from './controlFases.types';
 import { PrismaService } from '../prisma/prisma.service';
+// Opcional: usar enums de Prisma
+// import { Prisma } from '@prisma/client';
 
 type Clasificacion = 'CLASIFICADO' | 'NO_CLASIFICADO' | 'DESCALIFICADO';
 
@@ -82,7 +84,9 @@ export class ControlFasesService {
     const [totalEvaluaciones, completadas] = await Promise.all([
       this.prisma.evaluaciones.count().catch(() => 0),
       this.prisma.evaluaciones
-        .count({ where: { estado_registro: 'FIRMADA' as any } })
+        .count({
+          where: { estado_registro: 'FIRMADA' as any },
+        })
         .catch(() => 0),
     ]);
 
@@ -102,13 +106,17 @@ export class ControlFasesService {
     );
 
     // 4.2) Estado de cierre real desde cierres_fase (fase: CLASIFICATORIA)
-    const faseClasif = await this.prisma.fases.findUnique({
+    const faseClasif = await this.prisma.fases.findFirst({
       where: { nombre_fase: 'CLASIFICATORIA' },
       select: { id_fase: true },
     });
-    let stateMap = new Map<string, 'EN_PROCESO' | 'CERRADA' | 'VALIDADA'>();
+
+    let filas: ControlFasesResponse['filas'] = [];
 
     if (faseClasif) {
+      // Camino “rico” con cierres_fase
+      let stateMap = new Map<string, 'EN_PROCESO' | 'CERRADA' | 'VALIDADA'>();
+
       const cierres = await this.prisma.cierres_fase.findMany({
         where: { id_fase: faseClasif.id_fase },
         select: { id_area: true, id_nivel: true, estado_validacion: true },
@@ -121,11 +129,8 @@ export class ControlFasesService {
           return [`${c.id_area}:${c.id_nivel}`, st as 'CERRADA' | 'VALIDADA'];
         }),
       );
-    }
 
-    // 5) Filas tipadas explícitamente
-    const filas: ControlFasesResponse['filas'] = Array.from(acc.values()).map(
-      ({ id_area, id_nivel, counts }) => {
+      filas = Array.from(acc.values()).map(({ id_area, id_nivel, counts }) => {
         const area = areaById.get(id_area);
         const nivel = nivelById.get(id_nivel);
 
@@ -147,7 +152,9 @@ export class ControlFasesService {
         const faseActual: 'Clasificación' | 'Evaluación Final' | 'Completado' =
           progresoHecho === 0
             ? 'Clasificación'
-            : clasificados > 0 && noClasificados === 0 && descalificados === 0
+            : clasificados > 0 &&
+              noClasificados === 0 &&
+              descalificados === 0
               ? 'Completado'
               : 'Evaluación Final';
 
@@ -187,6 +194,8 @@ export class ControlFasesService {
 
         return {
           id: `${id_area}-${id_nivel}`,
+          idArea: id_area,            
+          idNivel: id_nivel,          
           area: area?.nombre_area ?? `Área ${id_area}`,
           nivel: nivel?.nombre_nivel ?? `Nivel ${id_nivel}`,
           faseActual,
@@ -200,10 +209,79 @@ export class ControlFasesService {
           accionColor: accion.color,
           accionDisabled: accion.disabled,
         };
-      },
-    );
+      });
+    } else {
+      // Fallback sin cierres_fase, pero ✅ cumpliendo el tipo FilaFase
+      filas = Array.from(acc.values()).map(({ id_area, id_nivel, counts }) => {
+        const area = areaById.get(id_area);
+        const nivel = nivelById.get(id_nivel);
 
-    // 6) Respuesta final perfectamente tipada (igual que la tuya)
+        const clasificados = counts.CLASIFICADO;
+        const noClasificados = counts.NO_CLASIFICADO;
+        const descalificados = counts.DESCALIFICADO;
+
+        const progresoHecho = clasificados + noClasificados + descalificados;
+        const progresoTotal = Math.max(progresoHecho, 1);
+
+        const faseActual:
+          | 'Clasificación'
+          | 'Evaluación Final'
+          | 'Completado' =
+          progresoHecho === 0
+            ? 'Clasificación'
+            : clasificados > 0 &&
+              noClasificados === 0 &&
+              descalificados === 0
+              ? 'Completado'
+              : 'Evaluación Final';
+
+        const estadoUI: 'En progreso' | 'Completado' | 'Listo para aprobar' =
+          faseActual === 'Completado'
+            ? 'Completado'
+            : clasificados > 0
+              ? 'Listo para aprobar'
+              : 'En progreso';
+
+        const accion =
+          estadoUI === 'Completado'
+            ? {
+                label: 'Completado',
+                color: 'success' as AccionColor,
+                disabled: true,
+              }
+            : estadoUI === 'Listo para aprobar'
+              ? {
+                  label: 'Aprobar Clasificación',
+                  color: 'primary' as AccionColor,
+                  disabled: false,
+                }
+              : {
+                  label: 'En progreso',
+                  color: 'neutral' as AccionColor,
+                  disabled: true,
+                };
+
+        return {
+          id: `${id_area}-${id_nivel}`,
+          idArea: id_area,            // ✅ añadido
+          idNivel: id_nivel,          // ✅ añadido
+          area: area?.nombre_area ?? `Área ${id_area}`,
+          nivel: nivel?.nombre_nivel ?? `Nivel ${id_nivel}`,
+          faseActual,
+          progresoHecho,
+          progresoTotal,
+          resumen: { clasificados, noClasificados, descalificados },
+          responsable: '—',
+          fechaHora: new Date().toISOString().slice(0, 16).replace('T', ' '),
+          estado: estadoUI,
+          accionLabel: accion.label,
+          accionColor: accion.color,
+          accionDisabled: accion.disabled,
+        };
+      });
+    }
+
+    // 6) Respuesta final (un solo return)
     const resp: ControlFasesResponse = {
       kpis: {
         evaluacionesCompletadas: {
@@ -214,7 +292,8 @@ export class ControlFasesService {
           valor: filas.filter(
             (f) =>
               f.accionLabel === 'Fase validada' ||
-              f.accionLabel === 'Fase cerrada',
+              f.accionLabel === 'Fase cerrada' ||
+              f.estado === 'Completado',
           ).length,
           total: filas.length,
         },
@@ -231,93 +310,5 @@ export class ControlFasesService {
     };
 
     return resp;
-
-    // fallback: si no hay fase CLASIFICATORIA en catálogo (muy raro)
-    // usamos tu cálculo original
-    const filasFallback: ControlFasesResponse['filas'] = Array.from(
-      acc.values(),
-    ).map(({ id_area, id_nivel, counts }) => {
-      const area = areaById.get(id_area);
-      const nivel = nivelById.get(id_nivel);
-
-      const clasificados = counts.CLASIFICADO;
-      const noClasificados = counts.NO_CLASIFICADO;
-      const descalificados = counts.DESCALIFICADO;
-
-      const progresoHecho = clasificados + noClasificados + descalificados;
-      const progresoTotal = Math.max(progresoHecho, 1);
-
-      const faseActual =
-        progresoHecho === 0
-          ? 'Clasificación'
-          : clasificados > 0 && noClasificados === 0 && descalificados === 0
-            ? 'Completado'
-            : 'Evaluación Final';
-
-      const estadoUI: 'En progreso' | 'Completado' | 'Listo para aprobar' =
-        faseActual === 'Completado'
-          ? 'Completado'
-          : clasificados > 0
-            ? 'Listo para aprobar'
-            : 'En progreso';
-
-      const accion =
-        estadoUI === 'Completado'
-          ? {
-              label: 'Completado',
-              color: 'success' as AccionColor,
-              disabled: true,
-            }
-          : estadoUI === 'Listo para aprobar'
-            ? {
-                label: 'Aprobar Clasificación',
-                color: 'primary' as AccionColor,
-                disabled: false,
-              }
-            : {
-                label: 'En progreso',
-                color: 'neutral' as AccionColor,
-                disabled: true,
-              };
-
-      return {
-        id: `${id_area}-${id_nivel}`,
-        area: area?.nombre_area ?? `Área ${id_area}`,
-        nivel: nivel?.nombre_nivel ?? `Nivel ${id_nivel}`,
-        faseActual,
-        progresoHecho,
-        progresoTotal,
-        resumen: { clasificados, noClasificados, descalificados },
-        responsable: '—',
-        fechaHora: new Date().toISOString().slice(0, 16).replace('T', ' '),
-        estado: estadoUI,
-        accionLabel: accion.label,
-        accionColor: accion.color,
-        accionDisabled: accion.disabled,
-      };
-    });
-
-    return {
-      kpis: {
-        evaluacionesCompletadas: {
-          valor: completadas,
-          total: totalEvaluaciones,
-        },
-        fasesCompletadas: {
-          valor: filasFallback.filter((f) => f.estado === 'Completado').length,
-          total: filasFallback.length,
-        },
-        aprobacionesPendientes: {
-          valor: filasFallback.filter((f) => f.estado === 'Listo para aprobar')
-            .length,
-          nota: 'requiere revisión',
-        },
-        progresoGeneral: {
-          porcentaje: progresoGeneral,
-          nota: 'del total completado',
-        },
-      },
-      filas: filasFallback,
-    };
   }
 }

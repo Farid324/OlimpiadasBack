@@ -4,6 +4,8 @@ export type AccionColor = 'primary' | 'neutral' | 'success';
 
 export type FilaFase = {
   id: string;
+  idArea: number;
+  idNivel: number;
   area: string;
   nivel: string;
   faseActual: 'Clasificación' | 'Evaluación Final' | 'Completado';
