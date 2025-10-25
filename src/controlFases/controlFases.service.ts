@@ -111,21 +111,8 @@ export class ControlFasesService {
     if (faseClasif) {
       const cierres = await this.prisma.cierres_fase.findMany({
         where: { id_fase: faseClasif.id_fase },
-        // si tu modelo NO tiene id_nivel, Prisma ignora el select y solo retornará id_area
-        select: {
-          id_area: true,
-          id_nivel: true,
-          estado_validacion: true,
-        },
+        select: { id_area: true, id_nivel: true, estado_validacion: true },
       });
-
-      // Detecta si existe columna id_nivel en el modelo real
-      const hasNivel =
-        cierres.length > 0 &&
-        Object.prototype.hasOwnProperty.call(cierres[0], 'id_nivel');
-
-      const makeKey = (a: number, n: number) =>
-        hasNivel ? `${a}:${n}` : `${a}:*`;
 
       stateMap = new Map(
         cierres.map((c) => {
@@ -134,129 +121,116 @@ export class ControlFasesService {
           return [`${c.id_area}:${c.id_nivel}`, st as 'CERRADA' | 'VALIDADA'];
         }),
       );
+    }
 
-      // Para filas calculadas (área,nivel) que vienen del acc:
-      // si no hay id_nivel en cierres_fase, usaremos key por área únicamente.
-      const keyFromRow = (a: number, n: number) =>
-        stateMap.has(`${a}:${n}`) ? `${a}:${n}` : `${a}:*`;
+    // 5) Filas tipadas explícitamente
+    const filas: ControlFasesResponse['filas'] = Array.from(acc.values()).map(
+      ({ id_area, id_nivel, counts }) => {
+        const area = areaById.get(id_area);
+        const nivel = nivelById.get(id_nivel);
 
-      // 5) Filas tipadas explícitamente
-      const filas: ControlFasesResponse['filas'] = Array.from(acc.values()).map(
-        ({ id_area, id_nivel, counts }) => {
-          const area = areaById.get(id_area);
-          const nivel = nivelById.get(id_nivel);
+        const clasificados = counts.CLASIFICADO;
+        const noClasificados = counts.NO_CLASIFICADO;
+        const descalificados = counts.DESCALIFICADO;
 
-          const clasificados = counts.CLASIFICADO;
-          const noClasificados = counts.NO_CLASIFICADO;
-          const descalificados = counts.DESCALIFICADO;
+        const progresoHecho = clasificados + noClasificados + descalificados;
+        const progresoTotal = Math.max(progresoHecho, 1);
 
-          const progresoHecho = clasificados + noClasificados + descalificados;
-          const progresoTotal = Math.max(progresoHecho, 1);
+        // Estado de cierre real
+        const statusFase = (stateMap.get(`${id_area}:${id_nivel}`) ??
+          'EN_PROCESO') as 'EN_PROCESO' | 'CERRADA' | 'VALIDADA';
 
-          // Estado de cierre real
-          const statusFase = (stateMap.get(keyFromRow(id_area, id_nivel)) ??
-            'EN_PROCESO') as 'EN_PROCESO' | 'CERRADA' | 'VALIDADA';
+        // ¿hay pendientes de puntaje en clasificación?
+        const pend = pendMap.get(`${id_area}:${id_nivel}`) ?? 0;
+        const sinPendientes = pend === 0;
 
-          // ¿hay pendientes de puntaje en clasificación?
-          const pend = pendMap.get(`${id_area}:${id_nivel}`) ?? 0;
-          const sinPendientes = pend === 0;
+        const faseActual: 'Clasificación' | 'Evaluación Final' | 'Completado' =
+          progresoHecho === 0
+            ? 'Clasificación'
+            : clasificados > 0 && noClasificados === 0 && descalificados === 0
+              ? 'Completado'
+              : 'Evaluación Final';
 
-          // Fase textual (visual) que tenías
-          const faseActual:
-            | 'Clasificación'
-            | 'Evaluación Final'
-            | 'Completado' =
-            progresoHecho === 0
-              ? 'Clasificación'
-              : clasificados > 0 && noClasificados === 0 && descalificados === 0
-                ? 'Completado'
-                : 'Evaluación Final';
+        let estadoUI: 'En progreso' | 'Completado' | 'Listo para aprobar';
+        if (statusFase === 'CERRADA' || statusFase === 'VALIDADA') {
+          estadoUI = 'Completado';
+        } else if (clasificados > 0 && sinPendientes) {
+          estadoUI = 'Listo para aprobar';
+        } else {
+          estadoUI = 'En progreso';
+        }
 
-          // Integración con estado real de cierre:
-          // - Si CERRADA o VALIDADA → botón deshabilitado, mostrar como completado/bloqueado.
-          // - Si EN_PROCESO y sin pendientes y con al menos un clasificado → 'Listo para aprobar'.
-          let estadoUI: 'En progreso' | 'Completado' | 'Listo para aprobar';
-          if (statusFase === 'CERRADA' || statusFase === 'VALIDADA') {
-            estadoUI = 'Completado';
-          } else if (clasificados > 0 && sinPendientes) {
-            estadoUI = 'Listo para aprobar';
-          } else {
-            estadoUI = 'En progreso';
-          }
-
-          const accion =
-            statusFase === 'CERRADA'
+        const accion =
+          statusFase === 'CERRADA'
+            ? {
+                label: 'Fase cerrada',
+                color: 'neutral' as AccionColor,
+                disabled: true,
+              }
+            : statusFase === 'VALIDADA'
               ? {
-                  label: 'Fase cerrada',
-                  color: 'neutral' as AccionColor,
+                  label: 'Fase validada',
+                  color: 'success' as AccionColor,
                   disabled: true,
                 }
-              : statusFase === 'VALIDADA'
+              : estadoUI === 'Listo para aprobar'
                 ? {
-                    label: 'Fase validada',
-                    color: 'success' as AccionColor,
-                    disabled: true,
+                    label: 'Aprobar Clasificación',
+                    color: 'primary' as AccionColor,
+                    disabled: false,
                   }
-                : estadoUI === 'Listo para aprobar'
-                  ? {
-                      label: 'Aprobar Clasificación',
-                      color: 'primary' as AccionColor,
-                      disabled: false,
-                    }
-                  : {
-                      label: 'En progreso',
-                      color: 'neutral' as AccionColor,
-                      disabled: true,
-                    };
+                : {
+                    label: 'En progreso',
+                    color: 'neutral' as AccionColor,
+                    disabled: true,
+                  };
 
-          return {
-            id: `${id_area}-${id_nivel}`,
-            area: area?.nombre_area ?? `Área ${id_area}`,
-            nivel: nivel?.nombre_nivel ?? `Nivel ${id_nivel}`,
-            faseActual,
-            progresoHecho,
-            progresoTotal,
-            resumen: { clasificados, noClasificados, descalificados },
-            responsable: '—',
-            fechaHora: new Date().toISOString().slice(0, 16).replace('T', ' '),
-            estado: estadoUI,
-            accionLabel: accion.label,
-            accionColor: accion.color,
-            accionDisabled: accion.disabled,
-          };
+        return {
+          id: `${id_area}-${id_nivel}`,
+          area: area?.nombre_area ?? `Área ${id_area}`,
+          nivel: nivel?.nombre_nivel ?? `Nivel ${id_nivel}`,
+          faseActual,
+          progresoHecho,
+          progresoTotal,
+          resumen: { clasificados, noClasificados, descalificados },
+          responsable: '—',
+          fechaHora: new Date().toISOString().slice(0, 16).replace('T', ' '),
+          estado: estadoUI,
+          accionLabel: accion.label,
+          accionColor: accion.color,
+          accionDisabled: accion.disabled,
+        };
+      },
+    );
+
+    // 6) Respuesta final perfectamente tipada (igual que la tuya)
+    const resp: ControlFasesResponse = {
+      kpis: {
+        evaluacionesCompletadas: {
+          valor: completadas,
+          total: totalEvaluaciones,
         },
-      );
-
-      // 6) Respuesta final perfectamente tipada
-      const resp: ControlFasesResponse = {
-        kpis: {
-          evaluacionesCompletadas: {
-            valor: completadas,
-            total: totalEvaluaciones,
-          },
-          fasesCompletadas: {
-            valor: filas.filter(
-              (f) =>
-                f.accionLabel === 'Fase validada' ||
-                f.accionLabel === 'Fase cerrada',
-            ).length,
-            total: filas.length,
-          },
-          aprobacionesPendientes: {
-            valor: filas.filter((f) => f.estado === 'Listo para aprobar')
-              .length,
-            nota: 'requiere revisión',
-          },
-          progresoGeneral: {
-            porcentaje: progresoGeneral,
-            nota: 'del total completado',
-          },
+        fasesCompletadas: {
+          valor: filas.filter(
+            (f) =>
+              f.accionLabel === 'Fase validada' ||
+              f.accionLabel === 'Fase cerrada',
+          ).length,
+          total: filas.length,
         },
-        filas,
-      };
+        aprobacionesPendientes: {
+          valor: filas.filter((f) => f.estado === 'Listo para aprobar').length,
+          nota: 'requiere revisión',
+        },
+        progresoGeneral: {
+          porcentaje: progresoGeneral,
+          nota: 'del total completado',
+        },
+      },
+      filas,
+    };
 
-      return resp;
-    }
+    return resp;
 
     // fallback: si no hay fase CLASIFICATORIA en catálogo (muy raro)
     // usamos tu cálculo original

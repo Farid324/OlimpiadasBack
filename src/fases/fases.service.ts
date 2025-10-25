@@ -1,10 +1,8 @@
 // src/fases/fases.service.ts
-
 import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -15,62 +13,73 @@ export type PhaseStatus = 'EN_PROCESO' | 'CERRADA' | 'VALIDADA';
 export class FasesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private async ensurePhaseState(
-    id_area: number,
-    id_nivel: number,
-    type: PhaseType,
-  ) {
-    let state = await this.prisma.phases_state.findUnique({
-      where: {
-        ux_phase_uniqueness: {
-          id_area: BigInt(id_area),
-          id_nivel: BigInt(id_nivel),
-          type,
-        },
-      },
+  /**
+   * Devuelve el id_fase a partir del nombre de catálogo
+   * CLASIFICACION -> CLASIFICATORIA
+   * FINAL         -> FINAL
+   */
+  private async getFaseId(type: PhaseType): Promise<number> {
+    const nombre_fase = type === 'CLASIFICACION' ? 'CLASIFICATORIA' : 'FINAL';
+    const fase = await this.prisma.fases.findUnique({
+      where: { nombre_fase },
+      select: { id_fase: true },
     });
-    if (!state) {
-      state = await this.prisma.phases_state.create({
-        data: {
-          id_area: BigInt(id_area),
-          id_nivel: BigInt(id_nivel),
-          type,
-          status: 'EN_PROCESO',
-        },
-      });
+    if (!fase) {
+      throw new BadRequestException(
+        'No se encontró la configuración de fases en el sistema.',
+      );
     }
-    return state;
+    return fase.id_fase;
   }
 
-  // se consulta estado actual
+  /**
+   * Estado lógico de la fase por (área, nivel, tipo)
+   * - Sin registro en cierres_fase => EN_PROCESO
+   * - estado_validacion = PENDIENTE => CERRADA
+   * - estado_validacion = VALIDADO  => VALIDADA
+   */
   async getStatus(
     id_area: number,
     id_nivel: number,
     type: PhaseType,
   ): Promise<PhaseStatus> {
-    const s = await this.ensurePhaseState(id_area, id_nivel, type);
-    return s.status as PhaseStatus;
+    const id_fase = await this.getFaseId(type);
+    const cierre = await this.prisma.cierres_fase.findUnique({
+      where: {
+        uq_cierre_unico: { id_fase, id_area, id_nivel },
+      },
+      select: { estado_validacion: true },
+    });
+    if (!cierre) return 'EN_PROCESO';
+    return cierre.estado_validacion === 'VALIDADO' ? 'VALIDADA' : 'CERRADA';
   }
 
-  // se establece regla: pendientes para poder cerrar?
+  /**
+   * ¿Existen pendientes que impidan cerrar?
+   * CLASIFICACION: inscripciones con puntaje_clasificacion = null
+   * FINAL: evaluaciones de esas inscripciones con estado_registro != 'FIRMADA'
+   */
   private async hasPendingsToClose(
     id_area: number,
     id_nivel: number,
     type: PhaseType,
-  ) {
+  ): Promise<boolean> {
     if (type === 'CLASIFICACION') {
       const sinPuntaje = await this.prisma.inscripciones.count({
         where: { id_area, id_nivel, puntaje_clasificacion: null },
       });
+      // Si hay puntajes nulos, hay pendientes.
       return sinPuntaje > 0;
     }
+
+    // FINAL: 2 pasos robustos (evita depender del include relacional)
     const inscIds = await this.prisma.inscripciones.findMany({
       where: { id_area, id_nivel },
       select: { id_inscripcion: true },
     });
-    if (inscIds.length === 0) {
-      return true;
-    }
+
+    // Si no hay inscripciones, consideramos que no se puede cerrar (pendientes)
+    if (inscIds.length === 0) return true;
 
     const ids = inscIds.map((i) => i.id_inscripcion);
 
@@ -78,7 +87,7 @@ export class FasesService {
       .count({
         where: {
           id_inscripcion: { in: ids },
-          estado_registro: { not: 'FIRMADA' as any },
+          estado_registro: { not: 'FIRMADA' },
         },
       })
       .catch(() => 0);
@@ -86,60 +95,64 @@ export class FasesService {
     return abiertas > 0;
   }
 
+  /**
+   * HU-16: Cerrar/Aprobar fase (deja estado_validacion = PENDIENTE)
+   * - Habilita reportes oficiales
+   * - Bloquea edición (gate en servicios de notas)
+   */
   async closePhase(params: {
     id_area: number;
     id_nivel: number;
     type: PhaseType;
     actor_id: number;
-    comment?: string;
+    comment?: string; // reservado para auditoría futura
   }) {
-    const { id_area, id_nivel, type, actor_id, comment } = params;
+    const { id_area, id_nivel, type, actor_id } = params;
 
-    const current = await this.ensurePhaseState(id_area, id_nivel, type);
-
-    if (current.status === 'CERRADA' || current.status === 'VALIDADA') {
-      throw new BadRequestException('Esta fase ya fue cerrada anteriormente.');
+    const status = await this.getStatus(id_area, id_nivel, type);
+    if (status === 'CERRADA' || status === 'VALIDADA') {
+      throw new BadRequestException(
+        'Esta fase ya fue cerrada anteriormente para este área y nivel.',
+      );
     }
 
-    const hasPendings = await this.hasPendingsToClose(id_area, id_nivel, type);
-    if (hasPendings) {
+    const pendientes = await this.hasPendingsToClose(id_area, id_nivel, type);
+    if (pendientes) {
       throw new BadRequestException(
         'No es posible cerrar la fase: aún existen evaluaciones pendientes.',
       );
     }
 
-    const updated = await this.prisma.$transaction(async (tx) => {
-      const s = await tx.phases_state.update({
-        where: { id_state: current.id_state },
-        data: {
-          status: 'CERRADA',
-          locked_at: new Date(),
-          closed_by: BigInt(actor_id),
-        },
-      });
+    const id_fase = await this.getFaseId(type);
 
-      await tx.phases_events.create({
-        data: {
-          id_state: s.id_state,
-          event: 'CLOSE',
-          actor_id: BigInt(actor_id),
-          message: comment ?? null,
-          metadata: { id_area, id_nivel, type },
-        },
-      });
-
-      return s;
+    await this.prisma.cierres_fase.upsert({
+      where: { uq_cierre_unico: { id_fase, id_area, id_nivel } },
+      update: {
+        estado_validacion: 'PENDIENTE',
+        cerrado_por: actor_id,
+        fecha_cierre: new Date(),
+      },
+      create: {
+        id_fase,
+        id_area,
+        id_nivel,
+        cerrado_por: actor_id,
+        fecha_cierre: new Date(),
+        estado_validacion: 'PENDIENTE',
+      },
     });
 
     return {
       ok: true,
       message:
         'Fase cerrada correctamente. Los reportes oficiales han sido habilitados.',
-      status: updated.status,
-      locked_at: updated.locked_at,
+      status: 'CERRADA' as PhaseStatus,
     };
   }
 
+  /**
+   * Gate reutilizable: impedir edición si la fase no está EN_PROCESO
+   */
   async assertPhaseIsEditable(
     id_area: number,
     id_nivel: number,
@@ -151,5 +164,47 @@ export class FasesService {
         'La fase está cerrada: no se permiten más cambios.',
       );
     }
+  }
+
+  /**
+   * HU-17: Validar cierre (estado_final = VALIDADA)
+   * - Habilita certificados/publicaciones (según tus gates)
+   */
+  async validateClose(params: {
+    id_area: number;
+    id_nivel: number;
+    type: PhaseType;
+    actor_id: number;
+    comment?: string;
+  }) {
+    const { id_area, id_nivel, type, actor_id } = params;
+    const id_fase = await this.getFaseId(type);
+
+    const cierre = await this.prisma.cierres_fase.findUnique({
+      where: { uq_cierre_unico: { id_fase, id_area, id_nivel } },
+      select: { id_cierre: true },
+    });
+
+    if (!cierre) {
+      throw new BadRequestException(
+        'Primero debes cerrar la fase antes de validarla.',
+      );
+    }
+
+    await this.prisma.cierres_fase.update({
+      where: { id_cierre: cierre.id_cierre },
+      data: {
+        estado_validacion: 'VALIDADO',
+        validado_por: actor_id,
+        fecha_validacion: new Date(),
+      },
+    });
+
+    return {
+      ok: true,
+      message:
+        'Fase validada correctamente. Se habilitan certificados y publicaciones.',
+      status: 'VALIDADA' as PhaseStatus,
+    };
   }
 }
