@@ -1,4 +1,7 @@
 -- CreateEnum
+CREATE TYPE "public"."clasificacion_estado" AS ENUM ('CLASIFICADO', 'NO_CLASIFICADO', 'DESCALIFICADO');
+
+-- CreateEnum
 CREATE TYPE "public"."estado_inscripcion" AS ENUM ('INSCRITO', 'CLASIFICADO', 'FINALISTA', 'PREMIADO', 'DESCALIFICADO');
 
 -- CreateEnum
@@ -14,10 +17,13 @@ CREATE TYPE "public"."tipo_lista" AS ENUM ('POR_AREA_Y_NIVEL', 'CLASIFICADOS', '
 CREATE TYPE "public"."fuente_lista" AS ENUM ('CLASIFICATORIA', 'FINAL');
 
 -- CreateEnum
-CREATE TYPE "public"."accion_log" AS ENUM ('CREAR', 'EDITAR', 'BORRAR', 'FIRMAR');
+CREATE TYPE "public"."estado_area" AS ENUM ('EVALUANDO', 'CLASIFICANDO', 'COMPLETADO');
 
 -- CreateEnum
-CREATE TYPE "public"."estado_area" AS ENUM ('EVALUANDO', 'CLASIFICANDO', 'COMPLETADO');
+CREATE TYPE "public"."ciclo_nivel" AS ENUM ('PRIMARIA', 'SECUNDARIA');
+
+-- CreateEnum
+CREATE TYPE "public"."accion_log" AS ENUM ('REGISTRO', 'MODIFICACION');
 
 -- CreateTable
 CREATE TABLE "public"."roles" (
@@ -67,6 +73,20 @@ CREATE TABLE "public"."niveles" (
 );
 
 -- CreateTable
+CREATE TABLE "public"."tutores" (
+    "id_tutor" SERIAL NOT NULL,
+    "nombre_completo" TEXT NOT NULL,
+    "ci" TEXT,
+    "correo" TEXT,
+    "telefono" TEXT NOT NULL,
+    "unidad_educativa" TEXT,
+    "activo" BOOLEAN NOT NULL DEFAULT true,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "tutores_pkey" PRIMARY KEY ("id_tutor")
+);
+
+-- CreateTable
 CREATE TABLE "public"."competidores" (
     "id_competidor" SERIAL NOT NULL,
     "nombres" TEXT NOT NULL,
@@ -74,10 +94,39 @@ CREATE TABLE "public"."competidores" (
     "ci" TEXT NOT NULL,
     "escuela" TEXT,
     "departamento" TEXT,
+    "tutor_contacto" TEXT,
+    "id_tutor" INTEGER,
+    "nivel" "public"."ciclo_nivel",
+    "grado" INTEGER,
     "activo" BOOLEAN NOT NULL DEFAULT true,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "competidores_pkey" PRIMARY KEY ("id_competidor")
+);
+
+-- CreateTable
+CREATE TABLE "public"."grupos" (
+    "id_grupo" SERIAL NOT NULL,
+    "nombre_equipo" TEXT NOT NULL,
+    "escuela" TEXT NOT NULL,
+    "departamento" TEXT NOT NULL,
+    "id_area" INTEGER NOT NULL,
+    "id_nivel" INTEGER NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_by" INTEGER,
+    "id_tutor" INTEGER,
+
+    CONSTRAINT "grupos_pkey" PRIMARY KEY ("id_grupo")
+);
+
+-- CreateTable
+CREATE TABLE "public"."grupo_miembros" (
+    "id_grupo_miembro" SERIAL NOT NULL,
+    "id_grupo" INTEGER NOT NULL,
+    "id_competidor" INTEGER NOT NULL,
+    "rol" TEXT,
+
+    CONSTRAINT "grupo_miembros_pkey" PRIMARY KEY ("id_grupo_miembro")
 );
 
 -- CreateTable
@@ -90,6 +139,8 @@ CREATE TABLE "public"."inscripciones" (
     "observaciones" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
+    "puntaje_clasificacion" DECIMAL(5,2),
+    "clasificacion" "public"."clasificacion_estado" DEFAULT 'NO_CLASIFICADO',
 
     CONSTRAINT "inscripciones_pkey" PRIMARY KEY ("id_inscripcion")
 );
@@ -229,7 +280,49 @@ CREATE UNIQUE INDEX "usuarios_correo_key" ON "public"."usuarios"("correo");
 CREATE UNIQUE INDEX "areas_nombre_area_key" ON "public"."areas"("nombre_area");
 
 -- CreateIndex
+CREATE INDEX "areas_nombre_area_idx" ON "public"."areas"("nombre_area");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "niveles_nombre_nivel_key" ON "public"."niveles"("nombre_nivel");
+
+-- CreateIndex
+CREATE INDEX "niveles_nombre_nivel_idx" ON "public"."niveles"("nombre_nivel");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tutores_ci_key" ON "public"."tutores"("ci");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "tutores_telefono_key" ON "public"."tutores"("telefono");
+
+-- CreateIndex
+CREATE INDEX "tutores_telefono_idx" ON "public"."tutores"("telefono");
+
+-- CreateIndex
+CREATE INDEX "tutores_nombre_completo_idx" ON "public"."tutores"("nombre_completo");
+
+-- CreateIndex
+CREATE INDEX "grupos_id_area_idx" ON "public"."grupos"("id_area");
+
+-- CreateIndex
+CREATE INDEX "grupos_id_nivel_idx" ON "public"."grupos"("id_nivel");
+
+-- CreateIndex
+CREATE INDEX "grupos_id_tutor_idx" ON "public"."grupos"("id_tutor");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "grupos_nombre_equipo_id_area_id_nivel_escuela_key" ON "public"."grupos"("nombre_equipo", "id_area", "id_nivel", "escuela");
+
+-- CreateIndex
+CREATE INDEX "grupo_miembros_id_grupo_idx" ON "public"."grupo_miembros"("id_grupo");
+
+-- CreateIndex
+CREATE INDEX "grupo_miembros_id_competidor_idx" ON "public"."grupo_miembros"("id_competidor");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "grupo_miembros_id_competidor_key" ON "public"."grupo_miembros"("id_competidor");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "grupo_miembros_id_grupo_id_competidor_key" ON "public"."grupo_miembros"("id_grupo", "id_competidor");
 
 -- CreateIndex
 CREATE INDEX "inscripciones_id_competidor_idx" ON "public"."inscripciones"("id_competidor");
@@ -239,6 +332,12 @@ CREATE INDEX "inscripciones_id_area_idx" ON "public"."inscripciones"("id_area");
 
 -- CreateIndex
 CREATE INDEX "inscripciones_id_nivel_idx" ON "public"."inscripciones"("id_nivel");
+
+-- CreateIndex
+CREATE INDEX "inscripciones_id_area_id_nivel_clasificacion_idx" ON "public"."inscripciones"("id_area", "id_nivel", "clasificacion");
+
+-- CreateIndex
+CREATE INDEX "inscripciones_id_area_id_nivel_puntaje_clasificacion_idx" ON "public"."inscripciones"("id_area", "id_nivel", "puntaje_clasificacion");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "inscripciones_id_competidor_id_area_id_nivel_key" ON "public"."inscripciones"("id_competidor", "id_area", "id_nivel");
@@ -263,6 +362,9 @@ CREATE INDEX "log_cambios_nota_id_evaluacion_idx" ON "public"."log_cambios_nota"
 
 -- CreateIndex
 CREATE INDEX "log_cambios_nota_id_usuario_idx" ON "public"."log_cambios_nota"("id_usuario");
+
+-- CreateIndex
+CREATE INDEX "log_cambios_nota_ts_idx" ON "public"."log_cambios_nota"("ts");
 
 -- CreateIndex
 CREATE INDEX "responsables_area_id_usuario_idx" ON "public"."responsables_area"("id_usuario");
@@ -311,6 +413,24 @@ CREATE INDEX "import_csv_ejecutado_por_idx" ON "public"."import_csv"("ejecutado_
 
 -- AddForeignKey
 ALTER TABLE "public"."usuarios" ADD CONSTRAINT "usuarios_id_rol_fkey" FOREIGN KEY ("id_rol") REFERENCES "public"."roles"("id_rol") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."competidores" ADD CONSTRAINT "competidores_id_tutor_fkey" FOREIGN KEY ("id_tutor") REFERENCES "public"."tutores"("id_tutor") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."grupos" ADD CONSTRAINT "grupos_id_tutor_fkey" FOREIGN KEY ("id_tutor") REFERENCES "public"."tutores"("id_tutor") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."grupos" ADD CONSTRAINT "grupos_id_area_fkey" FOREIGN KEY ("id_area") REFERENCES "public"."areas"("id_area") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."grupos" ADD CONSTRAINT "grupos_id_nivel_fkey" FOREIGN KEY ("id_nivel") REFERENCES "public"."niveles"("id_nivel") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."grupo_miembros" ADD CONSTRAINT "grupo_miembros_id_grupo_fkey" FOREIGN KEY ("id_grupo") REFERENCES "public"."grupos"("id_grupo") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."grupo_miembros" ADD CONSTRAINT "grupo_miembros_id_competidor_fkey" FOREIGN KEY ("id_competidor") REFERENCES "public"."competidores"("id_competidor") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."inscripciones" ADD CONSTRAINT "inscripciones_id_competidor_fkey" FOREIGN KEY ("id_competidor") REFERENCES "public"."competidores"("id_competidor") ON DELETE CASCADE ON UPDATE CASCADE;

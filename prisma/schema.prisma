@@ -52,13 +52,6 @@ enum fuente_lista {
   FINAL
 }
 
-enum accion_log {
-  CREAR
-  EDITAR
-  BORRAR
-  FIRMAR
-}
-
 enum estado_area {
   EVALUANDO
   CLASIFICANDO
@@ -75,6 +68,11 @@ model roles {
 enum ciclo_nivel {
   PRIMARIA
   SECUNDARIA
+}
+
+enum accion_log {
+  REGISTRO
+  MODIFICACION
 }
 
 model usuarios {
@@ -287,6 +285,7 @@ model log_cambios_nota {
 
   @@index([id_evaluacion])
   @@index([id_usuario])
+  @@index([ts])
 }
 
 model responsables_area {

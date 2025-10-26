@@ -23,7 +23,7 @@ import { TutoresModule } from './tutores/tutores.module';
 // NUEVOS
 import { NivelesModule } from './niveles/niveles.module';
 import { ReportesModule } from './reportes/reportes.module';
-
+import { LogsModule } from './logs/logs.module';
 @Module({
   imports: [
     PrismaModule,
@@ -36,6 +36,7 @@ import { ReportesModule } from './reportes/reportes.module';
 
     NivelesModule,
     ReportesModule,
+    LogsModule,
 
     JwtModule.register({
       secret: process.env.JWT_SECRET,
