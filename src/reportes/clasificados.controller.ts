@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ClasificadosService } from './clasificados.service';
 import { FasesService } from '../fases/fases.service';
+import { PhaseType } from '../fases/dto/close-phase.dto'; 
 
 type EstadoFiltro =
   | 'CLASIFICADO'
@@ -33,11 +34,15 @@ export class ClasificadosController {
     const nivel = id_nivel ? Number(id_nivel) : undefined;
 
     if (area && nivel) {
-      const st = await this.fases.getStatus(area, nivel, 'CLASIFICACION');
+      const st = await this.fases.getStatus(
+        area,
+        nivel,
+        PhaseType.CLASIFICACION,
+      ); 
       if (st !== 'CERRADA' && st !== 'VALIDADA') {
         throw new HttpException(
           'Fase Bloqueada. La fase de clasificación aún no ha sido aprobada. Los reportes se habilitarán una vez que des el aval correspondiente.',
-          HttpStatus.LOCKED, // 423
+          HttpStatus.LOCKED, 
         );
       }
     }
@@ -59,7 +64,11 @@ export class ClasificadosController {
     const nivel = id_nivel ? Number(id_nivel) : undefined;
 
     if (area && nivel) {
-      const st = await this.fases.getStatus(area, nivel, 'CLASIFICACION');
+      const st = await this.fases.getStatus(
+        area,
+        nivel,
+        PhaseType.CLASIFICACION,
+      ); 
       if (st !== 'CERRADA' && st !== 'VALIDADA') {
         throw new HttpException(
           'Fase Bloqueada. La fase de clasificación aún no ha sido aprobada. Los reportes se habilitarán una vez que des el aval correspondiente.',

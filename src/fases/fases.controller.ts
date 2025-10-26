@@ -1,6 +1,7 @@
 // src/fases/fases.controller.ts
 import {
   Body, Controller, Param, ParseIntPipe, Post, UseGuards, Get, Query,
+  BadRequestException,
 } from '@nestjs/common';
 import * as fasesService from './fases.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -9,12 +10,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { RESPONSABLE, ADMIN } from '../auth/constants';
 import type { JwtPayload } from '../interfaces/jwt-payload.interface';
 import { User } from '../common/decorators/user.decorator';
-import { BadRequestException } from '@nestjs/common';
-
-class ClosePhaseDto {
-  type!: fasesService.PhaseType; 
-  comentario?: string;
-}
+import { ClosePhaseDto, PhaseType } from './dto/close-phase.dto';
 
 @Controller('phases')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -30,7 +26,7 @@ export class FasesController {
     @Body() dto: ClosePhaseDto,
     @User() user: JwtPayload,
   ) {
-    if (!dto?.type || (dto.type !== 'CLASIFICACION' && dto.type !== 'FINAL')) {
+    if (!dto?.type || (dto.type !== PhaseType.CLASIFICACION && dto.type !== PhaseType.FINAL)) {
       throw new BadRequestException('Tipo de fase inválido. Debe ser CLASIFICACION o FINAL.');
     }
     const actor_id = Number(user.sub);
@@ -51,7 +47,7 @@ export class FasesController {
     @Body() dto: ClosePhaseDto,
     @User() user: JwtPayload,
   ) {
-    if (!dto?.type || (dto.type !== 'CLASIFICACION' && dto.type !== 'FINAL')) {
+    if (!dto?.type || (dto.type !== PhaseType.CLASIFICACION && dto.type !== PhaseType.FINAL)) {
       throw new BadRequestException('Tipo de fase inválido. Debe ser CLASIFICACION o FINAL.');
     }
     const actor_id = Number(user.sub);
@@ -65,8 +61,8 @@ export class FasesController {
   }
 
   @Get('availability')
-  async availability(@Query('type') type: fasesService.PhaseType) {
-    if (type !== 'CLASIFICACION' && type !== 'FINAL') {
+  async availability(@Query('type') type: PhaseType) {
+    if (type !== PhaseType.CLASIFICACION && type !== PhaseType.FINAL) {
       throw new BadRequestException('Tipo de fase inválido.');
     }
     const unlocked = await this.fases.isPhaseEnabledGlobally(type);

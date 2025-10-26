@@ -5,8 +5,8 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PhaseType } from './dto/close-phase.dto'; 
 
-export type PhaseType = 'CLASIFICACION' | 'FINAL';
 export type PhaseStatus = 'EN_PROCESO' | 'CERRADA' | 'VALIDADA';
 
 @Injectable()
@@ -19,8 +19,9 @@ export class FasesService {
    * FINAL         -> FINAL
    */
   private async getFaseId(type: PhaseType): Promise<number> {
-    const nombre_fase = type === 'CLASIFICACION' ? 'CLASIFICATORIA' : 'FINAL';
-    const fase = await this.prisma.fases.findUnique({
+    const nombre_fase =
+      type === PhaseType.CLASIFICACION ? 'CLASIFICATORIA' : 'FINAL';
+    const fase = await this.prisma.fases.findFirst({
       where: { nombre_fase },
       select: { id_fase: true },
     });
@@ -32,12 +33,6 @@ export class FasesService {
     return fase.id_fase;
   }
 
-  /**
-   * Estado lógico de la fase por (área, nivel, tipo)
-   * - Sin registro en cierres_fase => EN_PROCESO
-   * - estado_validacion = PENDIENTE => CERRADA
-   * - estado_validacion = VALIDADO  => VALIDADA
-   */
   async getStatus(
     id_area: number,
     id_nivel: number,
@@ -54,35 +49,26 @@ export class FasesService {
     return cierre.estado_validacion === 'VALIDADO' ? 'VALIDADA' : 'CERRADA';
   }
 
-  /**
-   * ¿Existen pendientes que impidan cerrar?
-   * CLASIFICACION: inscripciones con puntaje_clasificacion = null
-   * FINAL: evaluaciones de esas inscripciones con estado_registro != 'FIRMADA'
-   */
   private async hasPendingsToClose(
     id_area: number,
     id_nivel: number,
     type: PhaseType,
   ): Promise<boolean> {
-    if (type === 'CLASIFICACION') {
+    if (type === PhaseType.CLASIFICACION) {
       const sinPuntaje = await this.prisma.inscripciones.count({
         where: { id_area, id_nivel, puntaje_clasificacion: null },
       });
-      // Si hay puntajes nulos, hay pendientes.
       return sinPuntaje > 0;
     }
 
-    // FINAL: 2 pasos robustos (evita depender del include relacional)
+    // FINAL
     const inscIds = await this.prisma.inscripciones.findMany({
       where: { id_area, id_nivel },
       select: { id_inscripcion: true },
     });
-
-    // Si no hay inscripciones, consideramos que no se puede cerrar (pendientes)
     if (inscIds.length === 0) return true;
 
     const ids = inscIds.map((i) => i.id_inscripcion);
-
     const abiertas = await this.prisma.evaluaciones
       .count({
         where: {
@@ -95,17 +81,12 @@ export class FasesService {
     return abiertas > 0;
   }
 
-  /**
-   * HU-16: Cerrar/Aprobar fase (deja estado_validacion = PENDIENTE)
-   * - Habilita reportes oficiales
-   * - Bloquea edición (gate en servicios de notas)
-   */
   async closePhase(params: {
     id_area: number;
     id_nivel: number;
     type: PhaseType;
     actor_id: number;
-    comment?: string; // reservado para auditoría futura
+    comment?: string;
   }) {
     const { id_area, id_nivel, type, actor_id } = params;
 
@@ -150,9 +131,6 @@ export class FasesService {
     };
   }
 
-  /**
-   * Gate reutilizable: impedir edición si la fase no está EN_PROCESO
-   */
   async assertPhaseIsEditable(
     id_area: number,
     id_nivel: number,
@@ -166,26 +144,18 @@ export class FasesService {
     }
   }
 
-  /** Hay al menos un cierre para la fase dada? (CERRADA o VALIDADA) */
   async isPhaseEnabledGlobally(type: PhaseType): Promise<boolean> {
     const id_fase = await this.getFaseId(type);
-    const count = await this.prisma.cierres_fase.count({
-      where: { id_fase },
-    });
+    const count = await this.prisma.cierres_fase.count({ where: { id_fase } });
     return count > 0;
   }
 
-  /** Mensaje de bloqueo*/
   phaseLockedMessage(type: PhaseType): string {
-    return type === 'FINAL'
+    return type === PhaseType.FINAL
       ? 'Fase Bloqueada. La fase final aún no ha sido aprobada. Los reportes se habilitarán una vez que des el aval correspondiente.'
       : 'Fase Bloqueada. La fase de clasificación aún no ha sido aprobada. Los reportes se habilitarán una vez que des el aval correspondiente.';
   }
 
-  /**
-   * HU-17: Validar cierre (estado_final = VALIDADA)
-   * - Habilita certificados/publicaciones (según tus gates)
-   */
   async validateClose(params: {
     id_area: number;
     id_nivel: number;

@@ -1,6 +1,6 @@
 // prisma/seed.ts
 import 'dotenv/config';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma  } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { ciclo_nivel } from '@prisma/client';
 
@@ -385,6 +385,90 @@ async function main() {
     ],
     skipDuplicates: true,
   });
+
+    // ============================================================
+  // EXTRA PARA PRUEBAS HU-16
+  // ============================================================
+
+  await prisma.responsables_area.createMany({
+    data: [
+      {
+        id_usuario: responsable.id_usuario,
+        id_area: areaFisica.id_area,
+        activo: true,
+      },
+    ],
+    skipDuplicates: true,
+  });
+
+  const faseFinal = await prisma.fases.findUnique({
+    where: { nombre_fase: 'FINAL' },
+    select: { id_fase: true },
+  });
+  if (!faseFinal) throw new Error('Fase FINAL no encontrada (seed).');
+
+  const inscMatSec = await prisma.inscripciones.findMany({
+    where: { id_area: areaMate.id_area, id_nivel: secundaria.id_nivel },
+    select: { id_inscripcion: true },
+  });
+
+  for (const it of inscMatSec) {
+    await prisma.evaluaciones.upsert({
+      where: {
+        // evita duplicados en caso de re-seed
+        uq_eval_unica: {
+          id_inscripcion: it.id_inscripcion,
+          id_fase: faseFinal.id_fase,
+          id_evaluador: evaluador.id_usuario,
+        },
+      },
+      update: {
+        nota: new Prisma.Decimal(80 + Math.random() * 20), // 80..100
+        estado_registro: 'FIRMADA',
+        comentario: 'Auto-seed FINAL (firmada)',
+      },
+      create: {
+        id_inscripcion: it.id_inscripcion,
+        id_fase: faseFinal.id_fase,
+        id_evaluador: evaluador.id_usuario,
+        nota: new Prisma.Decimal(80 + Math.random() * 20),
+        estado_registro: 'FIRMADA',
+        comentario: 'Auto-seed FINAL (firmada)',
+      },
+    });
+  }
+
+  const inscFisSec = await prisma.inscripciones.findMany({
+    where: { id_area: areaFisica.id_area, id_nivel: secundaria.id_nivel },
+    select: { id_inscripcion: true },
+  });
+
+  if (inscFisSec.length > 0) {
+    const first = inscFisSec[0];
+    await prisma.evaluaciones.upsert({
+      where: {
+        uq_eval_unica: {
+          id_inscripcion: first.id_inscripcion,
+          id_fase: faseFinal.id_fase,
+          id_evaluador: evaluador.id_usuario,
+        },
+      },
+      update: {
+        nota: new Prisma.Decimal(60),
+        estado_registro: 'BORRADOR', 
+        comentario: 'Pendiente a propósito para test HU-16',
+      },
+      create: {
+        id_inscripcion: first.id_inscripcion,
+        id_fase: faseFinal.id_fase,
+        id_evaluador: evaluador.id_usuario,
+        nota: new Prisma.Decimal(60),
+        estado_registro: 'BORRADOR',
+        comentario: 'Pendiente a propósito para test HU-16',
+      },
+    });
+  }
+
 
   console.log('✅ Seed OK: competidores e inscripciones cargados.');
 }
