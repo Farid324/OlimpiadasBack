@@ -192,50 +192,39 @@ export class EvaluacionesAdminService {
       select: { id_area: true },
     });
     const areaIds = areasAsignadas.map((a) => a.id_area);
+    console.log('Asignados:', areasAsignadas);
 
     if (areaIds.length === 0) {
       return { total: 0, pendientes: 0, evaluados: 0, clasificados: 0 };
     }
 
     // 2️⃣ Total competidores en esas áreas
-    const total = await this.prisma.competidores.count({
+    const total = await this.prisma.inscripciones.count({
+      where: { id_area: { in: areaIds } },
+    });
+
+    // 3️⃣ Pendientes: inscripciones sin evaluación para este evaluador
+    const pendientes = await this.prisma.inscripciones.count({
       where: {
-        activo: true,
-        inscripciones: {
-          some: { id_area: { in: areaIds } },
-        },
+        id_area: { in: areaIds },
+        evaluaciones: { none: { id_evaluador: idEvaluador } },
       },
     });
 
-    // 3️⃣ Pendientes: evaluaciones sin nota
-    const pendientes = await this.prisma.evaluaciones.count({
+    // 4️⃣ Evaluados: inscripciones con evaluación para este evaluador
+    const evaluados = await this.prisma.inscripciones.count({
       where: {
-        id_evaluador: idEvaluador,
-        nota: { equals: undefined },
-        inscripcion: {
-          id_area: { in: areaIds },
-        },
+        id_area: { in: areaIds },
+        evaluaciones: { some: { id_evaluador: idEvaluador } },
       },
     });
 
-    // 4️⃣ Evaluados: con nota
-    const evaluados = await this.prisma.evaluaciones.count({
+    // 5️⃣ Clasificados: inscripciones con evaluación y nota >= 60
+    const clasificados = await this.prisma.inscripciones.count({
       where: {
-        id_evaluador: idEvaluador,
-        nota: { not: { equals: undefined } },
-        inscripcion: {
-          id_area: { in: areaIds },
-        },
-      },
-    });
-
-    // 5️⃣ Clasificados (ejemplo: nota >= 60)
-    const clasificados = await this.prisma.evaluaciones.count({
-      where: {
-        id_evaluador: idEvaluador,
-        nota: { gte: 60 },
-        inscripcion: {
-          id_area: { in: areaIds },
+        id_area: { in: areaIds },
+        evaluaciones: {
+          some: { id_evaluador: idEvaluador, nota: { gte: 51 } },
         },
       },
     });

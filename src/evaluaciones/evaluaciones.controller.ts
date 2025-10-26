@@ -81,4 +81,12 @@ export class EvaluacionesAdminController {
     console.log('Evaluador autenticado:', idEvaluador);
     return this.service.obtenerCompetidoresDeEvaluador(idEvaluador);
   }
+  // src/evaluaciones-admin/evaluaciones-admin.controller.ts
+  @Get('resumen')
+  async getResumenEvaluador(@Req() req: RequestWithUser) {
+    const idEvaluador = Number(req.user.sub);
+    const resumen = await this.service.getResumenEvaluador(idEvaluador);
+    console.log('[BACKEND] resumen:', resumen);
+    return resumen;
+  }
 }
