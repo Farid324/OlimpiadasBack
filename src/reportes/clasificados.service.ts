@@ -3,6 +3,10 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
+// Usa este import si NO tienes "esModuleInterop: true" en tsconfig
+import * as ExcelJS from 'exceljs';
+// Si tienes esModuleInterop: true, puedes usar:  import ExcelJS from 'exceljs';
+
 type Estado = 'CLASIFICADO' | 'NO_CLASIFICADO' | 'DESCALIFICADO';
 type Filtros = { id_area?: number; id_nivel?: number; estado?: Estado };
 
@@ -104,5 +108,48 @@ export class ClasificadosService {
       menciones: 0,
       totalPremiados: 0,
     };
+  }
+
+  /** 📦 Generar Excel con lo filtrado */
+  async exportarExcel(f: Filtros): Promise<Buffer> {
+    const rows = await this.list(f);
+
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Clasificados');
+
+    ws.columns = [
+      { header: 'Posición',          key: 'posicion', width: 10 },
+      { header: 'Nombre',            key: 'nombre',   width: 32 },
+      { header: 'Área',              key: 'area',     width: 18 },
+      { header: 'Nivel',             key: 'nivel',    width: 14 },
+      { header: 'Puntuación',        key: 'puntaje',  width: 12 },
+      { header: 'Unidad Educativa',  key: 'ue',       width: 32 },
+      { header: 'Departamento',      key: 'dep',      width: 18 },
+    ];
+    ws.getRow(1).font = { bold: true };
+
+    for (const r of rows) {
+      ws.addRow({
+        posicion: r.posicion ?? '-',
+        nombre: r.nombreCompleto,
+        area: r.area,
+        nivel: r.nivel,
+        puntaje: r.puntaje,
+        ue: r.unidadEducativa,
+        dep: r.departamento,
+      });
+    }
+
+    ws.eachRow((row) => {
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin' }, left: { style: 'thin' },
+          bottom: { style: 'thin' }, right: { style: 'thin' },
+        };
+      });
+    });
+
+    const buf = await wb.xlsx.writeBuffer();
+    return Buffer.isBuffer(buf) ? buf : Buffer.from(buf as ArrayBuffer);
   }
 }
