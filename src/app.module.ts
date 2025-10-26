@@ -23,7 +23,7 @@ import { TutoresModule } from './tutores/tutores.module';
 // NUEVOS
 import { NivelesModule } from './niveles/niveles.module';
 import { ReportesModule } from './reportes/reportes.module';
-import { LogsModule } from './logs/logs.module';
+import { LogsModule } from './registroActividad/logs.module';
 @Module({
   imports: [
     PrismaModule,
