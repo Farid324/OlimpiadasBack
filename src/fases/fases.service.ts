@@ -166,6 +166,22 @@ export class FasesService {
     }
   }
 
+  /** Hay al menos un cierre para la fase dada? (CERRADA o VALIDADA) */
+  async isPhaseEnabledGlobally(type: PhaseType): Promise<boolean> {
+    const id_fase = await this.getFaseId(type);
+    const count = await this.prisma.cierres_fase.count({
+      where: { id_fase },
+    });
+    return count > 0;
+  }
+
+  /** Mensaje de bloqueo*/
+  phaseLockedMessage(type: PhaseType): string {
+    return type === 'FINAL'
+      ? 'Fase Bloqueada. La fase final aún no ha sido aprobada. Los reportes se habilitarán una vez que des el aval correspondiente.'
+      : 'Fase Bloqueada. La fase de clasificación aún no ha sido aprobada. Los reportes se habilitarán una vez que des el aval correspondiente.';
+  }
+
   /**
    * HU-17: Validar cierre (estado_final = VALIDADA)
    * - Habilita certificados/publicaciones (según tus gates)

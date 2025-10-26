@@ -47,10 +47,10 @@ import { ControlFasesModule } from './controlFases/controlFases.module';
 
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
+      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '2h' },
     }),
   ],
-  controllers: [AuthController, UsersController, FasesController],
+  controllers: [AuthController, UsersController],
   providers: [AuthService, JwtStrategy, UsersService],
 })
 export class AppModule {}
