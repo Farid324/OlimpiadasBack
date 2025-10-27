@@ -29,6 +29,7 @@ import { ReportesModule } from './reportes/reportes.module';
 // ⬇️ IMPORTA TU MÓDULO AQUÍ
 import { ControlFasesModule } from './controlFases/controlFases.module';
 
+import { LogsModule } from './registroActividad/logs.module';
 @Module({
   imports: [
     PrismaModule,
@@ -41,6 +42,7 @@ import { ControlFasesModule } from './controlFases/controlFases.module';
 
     NivelesModule,
     ReportesModule,
+    LogsModule,
 
     ControlFasesModule, // ⬅️ AÑADIDO
     FasesModule,
