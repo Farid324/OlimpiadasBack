@@ -27,6 +27,7 @@ async findAll(query: QueryLogsDto & { page?: number; perPage?: number }) {
   const {
     id_evaluacion,
     id_usuario,
+    usuario, // <- nuevo
     accion,
     fecha_inicio,
     fecha_fin,
@@ -35,6 +36,7 @@ async findAll(query: QueryLogsDto & { page?: number; perPage?: number }) {
   } = query;
 
   const where: any = {};
+
   if (id_evaluacion) where.id_evaluacion = Number(id_evaluacion);
   if (id_usuario) where.id_usuario = Number(id_usuario);
   if (accion) where.accion = accion;
@@ -43,6 +45,16 @@ async findAll(query: QueryLogsDto & { page?: number; perPage?: number }) {
     where.ts = {};
     if (fecha_inicio) where.ts.gte = new Date(fecha_inicio);
     if (fecha_fin) where.ts.lte = new Date(fecha_fin);
+  }
+
+  // 🔹 Filtrado por nombre de usuario (si se manda usuario)
+  if (usuario) {
+    where.usuario = {
+      OR: [
+        { nombre: { contains: usuario, mode: 'insensitive' } },
+        { apellido: { contains: usuario, mode: 'insensitive' } },
+      ],
+    };
   }
 
   const skip = (page - 1) * perPage;
@@ -78,13 +90,13 @@ async findAll(query: QueryLogsDto & { page?: number; perPage?: number }) {
     const nivel = log.evaluacion?.inscripcion?.nivel?.nombre_nivel;
 
     const objetivo = comp
-      ? `${comp.nombres} ${comp.apellidos} (${area ?? 'Área desconocida'} - ${nivel ?? 'Nivel desconocido'})`
+      ? `${comp.nombres} ${comp.apellidos} (${area ?? 'Área desconocida'} - ${
+          nivel ?? 'Nivel desconocido'
+        })`
       : `Evaluación #${log.id_evaluacion}`;
 
     const descripcion =
-      log.accion === 'REGISTRO'
-        ? 'Se registró una nueva nota.'
-        : 'Se modificó la nota.';
+      log.accion === 'REGISTRO' ? 'Se registró una nueva nota.' : 'Se modificó la nota.';
 
     const cambios =
       log.valor_anterior != null && log.valor_nuevo != null
@@ -112,9 +124,9 @@ async findAll(query: QueryLogsDto & { page?: number; perPage?: number }) {
     };
   });
 
-  // 🔹 Devuelve siempre un objeto con items
   return { items, total, page, perPage };
 }
+
 
 
   /** 🔹 Exportar logs a CSV */

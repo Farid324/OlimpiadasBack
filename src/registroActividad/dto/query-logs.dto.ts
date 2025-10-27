@@ -11,6 +11,10 @@ export class QueryLogsDto {
 
   @IsOptional()
   @IsString()
+  usuario?: string; 
+
+  @IsOptional()
+  @IsString()
   accion?: 'REGISTRO' | 'MODIFICACION';
 
   @IsOptional()
