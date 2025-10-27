@@ -25,6 +25,7 @@ import { FasesController } from './fases/fases.controller';
 // NUEVOS
 import { NivelesModule } from './niveles/niveles.module';
 import { ReportesModule } from './reportes/reportes.module';
+import { EvaluacionesAdminModule } from './evaluaciones/evaluaciones-admin.module';
 
 // ⬇️ IMPORTA TU MÓDULO AQUÍ
 import { ControlFasesModule } from './controlFases/controlFases.module';
@@ -46,6 +47,7 @@ import { LogsModule } from './registroActividad/logs.module';
 
     ControlFasesModule, // ⬅️ AÑADIDO
     FasesModule,
+    EvaluacionesAdminModule,
 
     JwtModule.register({
       secret: process.env.JWT_SECRET,
