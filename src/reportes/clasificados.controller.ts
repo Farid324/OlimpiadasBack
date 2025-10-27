@@ -1,8 +1,9 @@
 // src/reportes/clasificados.controller.ts
-import { Controller, Get, Query, Res } from '@nestjs/common';
+import { Controller, Get, Query, Res, HttpException, HttpStatus,  } from '@nestjs/common';
 import { ClasificadosService } from './clasificados.service';
 import type { Response } from 'express';
-
+import { FasesService } from '../fases/fases.service';
+import { PhaseType } from '../fases/dto/close-phase.dto'; 
 
 type EstadoFiltro =
   | 'CLASIFICADO'
@@ -13,7 +14,10 @@ type EstadoFiltro =
 
 @Controller('reportes/clasificados')
 export class ClasificadosController {
-  constructor(private readonly service: ClasificadosService) {}
+  constructor(
+    private readonly service: ClasificadosService,
+    private readonly fases: FasesService,
+  ) {}
 
   @Get()
   async list(
@@ -21,9 +25,26 @@ export class ClasificadosController {
     @Query('id_nivel') id_nivel?: string,
     @Query('estado') estado?: EstadoFiltro,
   ) {
+    const area = id_area ? Number(id_area) : undefined;
+    const nivel = id_nivel ? Number(id_nivel) : undefined;
+
+    if (area && nivel) {
+      const st = await this.fases.getStatus(
+        area,
+        nivel,
+        PhaseType.CLASIFICACION,
+      ); 
+      if (st !== 'CERRADA' && st !== 'VALIDADA') {
+        throw new HttpException(
+          'Fase Bloqueada. La fase de clasificación aún no ha sido aprobada. Los reportes se habilitarán una vez que des el aval correspondiente.',
+          HttpStatus.LOCKED, 
+        );
+      }
+    }
+
     return this.service.list({
-      id_area: id_area ? Number(id_area) : undefined,
-      id_nivel: id_nivel ? Number(id_nivel) : undefined,
+      id_area: area,
+      id_nivel: nivel,
       estado: estado && estado !== 'TODOS' ? estado : undefined,
     });
   }
@@ -34,9 +55,26 @@ export class ClasificadosController {
     @Query('id_nivel') id_nivel?: string,
     @Query('estado') estado?: EstadoFiltro,
   ) {
+    const area = id_area ? Number(id_area) : undefined;
+    const nivel = id_nivel ? Number(id_nivel) : undefined;
+
+    if (area && nivel) {
+      const st = await this.fases.getStatus(
+        area,
+        nivel,
+        PhaseType.CLASIFICACION,
+      ); 
+      if (st !== 'CERRADA' && st !== 'VALIDADA') {
+        throw new HttpException(
+          'Fase Bloqueada. La fase de clasificación aún no ha sido aprobada. Los reportes se habilitarán una vez que des el aval correspondiente.',
+          HttpStatus.LOCKED,
+        );
+      }
+    }
+
     return this.service.resumen({
-      id_area: id_area ? Number(id_area) : undefined,
-      id_nivel: id_nivel ? Number(id_nivel) : undefined,
+      id_area: area,
+      id_nivel: nivel,
       estado: estado && estado !== 'TODOS' ? estado : undefined,
     });
   }

@@ -19,10 +19,15 @@ import { EvaluadoresModule } from './evaluadores/evaluadores.module';
 import { OlimpistasModule } from './olimpistas/olimpistas.module';
 import { GruposModule } from './grupos/grupos.module';
 import { TutoresModule } from './tutores/tutores.module';
+import { FasesModule } from './fases/fases.module';
+import { FasesController } from './fases/fases.controller';
 
 // NUEVOS
 import { NivelesModule } from './niveles/niveles.module';
 import { ReportesModule } from './reportes/reportes.module';
+
+// ⬇️ IMPORTA TU MÓDULO AQUÍ
+import { ControlFasesModule } from './controlFases/controlFases.module';
 
 @Module({
   imports: [
@@ -37,9 +42,12 @@ import { ReportesModule } from './reportes/reportes.module';
     NivelesModule,
     ReportesModule,
 
+    ControlFasesModule, // ⬅️ AÑADIDO
+    FasesModule,
+
     JwtModule.register({
       secret: process.env.JWT_SECRET,
-      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '1d' },
+      signOptions: { expiresIn: process.env.JWT_EXPIRES_IN || '2h' },
     }),
   ],
   controllers: [AuthController, UsersController],

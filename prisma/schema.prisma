@@ -15,6 +15,7 @@ datasource db {
 
 // ===================== Enums =====================
 // NUEVO
+
 enum clasificacion_estado {
   CLASIFICADO
   NO_CLASIFICADO
@@ -132,6 +133,8 @@ model niveles {
   listas_generadas listas_generadas[]
   grupos           grupos[]           @relation("nivel_grupos")
 
+  cierres_fase cierres_fase[]
+
   @@index([nombre_nivel])
 }
 
@@ -187,7 +190,7 @@ model grupos {
 
   id_tutor Int?
 
-  tutor    tutores? @relation(fields: [id_tutor], references: [id_tutor])
+  tutor    tutores?         @relation(fields: [id_tutor], references: [id_tutor])
   area     areas            @relation("area_grupos", fields: [id_area], references: [id_area])
   nivel    niveles          @relation("nivel_grupos", fields: [id_nivel], references: [id_nivel])
   miembros grupo_miembros[]
@@ -202,7 +205,7 @@ model grupo_miembros {
   id_grupo_miembro Int     @id @default(autoincrement()) @db.Integer
   id_grupo         Int
   id_competidor    Int
-  rol              String? 
+  rol              String?
 
   grupo      grupos       @relation(fields: [id_grupo], references: [id_grupo], onDelete: Cascade)
   competidor competidores @relation("competidor_miembros", fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
@@ -240,7 +243,6 @@ model inscripciones {
   @@index([id_area, id_nivel, clasificacion])
   @@index([id_area, id_nivel, puntaje_clasificacion])
 }
-
 
 model fases {
   id_fase     Int    @id @default(autoincrement()) @db.Integer
@@ -336,6 +338,7 @@ model cierres_fase {
   id_cierre         Int               @id @default(autoincrement()) @db.Integer
   id_fase           Int
   id_area           Int
+  id_nivel          Int // ⬅ NUEVO: cierre por área+nivel
   cerrado_por       Int
   fecha_cierre      DateTime          @default(now())
   estado_validacion estado_validacion @default(PENDIENTE)
@@ -344,11 +347,13 @@ model cierres_fase {
 
   fase        fases     @relation(fields: [id_fase], references: [id_fase])
   area        areas     @relation(fields: [id_area], references: [id_area])
+  nivel       niveles   @relation(fields: [id_nivel], references: [id_nivel])
   user_cierra usuarios  @relation("cierre_por", fields: [cerrado_por], references: [id_usuario])
   user_valida usuarios? @relation("validado_por", fields: [validado_por], references: [id_usuario])
 
-  @@unique([id_fase, id_area], name: "uq_cierre_unico")
+  @@unique([id_fase, id_area, id_nivel], name: "uq_cierre_unico")
   @@index([id_area])
+  @@index([id_nivel])
   @@index([id_fase])
 }
 
