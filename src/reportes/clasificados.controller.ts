@@ -1,9 +1,21 @@
 // src/reportes/clasificados.controller.ts
-import { Controller, Get, Query, Res, HttpException, HttpStatus,  } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  Res,
+  HttpException,
+  HttpStatus,
+  UseGuards,
+} from '@nestjs/common';
 import { ClasificadosService } from './clasificados.service';
 import type { Response } from 'express';
 import { FasesService } from '../fases/fases.service';
-import { PhaseType } from '../fases/dto/close-phase.dto'; 
+import { PhaseType } from '../fases/dto/close-phase.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { ADMIN } from '../auth/constants';
 
 type EstadoFiltro =
   | 'CLASIFICADO'
@@ -12,6 +24,8 @@ type EstadoFiltro =
   | 'TODOS'
   | undefined;
 
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(ADMIN)
 @Controller('reportes/clasificados')
 export class ClasificadosController {
   constructor(
@@ -33,11 +47,11 @@ export class ClasificadosController {
         area,
         nivel,
         PhaseType.CLASIFICACION,
-      ); 
+      );
       if (st !== 'CERRADA' && st !== 'VALIDADA') {
         throw new HttpException(
           'Fase Bloqueada. La fase de clasificación aún no ha sido aprobada. Los reportes se habilitarán una vez que des el aval correspondiente.',
-          HttpStatus.LOCKED, 
+          HttpStatus.LOCKED,
         );
       }
     }
@@ -63,7 +77,7 @@ export class ClasificadosController {
         area,
         nivel,
         PhaseType.CLASIFICACION,
-      ); 
+      );
       if (st !== 'CERRADA' && st !== 'VALIDADA') {
         throw new HttpException(
           'Fase Bloqueada. La fase de clasificación aún no ha sido aprobada. Los reportes se habilitarán una vez que des el aval correspondiente.',
@@ -93,8 +107,14 @@ export class ClasificadosController {
       estado: estado && estado !== 'TODOS' ? estado : undefined,
     });
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="clasificados.xlsx"');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="clasificados.xlsx"',
+    );
     res.send(buffer);
   }
 }

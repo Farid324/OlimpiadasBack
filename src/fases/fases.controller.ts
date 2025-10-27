@@ -1,6 +1,13 @@
 // src/fases/fases.controller.ts
 import {
-  Body, Controller, Param, ParseIntPipe, Post, UseGuards, Get, Query,
+  Body,
+  Controller,
+  Param,
+  ParseIntPipe,
+  Post,
+  UseGuards,
+  Get,
+  Query,
   BadRequestException,
 } from '@nestjs/common';
 import * as fasesService from './fases.service';
@@ -12,9 +19,9 @@ import type { JwtPayload } from '../interfaces/jwt-payload.interface';
 import { User } from '../common/decorators/user.decorator';
 import { ClosePhaseDto, PhaseType } from './dto/close-phase.dto';
 
-@Controller('phases')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(RESPONSABLE, ADMIN)
+@Roles(RESPONSABLE)
+@Controller('phases')
 export class FasesController {
   constructor(private readonly fases: fasesService.FasesService) {}
 
@@ -26,8 +33,13 @@ export class FasesController {
     @Body() dto: ClosePhaseDto,
     @User() user: JwtPayload,
   ) {
-    if (!dto?.type || (dto.type !== PhaseType.CLASIFICACION && dto.type !== PhaseType.FINAL)) {
-      throw new BadRequestException('Tipo de fase inválido. Debe ser CLASIFICACION o FINAL.');
+    if (
+      !dto?.type ||
+      (dto.type !== PhaseType.CLASIFICACION && dto.type !== PhaseType.FINAL)
+    ) {
+      throw new BadRequestException(
+        'Tipo de fase inválido. Debe ser CLASIFICACION o FINAL.',
+      );
     }
     const actor_id = Number(user.sub);
     return this.fases.closePhase({
@@ -47,8 +59,13 @@ export class FasesController {
     @Body() dto: ClosePhaseDto,
     @User() user: JwtPayload,
   ) {
-    if (!dto?.type || (dto.type !== PhaseType.CLASIFICACION && dto.type !== PhaseType.FINAL)) {
-      throw new BadRequestException('Tipo de fase inválido. Debe ser CLASIFICACION o FINAL.');
+    if (
+      !dto?.type ||
+      (dto.type !== PhaseType.CLASIFICACION && dto.type !== PhaseType.FINAL)
+    ) {
+      throw new BadRequestException(
+        'Tipo de fase inválido. Debe ser CLASIFICACION o FINAL.',
+      );
     }
     const actor_id = Number(user.sub);
     return this.fases.validateClose({
