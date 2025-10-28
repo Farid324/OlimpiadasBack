@@ -1,12 +1,35 @@
-import { IsNumber, Min, Max, IsOptional, IsString } from 'class-validator';
+import { IsInt, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class RegistrarNotaDto {
+  @IsInt()
+  idInscripcion: number;
+
+  @IsInt()
+  idEvaluador: number;
+
   @IsNumber()
-  @Min(1)
-  @Max(100)
   nota: number;
 
   @IsOptional()
   @IsString()
-  comentario?: string;
+  comentario?: string | null;
+}
+
+export class EditarNotaDto {
+  @IsInt()
+  idEvaluacion: number;
+
+  @IsInt()
+  idUsuario: number;
+
+  @IsOptional()
+  @IsInt()
+  idEvaluador?: number;
+
+  @IsNumber()
+  nuevaNota: number;
+
+  @IsOptional()
+  @IsString()
+  comentario?: string | null;
 }
