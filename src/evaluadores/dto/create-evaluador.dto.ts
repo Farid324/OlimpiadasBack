@@ -17,18 +17,24 @@ export class CreateEvaluadorDto {
   // Opción A: puedes enviar nombre y apellido por separado…
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, { message: 'nombre solo permite letras y espacios' })
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, {
+    message: 'nombre solo permite letras y espacios',
+  })
   nombre?: string;
 
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, { message: 'apellido solo permite letras y espacios' })
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, {
+    message: 'apellido solo permite letras y espacios',
+  })
   apellido?: string;
 
   // …u Opción B: enviar nombreCompleto (lo estás usando en el modal)
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, { message: 'nombreCompleto solo permite letras y espacios' })
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, {
+    message: 'nombreCompleto solo permite letras y espacios',
+  })
   nombreCompleto?: string;
 
   @IsEmail({}, { message: 'correo inválido' })
@@ -46,7 +52,9 @@ export class CreateEvaluadorDto {
   ci?: string;
 
   @IsString()
-  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, { message: 'institución solo permite letras y espacios' })
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, {
+    message: 'institución solo permite letras y espacios',
+  })
   institucion!: string;
 
   @IsString()

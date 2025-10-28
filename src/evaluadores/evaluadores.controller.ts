@@ -1,6 +1,15 @@
+// src/evaluadores/evaluadores.controller.ts
 import {
-  Controller, Get, Post, Body, Patch, Param, Query, Delete,
-  UseGuards, ParseIntPipe,
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Query,
+  Delete,
+  UseGuards,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { EvaluadoresService } from './evaluadores.service';
 import { CreateEvaluadorDto } from './dto/create-evaluador.dto';
