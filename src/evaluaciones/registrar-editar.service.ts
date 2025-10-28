@@ -51,26 +51,6 @@ export class EvaluacionesService {
     const clasificacion = calcularClasificacion(nota);
     const notaDecimal = new Prisma.Decimal(nota);
 
-    // Transacción: crear evaluación, log y actualizar inscripción
-    // const [evaluacionCreada] = await this.prisma.$transaction([
-    //   this.prisma.evaluaciones.create({
-    //     data: {
-    //       id_inscripcion: idInscripcion,
-    //       id_fase: 1,
-    //       id_evaluador: idEvaluador,
-    //       nota,
-    //       fecha_registro: new Date(),
-    //       estado_registro: 'BORRADOR', // según tu requisito
-    //       comentario: comentario ?? null,
-    //     },
-    //   }),
-    //   // No hacemos el resto aquí porque necesitamos el id_evaluacion para el log.
-    // ]).then(async ([evalCreated]) => {
-    //   // ahora creamos el log y actualizamos inscripcion dentro de otra transacción
-    //   // (pero para que todo sea atómico, lo hacemos con una sola $transaction final)
-    //   return [evalCreated];
-    // });
-
     // Hacemos todo en una única transacción atómica correctamente:
     const result = await this.prisma.$transaction(async (prisma) => {
       // 1) crear evaluacion
