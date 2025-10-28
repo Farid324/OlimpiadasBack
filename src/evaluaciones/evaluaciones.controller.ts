@@ -4,16 +4,17 @@ import {
   Get,
   Query,
   UseGuards,
-  Patch,
+  Put,
   Body,
   Post,
   Req,
-  Param,
 } from '@nestjs/common';
 import { EvaluacionesAdminService } from './evaluaciones.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { JwtPayload } from 'src/interfaces/jwt-payload.interface';
 import { Request } from 'express';
+import { EvaluacionesService } from './registrar-editar.service';
+import { EditarNotaDto, RegistrarNotaDto } from './dto/registrar-nota.dto';
 
 // ✅ Declaración de request tipado
 interface RequestWithUser extends Request {
@@ -23,7 +24,10 @@ interface RequestWithUser extends Request {
 @Controller('admin/evaluaciones')
 @UseGuards(JwtAuthGuard)
 export class EvaluacionesAdminController {
-  constructor(private service: EvaluacionesAdminService) {}
+  constructor(
+    private service: EvaluacionesAdminService,
+    private registrarEditarService: EvaluacionesService,
+  ) {}
 
   @Get('lista')
   async listarCompetidores(
@@ -43,36 +47,45 @@ export class EvaluacionesAdminController {
     return this.service.listarCompetidores({ search, idAreas, filtro });
   }
 
-  @Post('nota')
-  async registrarNota(
-    @Req() req: RequestWithUser,
-    @Body() body: { idInscripcion: number; nota: number },
-  ) {
-    const idEvaluador = Number(req.user.sub);
-    return this.service.registrarNota({
-      idInscripcion: body.idInscripcion,
-      idEvaluador,
-      nota: body.nota,
-    });
+  // @Post('nota')
+  // async registrarNota(
+  //   @Req() req: RequestWithUser,
+  //   @Body() body: { idInscripcion: number; nota: number },
+  // ) {
+  //   const idEvaluador = Number(req.user.sub);
+  //   return this.service.registrarNota({
+  //     idInscripcion: body.idInscripcion,
+  //     idEvaluador,
+  //     nota: body.nota,
+  //   });
+  // }
+
+  // @Patch('nota')
+  // async editarNota(
+  //   @Req() req: RequestWithUser,
+  //   @Body() body: { idEvaluacion: number; nuevaNota: number },
+  // ) {
+  //   const idUsuario = Number(req.user.sub);
+  //   return this.service.editarNota({
+  //     idEvaluacion: body.idEvaluacion,
+  //     idUsuario,
+  //     nuevaNota: body.nuevaNota,
+  //   });
+  // }
+
+  // @Get(':idEvaluacion/logs')
+  // obtenerLogs(@Param('idEvaluacion') idEvaluacion: string) {
+  //   const id = Number(idEvaluacion);
+  //   return this.service.obtenerLogsCambios(id);
+  // }
+  @Post('registrar-nota')
+  async registrarNota(@Body() dto: RegistrarNotaDto) {
+    return this.registrarEditarService.registrarNota(dto);
   }
 
-  @Patch('nota')
-  async editarNota(
-    @Req() req: RequestWithUser,
-    @Body() body: { idEvaluacion: number; nuevaNota: number },
-  ) {
-    const idUsuario = Number(req.user.sub);
-    return this.service.editarNota({
-      idEvaluacion: body.idEvaluacion,
-      idUsuario,
-      nuevaNota: body.nuevaNota,
-    });
-  }
-
-  @Get(':idEvaluacion/logs')
-  obtenerLogs(@Param('idEvaluacion') idEvaluacion: string) {
-    const id = Number(idEvaluacion);
-    return this.service.obtenerLogsCambios(id);
+  @Put('editar-nota')
+  async editarNota(@Body() dto: EditarNotaDto) {
+    return this.registrarEditarService.editarNota(dto);
   }
 
   @Get('mis-competidores')
