@@ -40,6 +40,18 @@ export class EvaluacionesAdminService {
             escuela: true,
           },
         },
+        evaluaciones: {
+          //where: { id_fase: 1 }, // si necesitas filtrar por fase
+          orderBy: { fecha_registro: 'desc' }, // la mas reciente primero
+          take: 1, // solo 1 (la actual)
+          select: {
+            id_evaluacion: true,
+            nota: true,
+            comentario: true,
+            id_evaluador: true,
+            fecha_registro: true,
+          },
+        },
         area: {
           select: {
             id_area: true,
