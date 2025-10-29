@@ -1,11 +1,22 @@
+// src/responsables/dto/update-responsable.dto.ts
 import { PartialType } from '@nestjs/mapped-types';
 import { CreateResponsableDto } from './create-responsable.dto';
-import { IsOptional, IsString, IsEmail, Matches, IsInt, Min, Max } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsEmail,
+  Matches,
+  IsInt,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class UpdateResponsableDto extends PartialType(CreateResponsableDto) {
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, { message: 'El nombre solo puede contener letras' })
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, {
+    message: 'El nombre solo puede contener letras',
+  })
   nombre?: string;
 
   @IsOptional()

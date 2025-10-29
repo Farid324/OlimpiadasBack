@@ -4,6 +4,7 @@ import {
   BadRequestException,
   NotFoundException,
   HttpException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Prisma } from '@prisma/client';
@@ -11,6 +12,8 @@ import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { QueryEvaluadorDto } from './dto/query-evaluador.dto';
 import { CreateEvaluadorDto } from './dto/create-evaluador.dto';
 import { UpdateEvaluadorDto } from './dto/update-evaluador.dto'; // ⬅️ nuevo
+import * as bcrypt from 'bcrypt';
+import { EmailService } from '../email/email.service';
 
 function isKnownPrismaError(e: unknown): e is PrismaClientKnownRequestError {
   return e instanceof PrismaClientKnownRequestError;
@@ -117,7 +120,11 @@ function partirNombreCompleto(full?: string): {
 }
 @Injectable()
 export class EvaluadoresService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(EvaluadoresService.name);
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly emailService: EmailService,
+  ) {}
 
   /** GET /evaluadores */
   async findAll(query: QueryEvaluadorDto) {
@@ -215,18 +222,16 @@ export class EvaluadoresService {
   /** POST /evaluadores */
   async create(dto: CreateEvaluadorInput) {
     try {
+      // ... (lógica para nombre, apellido, CI, validaciones, duplicados) ...
       let { nombre, apellido } = dto;
       if ((!nombre || !apellido) && dto.nombreCompleto) {
         const p = partirNombreCompleto(dto.nombreCompleto);
         nombre = nombre ?? p.nombre;
         apellido = apellido ?? p.apellido;
       }
-
-      // 🔒 Requeridos
       if (!nombre?.trim() || !apellido?.trim()) {
         throw new BadRequestException('Nombre y apellido son obligatorios');
       }
-
       const {
         correo,
         telefono,
@@ -237,10 +242,13 @@ export class EvaluadoresService {
         activo,
         id_areas,
       } = dto;
-
+      if (!ci || !ci.trim()) {
+        throw new BadRequestException(
+          'El CI es obligatorio para generar la contraseña inicial.',
+        );
+      }
+      const tempPassword = ci.trim();
       const idRolEvaluador = await this.getEvaluadorRoleId();
-
-      // duplicados (igual que antes)...
       if (correo) {
         const dupCorreo = await this.prisma.usuarios.findFirst({
           where: { correo },
@@ -269,30 +277,31 @@ export class EvaluadoresService {
       }
       await this.assertAreasExisten(id_areas || []);
 
-      // ✅ Tipo exacto de Prisma y sin campos undefined
+      const saltRounds = 10;
+      const hashedPassword = await bcrypt.hash(tempPassword, saltRounds);
+
       const data: Prisma.usuariosCreateInput = {
         nombre: nombre.trim(),
         apellido: apellido.trim(),
-        correo: correo.trim(), // requerido por el schema
-        hash_password: 'temporal',
+        correo: correo.trim(),
+        // CORRECCIÓN AQUÍ: Usa hashedPassword en lugar de 'temporal'
+        hash_password: hashedPassword,
         activo: typeof activo === 'boolean' ? activo : true,
-        rol: { connect: { id_rol: idRolEvaluador } }, // ⬅️ en vez de id_rol: number
+        rol: { connect: { id_rol: idRolEvaluador } },
 
         ...(telefono !== undefined ? { telefono } : {}),
-        ...(ci !== undefined ? { ci } : {}),
+        ...(ci !== undefined ? { ci: tempPassword } : {}), // Guardamos el CI
         ...(institucion !== undefined ? { institucion } : {}),
         ...(especialidad !== undefined ? { especialidad } : {}),
         ...(experiencia !== undefined ? { experiencia } : {}),
       };
 
-      // Si id_rol fuera RELACIÓN en tu schema, en vez de `id_rol: idRolEvaluador` usa:
-      // id_rol: { connect: { id_rol: idRolEvaluador } },
-
       const created = await this.prisma.usuarios.create({
         data,
-        select: { id_usuario: true },
+        select: { id_usuario: true, nombre: true, correo: true }, // Pedimos datos para el email
       });
 
+      // ... (lógica para crear evaluadores_area) ...
       if (Array.isArray(id_areas) && id_areas.length > 0) {
         await this.prisma.evaluadores_area.createMany({
           data: id_areas.map((id_area) => ({
@@ -302,9 +311,25 @@ export class EvaluadoresService {
           skipDuplicates: true,
         });
       }
+      // ... (lógica para enviar correo) ...
+      this.emailService
+        .sendEvaluatorWelcomeEmail(
+          created.correo,
+          created.nombre,
+          tempPassword, // Enviamos el CI (sin hashear) como contraseña temporal
+        )
+        .catch((emailError) => {
+          // Si el envío falla, solo lo registramos en los logs del servidor
+          this.logger.error(
+            `FALLO al enviar email de bienvenida a ${created.correo} (Usuario ID: ${created.id_usuario})`,
+            emailError instanceof Error ? emailError.stack : String(emailError),
+          );
+          // IMPORTANTE: NO lanzamos 'throw emailError' para no causar un 500
+        });
 
       return { ok: true, id_usuario: created.id_usuario };
     } catch (err: unknown) {
+      // ... (manejo de errores) ...
       console.error('ERROR create evaluador ->', errorToLog(err));
       if (isKnownPrismaError(err))
         throw new BadRequestException(formatPrismaError(err));
