@@ -1,6 +1,6 @@
 // prisma/seed.ts
 import 'dotenv/config';
-import { PrismaClient, Prisma  } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import { ciclo_nivel } from '@prisma/client';
 
@@ -285,8 +285,16 @@ async function main() {
     where: { ci: { in: dataCompetidores.map((c) => c.ci) } },
   });
 
-  const getId = (ci: string) =>
-    compList.find((c) => c.ci === ci)?.id_competidor!;
+  const getId = (ci: string) => {
+    const competidor = compList.find((c) => c.ci === ci);
+    if (!competidor) {
+      // Si esto pasa, algo salió muy mal (la creación o la búsqueda falló)
+      throw new Error(
+        `Error fatal en seed: No se pudo encontrar el competidor con CI ${ci} después de crearlo.`,
+      );
+    }
+    return competidor.id_competidor; // Esto ahora es 'number' (no undefined)
+  };
   const now = new Date();
 
   await prisma.inscripciones.createMany({
@@ -386,7 +394,7 @@ async function main() {
     skipDuplicates: true,
   });
 
-    // ============================================================
+  // ============================================================
   // EXTRA PARA PRUEBAS HU-16
   // ============================================================
 
@@ -455,7 +463,7 @@ async function main() {
       },
       update: {
         nota: new Prisma.Decimal(60),
-        estado_registro: 'BORRADOR', 
+        estado_registro: 'BORRADOR',
         comentario: 'Pendiente a propósito para test HU-16',
       },
       create: {
@@ -468,7 +476,6 @@ async function main() {
       },
     });
   }
-
 
   console.log('✅ Seed OK: competidores e inscripciones cargados.');
 }

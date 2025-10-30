@@ -1,4 +1,12 @@
-import { IsEmail, IsNotEmpty, IsString, IsNumber, Min, Max } from 'class-validator';
+// src/responsables/dto/create-responsable.dto.ts
+import {
+  IsEmail,
+  IsNotEmpty,
+  IsString,
+  IsNumber,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class CreateResponsableDto {
   @IsNotEmpty()
@@ -29,7 +37,7 @@ export class CreateResponsableDto {
 
   @IsString()
   especialidad: string;
-  
-    @IsNumber()
+
+  @IsNumber()
   id_area: number;
 }

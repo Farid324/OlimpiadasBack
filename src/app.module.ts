@@ -2,7 +2,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from './prisma/prisma.module';
 import { JwtModule } from '@nestjs/jwt';
-
+import { ConfigModule } from '@nestjs/config';
 // Auth
 import { AuthController } from './auth/controllers/auth.controller';
 import { AuthService } from './auth/services/auth.service';
@@ -20,7 +20,7 @@ import { OlimpistasModule } from './olimpistas/olimpistas.module';
 import { GruposModule } from './grupos/grupos.module';
 import { TutoresModule } from './tutores/tutores.module';
 import { FasesModule } from './fases/fases.module';
-import { FasesController } from './fases/fases.controller';
+//import { FasesController } from './fases/fases.controller';
 
 // NUEVOS
 import { NivelesModule } from './niveles/niveles.module';
@@ -33,6 +33,9 @@ import { ControlFasesModule } from './controlFases/controlFases.module';
 import { LogsModule } from './registroActividad/logs.module';
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true, // Hace que ConfigService esté disponible en toda la app
+    }),
     PrismaModule,
     AreasModule,
     OlimpistasModule,
