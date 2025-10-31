@@ -40,6 +40,13 @@ export class EvaluacionesAdminService {
             escuela: true,
           },
         },
+        nivel: {
+          select: {
+            id_nivel: true,
+            nombre_nivel: true,
+          },
+        },
+        clasificacion: true,
         evaluaciones: {
           //where: { id_fase: 1 }, // si necesitas filtrar por fase
           orderBy: { fecha_registro: 'desc' }, // la mas reciente primero
