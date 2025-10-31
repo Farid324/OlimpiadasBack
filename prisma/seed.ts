@@ -308,8 +308,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 95.5,
-        clasificacion: 'CLASIFICADO',
+        //puntaje_clasificacion: 95.5,
+        //clasificacion: 'CLASIFICADO',
       },
       {
         id_competidor: getId('CI0002'),
@@ -319,8 +319,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 93.0,
-        clasificacion: 'CLASIFICADO',
+        //puntaje_clasificacion: 93.0,
+        //clasificacion: 'CLASIFICADO',
       },
       {
         id_competidor: getId('CI0003'),
@@ -330,8 +330,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 92.0,
-        clasificacion: 'CLASIFICADO',
+        //puntaje_clasificacion: 92.0,
+        //clasificacion: 'CLASIFICADO',
       },
       {
         id_competidor: getId('CI0005'),
@@ -341,8 +341,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 45.0,
-        clasificacion: 'NO_CLASIFICADO',
+        //puntaje_clasificacion: 45.0,
+        //clasificacion: 'NO_CLASIFICADO',
       },
       {
         id_competidor: getId('CI0006'),
@@ -352,8 +352,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 50.5,
-        clasificacion: 'NO_CLASIFICADO',
+        //puntaje_clasificacion: 50.5,
+        //clasificacion: 'NO_CLASIFICADO',
       },
       {
         id_competidor: getId('CI0007'),
@@ -363,8 +363,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 70.0,
-        clasificacion: 'DESCALIFICADO',
+        //puntaje_clasificacion: 70.0,
+        //clasificacion: 'DESCALIFICADO',
       },
       // Física / Secundaria
       {
@@ -375,8 +375,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 89.5,
-        clasificacion: 'CLASIFICADO',
+        //puntaje_clasificacion: 89.5,
+        //clasificacion: 'CLASIFICADO',
       },
       // Matemática / Primaria
       {
@@ -387,8 +387,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 77.0,
-        clasificacion: 'CLASIFICADO',
+        //puntaje_clasificacion: 77.0,
+        //clasificacion: 'CLASIFICADO',
       },
     ],
     skipDuplicates: true,
@@ -415,67 +415,67 @@ async function main() {
   });
   if (!faseFinal) throw new Error('Fase FINAL no encontrada (seed).');
 
-  const inscMatSec = await prisma.inscripciones.findMany({
-    where: { id_area: areaMate.id_area, id_nivel: secundaria.id_nivel },
-    select: { id_inscripcion: true },
-  });
+  // const inscMatSec = await prisma.inscripciones.findMany({
+  //   where: { id_area: areaMate.id_area, id_nivel: secundaria.id_nivel },
+  //   select: { id_inscripcion: true },
+  // });
 
-  for (const it of inscMatSec) {
-    await prisma.evaluaciones.upsert({
-      where: {
-        // evita duplicados en caso de re-seed
-        uq_eval_unica: {
-          id_inscripcion: it.id_inscripcion,
-          id_fase: faseFinal.id_fase,
-          id_evaluador: evaluador.id_usuario,
-        },
-      },
-      update: {
-        nota: new Prisma.Decimal(80 + Math.random() * 20), // 80..100
-        estado_registro: 'FIRMADA',
-        comentario: 'Auto-seed FINAL (firmada)',
-      },
-      create: {
-        id_inscripcion: it.id_inscripcion,
-        id_fase: faseFinal.id_fase,
-        id_evaluador: evaluador.id_usuario,
-        nota: new Prisma.Decimal(80 + Math.random() * 20),
-        estado_registro: 'FIRMADA',
-        comentario: 'Auto-seed FINAL (firmada)',
-      },
-    });
-  }
+  // for (const it of inscMatSec) {
+  //   await prisma.evaluaciones.upsert({
+  //     where: {
+  //       // evita duplicados en caso de re-seed
+  //       uq_eval_unica: {
+  //         id_inscripcion: it.id_inscripcion,
+  //         id_fase: faseFinal.id_fase,
+  //         id_evaluador: evaluador.id_usuario,
+  //       },
+  //     },
+  //     update: {
+  //       nota: new Prisma.Decimal(80 + Math.random() * 20), // 80..100
+  //       estado_registro: 'FIRMADA',
+  //       comentario: 'Auto-seed FINAL (firmada)',
+  //     },
+  //     create: {
+  //       id_inscripcion: it.id_inscripcion,
+  //       id_fase: faseFinal.id_fase,
+  //       id_evaluador: evaluador.id_usuario,
+  //       nota: new Prisma.Decimal(80 + Math.random() * 20),
+  //       estado_registro: 'FIRMADA',
+  //       comentario: 'Auto-seed FINAL (firmada)',
+  //     },
+  //   });
+  // }
 
-  const inscFisSec = await prisma.inscripciones.findMany({
-    where: { id_area: areaFisica.id_area, id_nivel: secundaria.id_nivel },
-    select: { id_inscripcion: true },
-  });
+  // const inscFisSec = await prisma.inscripciones.findMany({
+  //   where: { id_area: areaFisica.id_area, id_nivel: secundaria.id_nivel },
+  //   select: { id_inscripcion: true },
+  // });
 
-  if (inscFisSec.length > 0) {
-    const first = inscFisSec[0];
-    await prisma.evaluaciones.upsert({
-      where: {
-        uq_eval_unica: {
-          id_inscripcion: first.id_inscripcion,
-          id_fase: faseFinal.id_fase,
-          id_evaluador: evaluador.id_usuario,
-        },
-      },
-      update: {
-        nota: new Prisma.Decimal(60),
-        estado_registro: 'BORRADOR',
-        comentario: 'Pendiente a propósito para test HU-16',
-      },
-      create: {
-        id_inscripcion: first.id_inscripcion,
-        id_fase: faseFinal.id_fase,
-        id_evaluador: evaluador.id_usuario,
-        nota: new Prisma.Decimal(60),
-        estado_registro: 'BORRADOR',
-        comentario: 'Pendiente a propósito para test HU-16',
-      },
-    });
-  }
+  // if (inscFisSec.length > 0) {
+  //   const first = inscFisSec[0];
+  //   await prisma.evaluaciones.upsert({
+  //     where: {
+  //       uq_eval_unica: {
+  //         id_inscripcion: first.id_inscripcion,
+  //         id_fase: faseFinal.id_fase,
+  //         id_evaluador: evaluador.id_usuario,
+  //       },
+  //     },
+  //     update: {
+  //       nota: new Prisma.Decimal(60),
+  //       estado_registro: 'BORRADOR',
+  //       comentario: 'Pendiente a propósito para test HU-16',
+  //     },
+  //     create: {
+  //       id_inscripcion: first.id_inscripcion,
+  //       id_fase: faseFinal.id_fase,
+  //       id_evaluador: evaluador.id_usuario,
+  //       nota: new Prisma.Decimal(60),
+  //       estado_registro: 'BORRADOR',
+  //       comentario: 'Pendiente a propósito para test HU-16',
+  //     },
+  //   });
+  // }
 
   console.log('✅ Seed OK: competidores e inscripciones cargados.');
 }
