@@ -242,9 +242,7 @@ export class EvaluacionesAdminService {
     const clasificados = await this.prisma.inscripciones.count({
       where: {
         id_area: { in: areaIds },
-        evaluaciones: {
-          some: { id_evaluador: idEvaluador, nota: { gte: 51 } },
-        },
+        clasificacion: 'CLASIFICADO',
       },
     });
 
