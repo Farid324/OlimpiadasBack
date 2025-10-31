@@ -15,7 +15,7 @@ import { PhaseType } from '../fases/dto/close-phase.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { ADMIN } from '../auth/constants';
+import { ADMIN} from '../auth/constants';
 
 type EstadoFiltro =
   | 'CLASIFICADO'
@@ -25,7 +25,7 @@ type EstadoFiltro =
   | undefined;
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(ADMIN)
+@Roles(ADMIN,'RESPONSABLE_DE_AREA' )
 @Controller('reportes/clasificados')
 export class ClasificadosController {
   constructor(
