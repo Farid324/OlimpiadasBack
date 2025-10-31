@@ -8,6 +8,7 @@ import {
   Body,
   Post,
   Req,
+  Param,
 } from '@nestjs/common';
 import { EvaluacionesAdminService } from './evaluaciones.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -15,6 +16,7 @@ import { JwtPayload } from 'src/interfaces/jwt-payload.interface';
 import { Request } from 'express';
 import { EvaluacionesService } from './registrar-editar.service';
 import { EditarNotaDto, RegistrarNotaDto } from './dto/registrar-nota.dto';
+import { AdminEvaluacionesService } from './admin-evaluaciones.service';
 
 // ✅ Declaración de request tipado
 interface RequestWithUser extends Request {
@@ -27,6 +29,7 @@ export class EvaluacionesAdminController {
   constructor(
     private service: EvaluacionesAdminService,
     private registrarEditarService: EvaluacionesService,
+    private adminEvaluaciones: AdminEvaluacionesService,
   ) {}
 
   @Get('lista')
@@ -101,5 +104,42 @@ export class EvaluacionesAdminController {
     const resumen = await this.service.getResumenEvaluador(idEvaluador);
     console.log('[BACKEND] resumen:', resumen);
     return resumen;
+  }
+  // GET /admin/evaluaciones/lista
+  @Get('adminLista')
+  async listar(
+    @Query('areaId') areaId?: string,
+    @Query('nivelId') nivelId?: string,
+    @Query('search') search?: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+  ) {
+    return this.adminEvaluaciones.listarEvaluacionesYInscripciones({
+      areaId: areaId ? Number(areaId) : undefined,
+      nivelId: nivelId ? Number(nivelId) : undefined,
+      search,
+      page: Number(page),
+      limit: Number(limit),
+    });
+  }
+  @Get('adminStats')
+  async stats(
+    @Query('areaId') areaId?: string,
+    @Query('nivelId') nivelId?: string,
+  ) {
+    return this.adminEvaluaciones.estadisticasPorAreaNivel(
+      areaId ? Number(areaId) : undefined,
+      nivelId ? Number(nivelId) : undefined,
+    );
+  }
+  @Get('areas') listAreas() {
+    return this.adminEvaluaciones.listarAreas();
+  }
+  @Get('niveles') listNiveles() {
+    return this.adminEvaluaciones.listarNiveles();
+  }
+  @Get(':id')
+  async getDetalle(@Param('id') id: string) {
+    return this.adminEvaluaciones.obtenerDetalleEvaluacion(Number(id));
   }
 }
