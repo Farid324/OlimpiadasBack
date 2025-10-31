@@ -130,41 +130,75 @@ async function main() {
     skipDuplicates: true,
   });
 
-  // Responsable demo
-  const respEmail = process.env.RESP_EMAIL ?? 'resp.math@olimpiadas.edu';
-  const respPass = process.env.RESP_PASSWORD ?? 'olimpiadas2024';
-  const respHash = await bcrypt.hash(respPass, 10);
+  // ==========================================================
+  //             RESPONSABLES: 2 usuarios distintos para HU-08
+  // ==========================================================
+  // Ana Martínez -> Matemática
+  const respMathEmail = process.env.RESP_MATH_EMAIL ?? 'resp.math@olimpiadas.edu';
+  const respMathPass  = process.env.RESP_MATH_PASSWORD ?? 'olimpiadas2024';
+  const respMathHash  = await bcrypt.hash(respMathPass, 10);
 
-  const responsable = await prisma.usuarios.upsert({
-    where: { correo: respEmail },
+  const responsableMath = await prisma.usuarios.upsert({
+    where: { correo: respMathEmail },
     update: {
-      hash_password: respHash,
+      hash_password: respMathHash,
       id_rol: respRole.id_rol,
       activo: true,
       nombre: 'Ana',
       apellido: 'Martínez',
     },
     create: {
-      correo: respEmail,
-      hash_password: respHash,
+      correo: respMathEmail,
+      hash_password: respMathHash,
       nombre: 'Ana',
       apellido: 'Martínez',
       id_rol: respRole.id_rol,
       activo: true,
       institucion: 'Instituto Tecnológico',
-      especialidad: 'Física Teórica',
+      especialidad: 'Matemática',
       experiencia: 10,
       telefono: '78987654',
     },
   });
 
+  // Luis Herrera -> Física
+  const respPhysEmail = process.env.RESP_PHYS_EMAIL ?? 'resp.phys@olimpiadas.edu';
+  const respPhysPass  = process.env.RESP_PHYS_PASSWORD ?? 'olimpiadas2024';
+  const respPhysHash  = await bcrypt.hash(respPhysPass, 10);
+
+  const responsablePhys = await prisma.usuarios.upsert({
+    where: { correo: respPhysEmail },
+    update: {
+      hash_password: respPhysHash,
+      id_rol: respRole.id_rol,
+      activo: true,
+      nombre: 'Luis',
+      apellido: 'Herrera',
+    },
+    create: {
+      correo: respPhysEmail,
+      hash_password: respPhysHash,
+      nombre: 'Luis',
+      apellido: 'Herrera',
+      id_rol: respRole.id_rol,
+      activo: true,
+      institucion: 'UMSS',
+      especialidad: 'Física Teórica',
+      experiencia: 9,
+      telefono: '70876543',
+    },
+  });
+
+  // Limpieza de asociaciones previas en estas áreas (por si re-seedeas)
+  await prisma.responsables_area.deleteMany({
+    where: { id_area: { in: [areaMate.id_area, areaFisica.id_area] } },
+  });
+
+  // Asociaciones correctas (uno por área)
   await prisma.responsables_area.createMany({
     data: [
-      {
-        id_usuario: responsable.id_usuario,
-        id_area: areaMate.id_area,
-        activo: true,
-      },
+      { id_usuario: responsableMath.id_usuario, id_area: areaMate.id_area,  activo: true },
+      { id_usuario: responsablePhys.id_usuario, id_area: areaFisica.id_area, activo: true },
     ],
     skipDuplicates: true,
   });
@@ -397,17 +431,6 @@ async function main() {
   // ============================================================
   // EXTRA PARA PRUEBAS HU-16
   // ============================================================
-
-  await prisma.responsables_area.createMany({
-    data: [
-      {
-        id_usuario: responsable.id_usuario,
-        id_area: areaFisica.id_area,
-        activo: true,
-      },
-    ],
-    skipDuplicates: true,
-  });
 
   const faseFinal = await prisma.fases.findUnique({
     where: { nombre_fase: 'FINAL' },
