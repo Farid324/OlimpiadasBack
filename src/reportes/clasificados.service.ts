@@ -120,8 +120,7 @@ export class ClasificadosService {
     return 'CLASIFICADOS / NO CLASIFICADOS / DESCALIFICADOS';
   }
 
-  /** 📦 Generar Excel con CI + cabecera institucional */
-  /** 📦 Generar Excel con CI + cabecera institucional (FIX: no sobreescribir fila 1) */
+/** 📦 Generar Excel con CI + cabecera institucional en TABLA (ExcelJS) */
 async exportarExcel(f: Filtros): Promise<Buffer> {
   const rows = await this.list(f);
 
@@ -147,10 +146,10 @@ async exportarExcel(f: Filtros): Promise<Buffer> {
   ws.addRow([titulo]);     // row 1
   ws.addRow([subtitulo]);  // row 2
 
-  // Columnas de la tabla (SIN 'header' para no pisar fila 1)
+  // Columnas visibles de la TABLA (no usamos headers aquí)
   const tableColumns = [
     { key: 'posicion',        width: 10 },
-    { key: 'ci',              width: 18 }, // CI después de Posición
+    { key: 'ci',              width: 18 },
     { key: 'nombreCompleto',  width: 36 },
     { key: 'area',            width: 18 },
     { key: 'nivel',           width: 14 },
@@ -172,10 +171,7 @@ async exportarExcel(f: Filtros): Promise<Buffer> {
 
   // Merge del título y subtítulo a lo ancho de la tabla
   const totalCols = tableColumns.length; // 8
-  const colLetter = (n: number) => {
-    let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
-    return s;
-  };
+  const colLetter = (n: number) => { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; };
   const lastColLetter = colLetter(totalCols);
   ws.mergeCells(`A1:${lastColLetter}1`);
   ws.mergeCells(`A2:${lastColLetter}2`);
@@ -187,60 +183,49 @@ async exportarExcel(f: Filtros): Promise<Buffer> {
   // Espacio entre cabecera y tabla
   ws.addRow([]); // row 3
 
-  // 2) Definir columnas (SIN header)
+  // Definir anchos de columna
   ws.columns = tableColumns as any;
 
-  // 3) Fila de encabezados manual (row 4)
-  const headerRow = ws.addRow(headerLabels);
-  headerRow.font = { bold: true };
-  headerRow.alignment = { horizontal: 'center' };
-  headerRow.eachCell((cell) => {
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE5E7EB' } }; // gris claro
-    cell.border = {
-      top: { style: 'thin', color: { argb: 'FF000000' } },
-      left: { style: 'thin', color: { argb: 'FF000000' } },
-      bottom: { style: 'thin', color: { argb: 'FF000000' } },
-      right: { style: 'thin', color: { argb: 'FF000000' } },
-    };
+  // === TABLA ESTRUCTURADA (con filtros, franjas y estilo azul) ===
+  const startRow = (ws.lastRow?.number ?? 3) + 1; // fila donde colocaremos la tabla (encabezados incluidos)
+  const tableRows = rows.map(r => [
+    r.posicion ?? null,
+    r.ci ?? '',
+    r.nombreCompleto,
+    r.area,
+    r.nivel,
+    r.puntaje,
+    r.unidadEducativa,
+    r.departamento,
+  ]);
+
+  ws.addTable({
+    name: 'TablaClasificados',
+    ref: `A${startRow}`,
+    headerRow: true,
+    totalsRow: false,
+    style: {
+      // estilos "Medium" en Excel suelen ser azules; 9 y 2 son buenas opciones
+      theme: 'TableStyleMedium9',
+      showRowStripes: true,
+      showFirstColumn: false,
+      showLastColumn: false,
+    },
+    columns: headerLabels.map((name) => ({ name, filterButton: true })),
+    rows: tableRows,
   });
 
-  // 4) Cuerpo de datos (respetando CI correcto de competidor.ci)
-  for (const r of rows) {
-    ws.addRow({
-      posicion: r.posicion ?? null,
-      ci: r.ci ?? null,
-      nombreCompleto: r.nombreCompleto,
-      area: r.area,
-      nivel: r.nivel,
-      puntaje: r.puntaje,
-      unidadEducativa: r.unidadEducativa,
-      departamento: r.departamento,
-    });
-  }
-
-  // Formato numérico en Puntuación (opcional)
-  const puntajeColIdx = headerLabels.indexOf('Puntuación') + 1;
-  const firstDataRow = headerRow.number + 1;
-  const lastDataRow = ws.lastRow?.number ?? firstDataRow - 1;
-  if (puntajeColIdx > 0) {
-    for (let i = firstDataRow; i <= lastDataRow; i++) {
-      ws.getRow(i).getCell(puntajeColIdx).numFmt = '0.00';
-    }
-  }
-
-  // Bordes suaves en cuerpo (opcional)
+  // Formato numérico SOLO para la columna Puntuación dentro de la tabla
+  const puntajeColIdx = 6; // A=1, B=2, ..., F=6 (Puntuación)
+  const firstDataRow = startRow + 1;                 // fila de datos (debajo del header de tabla)
+  const lastDataRow  = firstDataRow + tableRows.length - 1;
   for (let i = firstDataRow; i <= lastDataRow; i++) {
-    ws.getRow(i).eachCell((cell) => {
-      cell.border = {
-        left:   { style: 'thin', color: { argb: 'FFCBD5E1' } },
-        right:  { style: 'thin', color: { argb: 'FFCBD5E1' } },
-        bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
-      };
-    });
+    ws.getRow(i).getCell(puntajeColIdx).numFmt = '0.00';
   }
 
   const buf = await wb.xlsx.writeBuffer();
   return Buffer.isBuffer(buf) ? buf : Buffer.from(buf as ArrayBuffer);
 }
+
 
 }
