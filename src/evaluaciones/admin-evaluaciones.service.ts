@@ -94,7 +94,6 @@ export class AdminEvaluacionesService {
       })),
     }));
   }
-
   async estadisticasPorAreaNivel(areaId?: number, nivelId?: number) {
     const baseWhere: Prisma.inscripcionesWhereInput = {};
     if (areaId) baseWhere.id_area = areaId;
@@ -142,35 +141,5 @@ export class AdminEvaluacionesService {
     const pendientes = Math.max(0, total - evaluadasCount);
 
     return { total, completadas, enProceso, pendientes };
-  }
-
-  async listarAreas() {
-    return this.prisma.areas.findMany({
-      where: { activo: true },
-      orderBy: { nombre_area: 'asc' },
-    });
-  }
-  async listarNiveles() {
-    return this.prisma.niveles.findMany({ orderBy: { orden: 'asc' } });
-  }
-
-  async obtenerDetalleEvaluacion(idEvaluacion: number) {
-    const ev = await this.prisma.evaluaciones.findUnique({
-      where: { id_evaluacion: idEvaluacion },
-      include: {
-        inscripcion: {
-          include: {
-            competidor: true,
-            area: true,
-            nivel: true,
-          },
-        },
-        evaluador: {
-          select: { id_usuario: true, nombre: true, apellido: true },
-        },
-      },
-    });
-    if (!ev) throw new NotFoundException('Evaluacion no encontrada');
-    return ev;
   }
 }
