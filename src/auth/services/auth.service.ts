@@ -8,6 +8,7 @@ import type { LoginResult, RoleName } from '../dto/login-result.dto';
 
 @Injectable()
 export class AuthService {
+  jwtService: any;
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
@@ -29,14 +30,14 @@ export class AuthService {
   async login(email: string, password: string): Promise<LoginResult> {
     const u = await this.validateUser(email, password);
 
-    const roleName: RoleName = u.rol.nombre as RoleName;
+    const role: RoleName = u.rol.nombre as RoleName;
 
-    const payload = {
+    const payload: JwtPayload = {
       sub: String(u.id_usuario),
       email: u.correo,
+      role,
       roleId: String(u.id_rol),
-      roleName,
-    } satisfies JwtPayload;
+    };
 
     const access_token = `${await this.jwt.signAsync(payload)}`;
 
@@ -46,7 +47,7 @@ export class AuthService {
         id: String(u.id_usuario),
         email: u.correo,
         name: `${u.nombre} ${u.apellido}`,
-        role: roleName,
+        role,
       },
     };
   }

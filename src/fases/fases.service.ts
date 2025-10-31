@@ -5,7 +5,7 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PhaseType } from './dto/close-phase.dto'; 
+import { PhaseType } from './dto/close-phase.dto';
 
 export type PhaseStatus = 'EN_PROCESO' | 'CERRADA' | 'VALIDADA';
 
@@ -31,6 +31,23 @@ export class FasesService {
       );
     }
     return fase.id_fase;
+  }
+
+  private async esResponsableDelAreaYNivel(
+    idUsuario: number,
+    idArea: number,
+    _idNivel: number, // nivel no se usa porque no existe en responsables_area
+  ): Promise<boolean> {
+    const responsable = await this.prisma.responsables_area.findFirst({
+      where: {
+        id_usuario: idUsuario,
+        id_area: idArea,
+        activo: true,
+      },
+      select: { id_usuario: true },
+    });
+
+    return Boolean(responsable);
   }
 
   async getStatus(
@@ -89,6 +106,22 @@ export class FasesService {
     comment?: string;
   }) {
     const { id_area, id_nivel, type, actor_id } = params;
+
+    const autorizado = await this.esResponsableDelAreaYNivel(
+      actor_id,
+      id_area,
+      id_nivel,
+    );
+    if (!autorizado) {
+      const areaNombre = await this.prisma.areas.findUnique({
+        where: { id_area },
+        select: { nombre_area: true },
+      });
+
+      throw new ForbiddenException(
+        `Solo el responsable del área ${areaNombre?.nombre_area ?? id_area} puede cerrar o validar esta fase.`,
+      );
+    }
 
     const status = await this.getStatus(id_area, id_nivel, type);
     if (status === 'CERRADA' || status === 'VALIDADA') {
@@ -170,6 +203,22 @@ export class FasesService {
       where: { uq_cierre_unico: { id_fase, id_area, id_nivel } },
       select: { id_cierre: true },
     });
+
+    const autorizado = await this.esResponsableDelAreaYNivel(
+      actor_id,
+      id_area,
+      id_nivel,
+    );
+    if (!autorizado) {
+      const areaNombre = await this.prisma.areas.findUnique({
+        where: { id_area },
+        select: { nombre_area: true },
+      });
+
+      throw new ForbiddenException(
+        `Solo el responsable del área ${areaNombre?.nombre_area ?? id_area} puede cerrar o validar esta fase.`,
+      );
+    }
 
     if (!cierre) {
       throw new BadRequestException(
