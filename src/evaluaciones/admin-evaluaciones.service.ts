@@ -142,4 +142,13 @@ export class AdminEvaluacionesService {
 
     return { total, completadas, enProceso, pendientes };
   }
+  async listarAreas() {
+    return this.prisma.areas.findMany({
+      where: { activo: true },
+      orderBy: { nombre_area: 'asc' },
+    });
+  }
+  async listarNiveles() {
+    return this.prisma.niveles.findMany({ orderBy: { orden: 'asc' } });
+  }
 }
