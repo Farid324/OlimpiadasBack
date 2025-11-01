@@ -9,8 +9,10 @@ import { ControlFasesService } from './controlFases.service';
 import { ControlFasesRespController } from './responsable/controlFasesResp.controller';
 import { ControlFasesRespService } from './responsable/controlFasesResp.service';
 
+import { FasesModule } from '../fases/fases.module';
+
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, FasesModule],
   controllers: [ControlFasesController, ControlFasesRespController],
   providers: [ControlFasesService, ControlFasesRespService],
   exports: [ControlFasesService, ControlFasesRespService],

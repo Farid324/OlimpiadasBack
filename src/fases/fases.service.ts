@@ -38,6 +38,17 @@ export class FasesService {
     idArea: number,
     _idNivel: number, // nivel no se usa porque no existe en responsables_area
   ): Promise<boolean> {
+    // Si es ADMIN, pasa directo, en caso de no querer que el admins apruebe fase quitar este bloque
+    const user = await this.prisma.usuarios.findUnique({
+      where: { id_usuario: idUsuario },
+      select: {
+        rol: { select: { nombre: true } },
+      },
+    });
+
+    if (user?.rol?.nombre === 'ADMINISTRADOR') {
+      return true; // 👈 ADMIN siempre puede
+    }
     const responsable = await this.prisma.responsables_area.findFirst({
       where: {
         id_usuario: idUsuario,

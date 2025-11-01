@@ -95,7 +95,7 @@ export class ControlFasesService {
         ? Math.round((completadas / totalEvaluaciones) * 100)
         : 0;
 
-    // 4.1) Pendientes de CLASIFICACIÓN (puntaje_clasificacion = null) por (área,nivel)
+    // 4.1) Pendientes de CLASIFICACIÓN (puntaje_clasificacion = null) por (área, y o nivel)
     const pendientesGroup = await this.prisma.inscripciones.groupBy({
       by: ['id_area', 'id_nivel'],
       where: { puntaje_clasificacion: null },
