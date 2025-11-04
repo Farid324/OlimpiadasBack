@@ -1,3 +1,4 @@
+//src/reportes/public.controller.ts
 import { Controller, Get } from '@nestjs/common';
 import { PublicReportService } from './public.service';
 
