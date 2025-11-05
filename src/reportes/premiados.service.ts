@@ -45,12 +45,13 @@ export class PremiadosService {
     pos: number,
     cfg: { oro: number; plata: number; bronce: number; menciones: number },
   ): { tipo: EstadoMedalla | null; etiqueta: string | null } {
-    if (pos <= cfg.oro) return { tipo: 'ORO', tipoLabel: 'Medalla de oro' } as any;
-    if (pos <= cfg.oro + cfg.plata) return { tipo: 'PLATA', tipoLabel: 'Medalla de Plata' } as any;
+    if (pos <= cfg.oro) return { tipo: 'ORO', etiqueta: 'Medalla de Oro' };
+    if (pos <= cfg.oro + cfg.plata)
+      return { tipo: 'PLATA', etiqueta: 'Medalla de Plata' };
     if (pos <= cfg.oro + cfg.plata + cfg.bronce)
-      return { tipo: 'BRONCE', tipoLabel: 'Medalla de Bronce' } as any;
+      return { tipo: 'BRONCE', etiqueta: 'Medalla de Bronce' };
     if (pos <= cfg.oro + cfg.plata + cfg.bronce + cfg.menciones)
-      return { tipo: 'MENCION', tipoLabel: 'Mención' } as any;
+      return { tipo: 'MENCION', etiqueta: 'Mención' };
     return { tipo: null, etiqueta: null };
   }
 
@@ -109,7 +110,11 @@ export class PremiadosService {
         inscripcion: insc,
         score: scoreMap.get(insc.id_inscripcion) ?? 0,
       }))
-      .sort((a, b) => b.score - a.score || a.inscripcion.id_inscripcion - b.inscripcion.id_inscripcion);
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          a.inscripcion.id_inscripcion - b.inscripcion.id_inscripcion,
+      );
 
     // 5) asignar medallas
     const salida: Array<{
@@ -137,7 +142,8 @@ export class PremiadosService {
       salida.push({
         id_inscripcion: inscripcion.id_inscripcion,
         posicion: pos,
-        nombreCompleto: `${inscripcion.competidor.nombres} ${inscripcion.competidor.apellidos}`.trim(),
+        nombreCompleto:
+          `${inscripcion.competidor.nombres} ${inscripcion.competidor.apellidos}`.trim(),
         premio: med.etiqueta ?? '',
         estadoPremio: med.tipo,
         area: inscripcion.area.nombre_area,
@@ -156,7 +162,11 @@ export class PremiadosService {
   async list(f: FiltrosPremiados) {
     // si viene área+nivel, validar fase FINAL
     if (f.id_area && f.id_nivel) {
-      const st = await this.fases.getStatus(f.id_area, f.id_nivel, PhaseType.FINAL);
+      const st = await this.fases.getStatus(
+        f.id_area,
+        f.id_nivel,
+        PhaseType.FINAL,
+      );
       if (st !== 'VALIDADA') {
         // HU-012: mensaje exacto
         throw new HttpException(
@@ -272,7 +282,11 @@ export class PremiadosService {
     nombreVista?: string;
   }) {
     // validamos que la fase final esta validada
-    const st = await this.fases.getStatus(params.id_area, params.id_nivel, PhaseType.FINAL);
+    const st = await this.fases.getStatus(
+      params.id_area,
+      params.id_nivel,
+      PhaseType.FINAL,
+    );
     if (st !== 'VALIDADA') {
       throw new HttpException(
         'No es posible guardar el orden: la fase no ha sido avalada.',
@@ -350,7 +364,9 @@ export class PremiadosService {
     return hist.map((h) => ({
       id: h.id_reorden,
       fecha: h.fecha_reorden,
-      autor: [h.usuario?.nombre, h.usuario?.apellido].filter(Boolean).join(' ') || h.usuario?.correo,
+      autor:
+        [h.usuario?.nombre, h.usuario?.apellido].filter(Boolean).join(' ') ||
+        h.usuario?.correo,
       orden: h.nueva_posicion,
     }));
   }
