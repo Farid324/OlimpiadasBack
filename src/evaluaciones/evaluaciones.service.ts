@@ -1,116 +1,58 @@
-// src/evaluaciones-admin/evaluaciones-admin.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class EvaluacionesAdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(public prisma: PrismaService) {}
 
-  async obtenerCompetidoresDeEvaluador(idEvaluador: number) {
-    console.log('🔹 [SERVICIO] Evaluador autenticado:', idEvaluador);
-
-    // 1️⃣ Obtener las áreas asignadas al evaluador
-    const areasEvaluador = await this.prisma.evaluadores_area.findMany({
-      where: { id_usuario: idEvaluador },
-      select: { id_area: true },
-    });
-    console.log('🔹 [SERVICIO] ÁREAS DEL EVALUADOR:', areasEvaluador);
-
-    const idAreas = areasEvaluador.map((a) => a.id_area);
-
-    if (idAreas.length === 0) {
-      console.log('⚠️ [SERVICIO] El evaluador no tiene áreas asignadas.');
-      return [];
-    }
-
-    // 2️⃣ Buscar las inscripciones en esas áreas
-    console.log('🔹 [SERVICIO] Buscando inscripciones en áreas:', idAreas);
-    const inscripciones = await this.prisma.inscripciones.findMany({
-      where: {
-        id_area: { in: idAreas },
-      },
-      select: {
-        id_inscripcion: true,
-        competidor: {
-          select: {
-            id_competidor: true,
-            nombres: true,
-            apellidos: true,
-            ci: true,
-            escuela: true,
-          },
-        },
-        nivel: {
-          select: {
-            id_nivel: true,
-            nombre_nivel: true,
-          },
-        },
-        clasificacion: true,
-        evaluaciones: {
-          //where: { id_fase: 1 }, // si necesitas filtrar por fase
-          orderBy: { fecha_registro: 'desc' }, // la mas reciente primero
-          take: 1, // solo 1 (la actual)
-          select: {
-            id_evaluacion: true,
-            nota: true,
-            comentario: true,
-            id_evaluador: true,
-            fecha_registro: true,
-          },
-        },
-        area: {
-          select: {
-            id_area: true,
-            nombre_area: true,
-          },
-        },
-      },
-    });
-
-    console.log(
-      '✅ [SERVICIO] Inscripciones encontradas:',
-      inscripciones.length,
-    );
-    console.log('📋 [SERVICIO] Detalle de las inscripciones:', inscripciones);
-
-    return inscripciones;
-  }
-
-  // 🔍 Listar y buscar competidores
+  //Listar y buscar competidores con filtros
   async listarCompetidores({
     search,
     idAreas,
     filtro,
+    id_area,
+    id_nivel,
   }: {
     search?: string;
-    idAreas: number[];
-    filtro?: 'PENDIENTE' | 'EVALUADO' | 'TODOS';
+    idAreas: number[];                           // áreas del evaluador (obligatorio)
+    filtro?: 'PENDIENTE' | 'EVALUADO' | 'TODOS'; // tab
+    id_area?: number;                            // filtro UI opcional
+    id_nivel?: number;                           // filtro UI opcional
   }) {
+    if (!Array.isArray(idAreas) || idAreas.length === 0) {
+      return [];
+    }
+
+    // Si llega id_area se usa ese número; caso contrario, se limita a las áreas asignadas
+    const areaWhere =
+      typeof id_area === 'number' && id_area > 0 ? id_area : { in: idAreas };
+
     return this.prisma.inscripciones.findMany({
       where: {
-        id_area: { in: idAreas },
+        id_area: areaWhere,
+        ...(typeof id_nivel === 'number' && id_nivel > 0 ? { id_nivel } : {}),
         competidor: {
           OR: search
             ? [
-                { nombres: { contains: search, mode: 'insensitive' } },
+                { nombres:   { contains: search, mode: 'insensitive' } },
                 { apellidos: { contains: search, mode: 'insensitive' } },
-                { ci: { contains: search, mode: 'insensitive' } },
-                { escuela: { contains: search, mode: 'insensitive' } },
+                { ci:        { contains: search, mode: 'insensitive' } },
+                { escuela:   { contains: search, mode: 'insensitive' } },
               ]
             : undefined,
         },
         ...(filtro === 'PENDIENTE'
           ? { evaluaciones: { none: {} } }
           : filtro === 'EVALUADO'
-            ? { evaluaciones: { some: {} } }
-            : {}),
+          ? { evaluaciones: { some: {} } }
+          : {}),
       },
       select: {
         id_inscripcion: true,
         estado_inscripcion: true,
-        area: { select: { nombre_area: true } },
+        area:  { select: { nombre_area: true } },
         nivel: { select: { nombre_nivel: true } },
+        clasificacion: true,
         competidor: {
           select: {
             id_competidor: true,
@@ -122,6 +64,8 @@ export class EvaluacionesAdminService {
           },
         },
         evaluaciones: {
+          orderBy: { fecha_registro: 'desc' },
+          take: 1,
           select: {
             id_evaluacion: true,
             nota: true,
@@ -133,16 +77,10 @@ export class EvaluacionesAdminService {
     });
   }
 
-  // 📝 Registrar una nueva nota
+  // ====== el resto queda igual ======
   async registrarNota({
-    idInscripcion,
-    idEvaluador,
-    nota,
-  }: {
-    idInscripcion: number;
-    idEvaluador: number;
-    nota: number;
-  }) {
+    idInscripcion, idEvaluador, nota,
+  }: { idInscripcion: number; idEvaluador: number; nota: number; }) {
     const inscripcion = await this.prisma.inscripciones.findUnique({
       where: { id_inscripcion: idInscripcion },
     });
@@ -151,7 +89,7 @@ export class EvaluacionesAdminService {
     return this.prisma.evaluaciones.create({
       data: {
         id_inscripcion: idInscripcion,
-        id_fase: 1, // Ejemplo, si tenés fases separadas
+        id_fase: 1,
         id_evaluador: idEvaluador,
         nota,
         estado_registro: 'FIRMADA',
@@ -159,16 +97,9 @@ export class EvaluacionesAdminService {
     });
   }
 
-  // ✏️ Editar una nota (registrando log)
   async editarNota({
-    idEvaluacion,
-    idUsuario,
-    nuevaNota,
-  }: {
-    idEvaluacion: number;
-    idUsuario: number;
-    nuevaNota: number;
-  }) {
+    idEvaluacion, idUsuario, nuevaNota,
+  }: { idEvaluacion: number; idUsuario: number; nuevaNota: number; }) {
     const evaluacion = await this.prisma.evaluaciones.findUnique({
       where: { id_evaluacion: idEvaluacion },
     });
@@ -193,36 +124,22 @@ export class EvaluacionesAdminService {
 
     return actualizada;
   }
-  async obtenerLogsCambios(idEvaluacion: number) {
-    return this.prisma.log_cambios_nota.findMany({
-      where: { id_evaluacion: idEvaluacion },
-      include: {
-        usuario: {
-          select: { id_usuario: true, nombre: true, apellido: true, rol: true },
-        },
-      },
-      orderBy: { ts: 'desc' },
-    });
-  }
+
   async getResumenEvaluador(idEvaluador: number) {
-    // 1️⃣ Obtener áreas donde el evaluador tiene asignaciones
     const areasAsignadas = await this.prisma.evaluadores_area.findMany({
       where: { id_usuario: idEvaluador, activo: true },
       select: { id_area: true },
     });
     const areaIds = areasAsignadas.map((a) => a.id_area);
-    console.log('Asignados:', areasAsignadas);
 
     if (areaIds.length === 0) {
       return { total: 0, pendientes: 0, evaluados: 0, clasificados: 0 };
     }
 
-    // 2️⃣ Total competidores en esas áreas
     const total = await this.prisma.inscripciones.count({
       where: { id_area: { in: areaIds } },
     });
 
-    // 3️⃣ Pendientes: inscripciones sin evaluación para este evaluador
     const pendientes = await this.prisma.inscripciones.count({
       where: {
         id_area: { in: areaIds },
@@ -230,7 +147,6 @@ export class EvaluacionesAdminService {
       },
     });
 
-    // 4️⃣ Evaluados: inscripciones con evaluación para este evaluador
     const evaluados = await this.prisma.inscripciones.count({
       where: {
         id_area: { in: areaIds },
@@ -238,12 +154,8 @@ export class EvaluacionesAdminService {
       },
     });
 
-    // 5️⃣ Clasificados: inscripciones con evaluación y nota >= 60
     const clasificados = await this.prisma.inscripciones.count({
-      where: {
-        id_area: { in: areaIds },
-        clasificacion: 'CLASIFICADO',
-      },
+      where: { id_area: { in: areaIds }, clasificacion: 'CLASIFICADO' },
     });
 
     return { total, pendientes, evaluados, clasificados };
