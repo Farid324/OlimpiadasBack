@@ -31,6 +31,7 @@ import { EvaluacionesAdminModule } from './evaluaciones/evaluaciones-admin.modul
 import { ControlFasesModule } from './controlFases/controlFases.module';
 
 import { LogsModule } from './registroActividad/logs.module';
+import { MedalleroConfigModule } from './medallero-config/medallero-config.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -47,6 +48,7 @@ import { LogsModule } from './registroActividad/logs.module';
     NivelesModule,
     ReportesModule,
     LogsModule,
+    MedalleroConfigModule,
 
     ControlFasesModule, // ⬅️ AÑADIDO
     FasesModule,
