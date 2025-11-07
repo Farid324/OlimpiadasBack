@@ -17,7 +17,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 
 @Controller('tutores')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('ADMINISTRADOR')
+@Roles('ADMINISTRADOR', 'RESPONSABLE_DE_AREA')
 export class TutoresController {
   constructor(private readonly service: TutoresService) {}
 

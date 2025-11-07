@@ -1,5 +1,3 @@
-// src/olimpistas/olimpistas.controller.ts
-
 import {
   BadRequestException,
   Body,
@@ -11,6 +9,7 @@ import {
   Req,
   Get,
   Query,
+  Param,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -28,11 +27,11 @@ export class OlimpistasController {
   constructor(private readonly service: OlimpistasService) {}
 
   @Post('register')
-  @Roles('ADMINISTRADOR')
+  @Roles('ADMINISTRADOR' ,'RESPONSABLE_DE_AREA')
   @UseInterceptors(FileInterceptor('file'))
   async register(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: any,
+    @Body() body: unknown,
     @Req() req: any,
   ) {
     const contentType = (req.headers['content-type'] as string) || '';
@@ -56,9 +55,9 @@ export class OlimpistasController {
         body as RegistroOlimpistaDto[],
         req.user?.sub ? Number(req.user.sub) : undefined,
       );
-    } else if (body?.data && Array.isArray(body.data)) {
+    } else if ((body as any)?.data && Array.isArray((body as any).data)) {
       return this.service.registerMany(
-        body.data as RegistroOlimpistaDto[],
+        (body as any).data as RegistroOlimpistaDto[],
         req.user?.sub ? Number(req.user.sub) : undefined,
       );
     } else {
@@ -69,15 +68,36 @@ export class OlimpistasController {
     }
   }
 
+  // PERMITIR también RESPONSABLE_DE_AREA y filtrar en el service
   @Get()
-  @Roles('ADMINISTRADOR')
-  list(@Query() query: GetOlimpistasQueryDto) {
-    return this.service.listOlimpistas({ area: query.area, q: query.q });
+  @Roles('ADMINISTRADOR', 'RESPONSABLE_DE_AREA')
+  list(@Query() query: GetOlimpistasQueryDto, @Req() req: any) {
+    const userId = req.user?.sub ? Number(req.user.sub) : null;
+    const role = String(req.user?.role ?? req.user?.rol ?? '').toUpperCase();
+    const isAdmin = role === 'ADMINISTRADOR';
+
+    return this.service.listOlimpistas({
+      area: query.area,
+      q: query.q,
+      //limitToUserAreasOf: isAdmin ? null : userId,
+    });
   }
 
   @Get('areas-counters')
+  @Roles('ADMINISTRADOR', 'RESPONSABLE_DE_AREA')
+  areasCounters(@Req() req: any) {
+    const userId = req.user?.sub ? Number(req.user.sub) : null;
+    const role = String(req.user?.role ?? req.user?.rol ?? '').toUpperCase();
+    const isAdmin = role === 'ADMINISTRADOR';
+
+    return this.service.getAreasCounters(isAdmin ? null : userId);
+  }
+
+  // Solo admin: verificación de CI duplicado
+  @Get('check-ci/:ci')
   @Roles('ADMINISTRADOR')
-  areasCounters() {
-    return this.service.getAreasCounters();
+  async checkCi(@Param('ci') ci: string) {
+    const exists = await this.service.existsByCi(ci?.trim() ?? '');
+    return { exists };
   }
 }
