@@ -73,6 +73,18 @@ CREATE TABLE "public"."niveles" (
 );
 
 -- CreateTable
+CREATE TABLE "public"."configuracion_fase" (
+    "id_configuracion" SERIAL NOT NULL,
+    "id_fase" INTEGER NOT NULL,
+    "id_area" INTEGER NOT NULL,
+    "id_nivel" INTEGER NOT NULL,
+    "nota_minima_aprobacion" DECIMAL(5,2) NOT NULL,
+    "fecha_modificacion" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "configuracion_fase_pkey" PRIMARY KEY ("id_configuracion")
+);
+
+-- CreateTable
 CREATE TABLE "public"."tutores" (
     "id_tutor" SERIAL NOT NULL,
     "nombre_completo" TEXT NOT NULL,
@@ -141,6 +153,7 @@ CREATE TABLE "public"."inscripciones" (
     "updated_at" TIMESTAMP(3) NOT NULL,
     "puntaje_clasificacion" DECIMAL(5,2),
     "clasificacion" "public"."clasificacion_estado" DEFAULT 'NO_CLASIFICADO',
+    "puntaje_final" DECIMAL(5,2),
 
     CONSTRAINT "inscripciones_pkey" PRIMARY KEY ("id_inscripcion")
 );
@@ -290,6 +303,12 @@ CREATE UNIQUE INDEX "niveles_nombre_nivel_key" ON "public"."niveles"("nombre_niv
 CREATE INDEX "niveles_nombre_nivel_idx" ON "public"."niveles"("nombre_nivel");
 
 -- CreateIndex
+CREATE INDEX "configuracion_fase_id_fase_id_area_id_nivel_idx" ON "public"."configuracion_fase"("id_fase", "id_area", "id_nivel");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "configuracion_fase_id_fase_id_area_id_nivel_key" ON "public"."configuracion_fase"("id_fase", "id_area", "id_nivel");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "tutores_ci_key" ON "public"."tutores"("ci");
 
 -- CreateIndex
@@ -417,6 +436,15 @@ CREATE INDEX "import_csv_ejecutado_por_idx" ON "public"."import_csv"("ejecutado_
 
 -- AddForeignKey
 ALTER TABLE "public"."usuarios" ADD CONSTRAINT "usuarios_id_rol_fkey" FOREIGN KEY ("id_rol") REFERENCES "public"."roles"("id_rol") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."configuracion_fase" ADD CONSTRAINT "configuracion_fase_id_fase_fkey" FOREIGN KEY ("id_fase") REFERENCES "public"."fases"("id_fase") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."configuracion_fase" ADD CONSTRAINT "configuracion_fase_id_area_fkey" FOREIGN KEY ("id_area") REFERENCES "public"."areas"("id_area") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."configuracion_fase" ADD CONSTRAINT "configuracion_fase_id_nivel_fkey" FOREIGN KEY ("id_nivel") REFERENCES "public"."niveles"("id_nivel") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."competidores" ADD CONSTRAINT "competidores_id_tutor_fkey" FOREIGN KEY ("id_tutor") REFERENCES "public"."tutores"("id_tutor") ON DELETE SET NULL ON UPDATE CASCADE;
