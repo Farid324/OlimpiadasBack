@@ -167,6 +167,22 @@ export class FasesService {
       },
     });
 
+    const inscripciones = await this.prisma.inscripciones.findMany({
+      where: { id_area, id_nivel },
+      select: { id_inscripcion: true },
+    });
+
+    if (inscripciones.length > 0) {
+      const ids = inscripciones.map((i) => i.id_inscripcion);
+      await this.prisma.evaluaciones.updateMany({
+        where: {
+          id_inscripcion: { in: ids },
+          id_fase,
+        },
+        data: { estado_registro: 'FIRMADA' },
+      });
+    }
+
     return {
       ok: true,
       message:
