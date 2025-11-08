@@ -1,38 +1,30 @@
-// src/responsables/dto/update-responsable.dto.ts
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateResponsableDto } from './create-responsable.dto';
-import {
-  IsOptional,
-  IsString,
-  IsEmail,
-  Matches,
-  IsInt,
-  Min,
-  Max,
-} from 'class-validator';
+import { IsEmail, IsNumber, IsOptional, IsString, Length, Matches, Min, Max } from 'class-validator';
 
-export class UpdateResponsableDto extends PartialType(CreateResponsableDto) {
+export class UpdateResponsableDto {
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, {
-    message: 'El nombre solo puede contener letras',
-  })
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/)
   nombre?: string;
 
   @IsOptional()
   @IsString()
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]*$/)
   apellido?: string;
 
   @IsOptional()
-  @IsEmail({}, { message: 'Debe ingresar un correo válido' })
+  @IsEmail()
   correo?: string;
 
   @IsOptional()
   @IsString()
+  @Matches(/^\d+$/)
+  @Length(8, 8)
   telefono?: string;
 
   @IsOptional()
   @IsString()
+  @Matches(/^\d+$/)
+  @Length(6, 8)
   ci?: string;
 
   @IsOptional()
@@ -44,12 +36,13 @@ export class UpdateResponsableDto extends PartialType(CreateResponsableDto) {
   especialidad?: string;
 
   @IsOptional()
-  @IsInt()
-  @Min(1, { message: 'La experiencia mínima es 1 año' })
-  @Max(30, { message: 'La experiencia máxima es 30 años' })
+  @IsNumber()
+  @Min(1)
+  @Max(30)
   experiencia?: number;
 
+  // ✔︎ NUEVO: permitir cambiar el área al editar
   @IsOptional()
-  @IsInt()
+  @IsNumber()
   id_area?: number;
 }
