@@ -8,15 +8,16 @@ import {
   Post,
   Req,
   Param,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { JwtPayload } from 'src/interfaces/jwt-payload.interface';
 import { Request } from 'express';
 
-import { EvaluacionesAdminService } from './evaluaciones.service';          // ← este es tu service “mis-competidores”
-import { EvaluacionesService } from './registrar-editar.service';          // ← registrar/editar nota
+import { EvaluacionesAdminService } from './evaluaciones.service';
+import { EvaluacionesService } from './registrar-editar.service';
 import { EditarNotaDto, RegistrarNotaDto } from './dto/registrar-nota.dto';
-import { AdminEvaluacionesService } from './admin-evaluaciones.service';   // ← endpoints de admin (stats/lista/areas/niveles)
+import { AdminEvaluacionesService } from './admin-evaluaciones.service';
 
 interface RequestWithUser extends Request {
   user: JwtPayload;
@@ -26,9 +27,9 @@ interface RequestWithUser extends Request {
 @UseGuards(JwtAuthGuard)
 export class EvaluacionesAdminController {
   constructor(
-    private service: EvaluacionesAdminService,      // “mis-competidores”
+    private service: EvaluacionesAdminService,
     private registrarEditarService: EvaluacionesService,
-    private adminEvaluaciones: AdminEvaluacionesService, // admin endpoints
+    private adminEvaluaciones: AdminEvaluacionesService,
   ) {}
 
   // ====================  VISTA EVALUADOR  ====================
@@ -69,14 +70,30 @@ export class EvaluacionesAdminController {
   }
 
   // Registrar / Editar nota
-  @Post('registrar-nota')
-  async registrarNota(@Body() dto: RegistrarNotaDto) {
-    return this.registrarEditarService.registrarNota(dto);
+  @Post('registrar-nota/:idFase')
+  async registrarNota(
+    @Body() dto: RegistrarNotaDto,
+    @Param('idFase') idFaseParam: string,
+  ) {
+    const idFase = Number(idFaseParam);
+    if (isNaN(idFase) || idFase < 1) {
+      // Manejo básico de error si la fase no es válida
+      throw new BadRequestException('ID de fase inválido o faltante.');
+    }
+    return this.registrarEditarService.registrarNota(dto, idFase);
   }
 
-  @Put('editar-nota')
-  async editarNota(@Body() dto: EditarNotaDto) {
-    return this.registrarEditarService.editarNota(dto);
+  @Put('editar-nota/:idFase')
+  async editarNota(
+    @Body() dto: EditarNotaDto,
+    @Param('idFase') idFaseParam: string,
+  ) {
+    const idFase = Number(idFaseParam);
+    if (isNaN(idFase) || idFase < 1) {
+      // Manejo básico de error si la fase no es válida
+      throw new BadRequestException('ID de fase inválido o faltante.');
+    }
+    return this.registrarEditarService.editarNota(dto, idFase);
   }
 
   // ====================  VISTA ADMIN  ====================
@@ -124,4 +141,3 @@ export class EvaluacionesAdminController {
     return this.adminEvaluaciones.obtenerDetalleEvaluacion(Number(id));
   }
 }
-
