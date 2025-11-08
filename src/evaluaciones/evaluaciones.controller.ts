@@ -100,7 +100,7 @@ export class EvaluacionesAdminController {
 
   // Registrar / Editar nota
   @Post('registrar-nota')
-  async registrarNota(@Body() dto: RegistrarNotaDto) {
+  async registrarNota(@Body() dto: RegistrarNotaDto & { idFase: 1 | 2 }) {
     return this.registrarEditarService.registrarNota(dto);
   }
 
