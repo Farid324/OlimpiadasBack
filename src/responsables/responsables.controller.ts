@@ -1,15 +1,4 @@
-// src/responsables/responsables.controller.ts
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Query,
-  Delete,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Query, UseGuards, Delete } from '@nestjs/common';
 import { ResponsablesService } from './responsables.service';
 import { CreateResponsableDto } from './dto/create-responsable.dto';
 import { UpdateResponsableDto } from './dto/update-responsable.dto';
@@ -40,16 +29,12 @@ export class ResponsablesController {
     return this.service.update(Number(id), dto);
   }
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.delete(Number(id));
-  }
-
   @Patch(':id/toggle')
   toggle(@Param('id') id: string) {
     return this.service.toggleActivo(Number(id));
   }
 
+  // ✔︎ verificaciones rápidas ya existentes
   @Get('check-telefono/:telefono')
   checkTelefono(@Param('telefono') telefono: string) {
     return this.service.checkTelefono(telefono);
@@ -63,5 +48,17 @@ export class ResponsablesController {
   @Get('check-correo/:correo')
   checkCorreo(@Param('correo') correo: string) {
     return this.service.checkCorreo(correo);
+  }
+
+  // ✔︎ NUEVO: verificación de área ocupada (activo=true)
+  @Get('check-area/:id_area')
+  checkArea(@Param('id_area') id_area: string) {
+    return this.service.checkArea(Number(id_area));
+  }
+
+  // (Si ya añadiste borrar anteriormente, mantenlo)
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.service.remove(Number(id));
   }
 }
