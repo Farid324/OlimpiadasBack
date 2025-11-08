@@ -13,10 +13,10 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { JwtPayload } from 'src/interfaces/jwt-payload.interface';
 import { Request } from 'express';
 
-import { EvaluacionesAdminService } from './evaluaciones.service';          // ← este es tu service “mis-competidores”
-import { EvaluacionesService } from './registrar-editar.service';          // ← registrar/editar nota
+import { EvaluacionesAdminService } from './evaluaciones.service'; // ← este es tu service “mis-competidores”
+import { EvaluacionesService } from './registrar-editar.service'; // ← registrar/editar nota
 import { EditarNotaDto, RegistrarNotaDto } from './dto/registrar-nota.dto';
-import { AdminEvaluacionesService } from './admin-evaluaciones.service';   // ← endpoints de admin (stats/lista/areas/niveles)
+import { AdminEvaluacionesService } from './admin-evaluaciones.service'; // ← endpoints de admin (stats/lista/areas/niveles)
 
 interface RequestWithUser extends Request {
   user: JwtPayload;
@@ -26,7 +26,7 @@ interface RequestWithUser extends Request {
 @UseGuards(JwtAuthGuard)
 export class EvaluacionesAdminController {
   constructor(
-    private service: EvaluacionesAdminService,      // “mis-competidores”
+    private service: EvaluacionesAdminService, // “mis-competidores”
     private registrarEditarService: EvaluacionesService,
     private adminEvaluaciones: AdminEvaluacionesService, // admin endpoints
   ) {}
@@ -56,6 +56,36 @@ export class EvaluacionesAdminController {
       search,
       idAreas,
       filtro,
+      id_area: id_area ? Number(id_area) : undefined,
+      id_nivel: id_nivel ? Number(id_nivel) : undefined,
+    });
+  }
+  @Get('listarCompetidoresFirmados')
+  async listarCompetidoresFirmados(
+    @Req() req: RequestWithUser,
+    @Query('search') search?: string,
+    @Query('id_area') id_area?: string,
+    @Query('id_nivel') id_nivel?: string,
+  ) {
+    const idUsuario = Number(req.user.sub);
+
+    // 🔹 1️⃣ Buscar las áreas asignadas al evaluador logueado
+    const areas = await this.service['prisma'].evaluadores_area.findMany({
+      where: { id_usuario: idUsuario, activo: true },
+      select: { id_area: true },
+    });
+
+    const idAreas = areas.map((a) => a.id_area);
+
+    // 🔹 2️⃣ Verificación: si el evaluador no tiene áreas, devolver lista vacía
+    if (idAreas.length === 0) {
+      return [];
+    }
+
+    // 🔹 3️⃣ Llamar al service con los parámetros normalizados
+    return this.service.listarCompetidoresFirmados({
+      search,
+      idAreas,
       id_area: id_area ? Number(id_area) : undefined,
       id_nivel: id_nivel ? Number(id_nivel) : undefined,
     });
@@ -124,4 +154,3 @@ export class EvaluacionesAdminController {
     return this.adminEvaluaciones.obtenerDetalleEvaluacion(Number(id));
   }
 }
-
