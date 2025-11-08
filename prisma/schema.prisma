@@ -228,6 +228,8 @@ model inscripciones {
   puntaje_clasificacion Decimal?              @db.Decimal(5, 2)
   clasificacion         clasificacion_estado? @default(NO_CLASIFICADO)
 
+  puntaje_final Decimal? @db.Decimal(5, 2)
+
   competidor competidores @relation(fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
   area       areas        @relation(fields: [id_area], references: [id_area])
   nivel      niveles      @relation(fields: [id_nivel], references: [id_nivel])
