@@ -2,8 +2,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, clasificacion_estado } from '@prisma/client';
 
-// Asumo que estás en un servicio NestJS con this.prisma disponible.
-// Ajusta nombres e imports según tu archivo real.
 type clasificacion_estadoType = clasificacion_estado | null;
 
 type RegistrarNotaDto = {
@@ -15,8 +13,8 @@ type RegistrarNotaDto = {
 
 type EditarNotaDto = {
   idEvaluacion: number;
-  idUsuario: number; // quien realiza la edición (para el log)
-  idEvaluador?: number; // opcional, si se puede cambiar el evaluador
+  idUsuario: number;
+  idEvaluador?: number;
   nuevaNota: number;
   comentario?: string | null;
 };
@@ -26,8 +24,6 @@ function calcularClasificacion(
 ): clasificacion_estadoType {
   if (nota === null || nota === undefined) return null;
   if (nota === -1) return 'DESCALIFICADO';
-  // Nota > 60 -> CLASIFICADO
-  // Nota >= 0 and <= 60 -> NO_CLASIFICADO
   if (nota > 60) return 'CLASIFICADO';
   if (nota >= 0) return 'NO_CLASIFICADO';
   return null;
@@ -36,11 +32,9 @@ function calcularClasificacion(
 export class EvaluacionesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // 📝 Registrar una nueva nota (transacción)
   async registrarNota(dto: RegistrarNotaDto) {
     const { idInscripcion, idEvaluador, nota, comentario } = dto;
 
-    // Recuperar la inscripción (valida existencia y permite usar area/nivel si es necesario)
     const inscripcion = await this.prisma.inscripciones.findUnique({
       where: { id_inscripcion: idInscripcion },
     });
@@ -51,9 +45,7 @@ export class EvaluacionesService {
     const clasificacion = calcularClasificacion(nota);
     const notaDecimal = new Prisma.Decimal(nota);
 
-    // Hacemos todo en una única transacción atómica correctamente:
     const result = await this.prisma.$transaction(async (prisma) => {
-      // 1) crear evaluacion
       const nuevaEval = await prisma.evaluaciones.create({
         data: {
           id_inscripcion: idInscripcion,
@@ -66,24 +58,21 @@ export class EvaluacionesService {
         },
       });
 
-      // 2) crear log de cambios
       await prisma.log_cambios_nota.create({
         data: {
           id_evaluacion: nuevaEval.id_evaluacion,
-          id_usuario: idEvaluador, // el usuario que registra (evaluador)
+          id_usuario: idEvaluador,
           accion: 'REGISTRO',
           valor_anterior: null,
           valor_nuevo: notaDecimal,
-          // ts por default
         },
       });
 
-      // 3) actualizar inscripcion: puntaje_clasificacion y clasificacion
       await prisma.inscripciones.update({
         where: { id_inscripcion: idInscripcion },
         data: {
           puntaje_clasificacion: notaDecimal,
-          clasificacion: clasificacion, // coincide con enum en prisma
+          clasificacion: clasificacion,
           updated_at: new Date(),
         },
       });
@@ -94,7 +83,6 @@ export class EvaluacionesService {
     return result;
   }
 
-  // ✏️ Editar una nota (transacción, agrega log)
   async editarNota(dto: EditarNotaDto) {
     const { idEvaluacion, idUsuario, idEvaluador, nuevaNota, comentario } = dto;
 
@@ -105,14 +93,11 @@ export class EvaluacionesService {
 
     const notaAnterior = evaluacion.nota;
 
-    // Calculamos la nueva clasificación para la inscripción relacionada
-    // Necesitamos el id_inscripcion (está en la evaluación)
     const idInscripcion = evaluacion.id_inscripcion;
     const nuevaClasificacion = calcularClasificacion(nuevaNota);
     const nuevaNotaDecimal = new Prisma.Decimal(nuevaNota);
 
     const actualizada = await this.prisma.$transaction(async (prisma) => {
-      // 1) actualizar evaluacion
       const evalActualizada = await prisma.evaluaciones.update({
         where: { id_evaluacion: idEvaluacion },
         data: {
@@ -123,7 +108,6 @@ export class EvaluacionesService {
         },
       });
 
-      // 2) crear log con datos
       await prisma.log_cambios_nota.create({
         data: {
           id_evaluacion: idEvaluacion,
@@ -134,7 +118,6 @@ export class EvaluacionesService {
         },
       });
 
-      // 3) actualizar inscripcion (puntaje_clasificacion y clasificacion)
       await prisma.inscripciones.update({
         where: { id_inscripcion: idInscripcion },
         data: {
@@ -150,7 +133,6 @@ export class EvaluacionesService {
     return actualizada;
   }
 
-  // Obtener logs (ya lo tenías; lo mantengo)
   async obtenerLogsCambios(idEvaluacion: number) {
     return this.prisma.log_cambios_nota.findMany({
       where: { id_evaluacion: idEvaluacion },
