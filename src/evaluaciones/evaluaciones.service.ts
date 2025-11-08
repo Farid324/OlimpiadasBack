@@ -14,10 +14,10 @@ export class EvaluacionesAdminService {
     id_nivel,
   }: {
     search?: string;
-    idAreas: number[];                           // áreas del evaluador (obligatorio)
+    idAreas: number[]; // áreas del evaluador (obligatorio)
     filtro?: 'PENDIENTE' | 'EVALUADO' | 'TODOS'; // tab
-    id_area?: number;                            // filtro UI opcional
-    id_nivel?: number;                           // filtro UI opcional
+    id_area?: number; // filtro UI opcional
+    id_nivel?: number; // filtro UI opcional
   }) {
     if (!Array.isArray(idAreas) || idAreas.length === 0) {
       return [];
@@ -34,23 +34,23 @@ export class EvaluacionesAdminService {
         competidor: {
           OR: search
             ? [
-                { nombres:   { contains: search, mode: 'insensitive' } },
+                { nombres: { contains: search, mode: 'insensitive' } },
                 { apellidos: { contains: search, mode: 'insensitive' } },
-                { ci:        { contains: search, mode: 'insensitive' } },
-                { escuela:   { contains: search, mode: 'insensitive' } },
+                { ci: { contains: search, mode: 'insensitive' } },
+                { escuela: { contains: search, mode: 'insensitive' } },
               ]
             : undefined,
         },
         ...(filtro === 'PENDIENTE'
           ? { evaluaciones: { none: {} } }
           : filtro === 'EVALUADO'
-          ? { evaluaciones: { some: {} } }
-          : {}),
+            ? { evaluaciones: { some: {} } }
+            : {}),
       },
       select: {
         id_inscripcion: true,
         estado_inscripcion: true,
-        area:  { select: { nombre_area: true } },
+        area: { select: { nombre_area: true } },
         nivel: { select: { nombre_nivel: true } },
         clasificacion: true,
         competidor: {
@@ -76,11 +76,94 @@ export class EvaluacionesAdminService {
       orderBy: [{ id_area: 'asc' }, { id_nivel: 'asc' }],
     });
   }
+  async listarCompetidoresFirmados({
+    search,
+    idAreas,
+    id_area,
+    id_nivel,
+  }: {
+    search?: string;
+    idAreas: number[]; // Áreas asignadas al evaluador (obligatorio)
+    id_area?: number; // Filtro de área específico (opcional)
+    id_nivel?: number; // Filtro de nivel específico (opcional)
+  }) {
+    // ⚠️ Si no hay áreas asignadas, no devuelve nada
+    if (!Array.isArray(idAreas) || idAreas.length === 0) {
+      return [];
+    }
+
+    // Si llega id_area, se usa ese número; caso contrario, se limita a las áreas asignadas
+    const areaWhere =
+      typeof id_area === 'number' && id_area > 0 ? id_area : { in: idAreas };
+
+    return this.prisma.inscripciones.findMany({
+      where: {
+        id_area: areaWhere,
+        clasificacion: 'CLASIFICADO', // ✅ solo competidores clasificados
+        ...(typeof id_nivel === 'number' && id_nivel > 0 ? { id_nivel } : {}),
+
+        // ✅ solo inscripciones con al menos una evaluación firmada
+        evaluaciones: {
+          some: { estado_registro: 'FIRMADA' },
+        },
+
+        // ✅ búsqueda flexible por nombre, apellidos, ci o escuela
+        competidor: search
+          ? {
+              OR: [
+                { nombres: { contains: search, mode: 'insensitive' } },
+                { apellidos: { contains: search, mode: 'insensitive' } },
+                { ci: { contains: search, mode: 'insensitive' } },
+                { escuela: { contains: search, mode: 'insensitive' } },
+              ],
+            }
+          : undefined,
+      },
+      select: {
+        id_inscripcion: true,
+        estado_inscripcion: true,
+        clasificacion: true,
+        area: { select: { nombre_area: true } },
+        nivel: { select: { nombre_nivel: true } },
+        competidor: {
+          select: {
+            id_competidor: true,
+            nombres: true,
+            apellidos: true,
+            ci: true,
+            escuela: true,
+            departamento: true,
+          },
+        },
+        // ✅ solo muestra la última evaluación firmada
+        evaluaciones: {
+          where: {
+            estado_registro: 'FIRMADA',
+            id_fase: 2,
+          },
+          orderBy: { fecha_registro: 'desc' },
+          take: 1,
+          select: {
+            id_evaluacion: true,
+            nota: true,
+            estado_registro: true,
+          },
+        },
+      },
+      orderBy: [{ id_area: 'asc' }, { id_nivel: 'asc' }],
+    });
+  }
 
   // ====== el resto queda igual ======
   async registrarNota({
-    idInscripcion, idEvaluador, nota,
-  }: { idInscripcion: number; idEvaluador: number; nota: number; }) {
+    idInscripcion,
+    idEvaluador,
+    nota,
+  }: {
+    idInscripcion: number;
+    idEvaluador: number;
+    nota: number;
+  }) {
     const inscripcion = await this.prisma.inscripciones.findUnique({
       where: { id_inscripcion: idInscripcion },
     });
@@ -98,8 +181,14 @@ export class EvaluacionesAdminService {
   }
 
   async editarNota({
-    idEvaluacion, idUsuario, nuevaNota,
-  }: { idEvaluacion: number; idUsuario: number; nuevaNota: number; }) {
+    idEvaluacion,
+    idUsuario,
+    nuevaNota,
+  }: {
+    idEvaluacion: number;
+    idUsuario: number;
+    nuevaNota: number;
+  }) {
     const evaluacion = await this.prisma.evaluaciones.findUnique({
       where: { id_evaluacion: idEvaluacion },
     });
