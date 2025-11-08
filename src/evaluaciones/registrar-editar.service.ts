@@ -37,8 +37,8 @@ export class EvaluacionesService {
   constructor(private readonly prisma: PrismaService) {}
 
   // 📝 Registrar una nueva nota (transacción)
-  async registrarNota(dto: RegistrarNotaDto) {
-    const { idInscripcion, idEvaluador, nota, comentario } = dto;
+  async registrarNota(dto: RegistrarNotaDto & { idFase: 1 | 2 }) {
+    const { idInscripcion, idEvaluador, nota, comentario, idFase } = dto;
 
     // Recuperar la inscripción (valida existencia y permite usar area/nivel si es necesario)
     const inscripcion = await this.prisma.inscripciones.findUnique({
@@ -50,6 +50,8 @@ export class EvaluacionesService {
 
     const clasificacion = calcularClasificacion(nota);
     const notaDecimal = new Prisma.Decimal(nota);
+    const puntajeField =
+      idFase === 1 ? 'puntaje_clasificacion' : 'puntaje_final';
 
     // Hacemos todo en una única transacción atómica correctamente:
     const result = await this.prisma.$transaction(async (prisma) => {
@@ -57,7 +59,7 @@ export class EvaluacionesService {
       const nuevaEval = await prisma.evaluaciones.create({
         data: {
           id_inscripcion: idInscripcion,
-          id_fase: 1,
+          id_fase: idFase,
           id_evaluador: idEvaluador,
           nota: notaDecimal,
           fecha_registro: new Date(),
@@ -82,7 +84,7 @@ export class EvaluacionesService {
       await prisma.inscripciones.update({
         where: { id_inscripcion: idInscripcion },
         data: {
-          puntaje_clasificacion: notaDecimal,
+          [puntajeField]: notaDecimal,
           clasificacion: clasificacion, // coincide con enum en prisma
           updated_at: new Date(),
         },
