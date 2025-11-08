@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class EvaluacionesAdminService {
@@ -14,45 +15,72 @@ export class EvaluacionesAdminService {
     id_nivel,
   }: {
     search?: string;
-    idAreas: number[];                           // áreas del evaluador (obligatorio)
-    filtro?: 'PENDIENTE' | 'EVALUADO' | 'TODOS'; // tab
-    id_area?: number;                            // filtro UI opcional
-    id_nivel?: number;                           // filtro UI opcional
+    idAreas: number[];
+    filtro?: 'PENDIENTE' | 'EVALUADO' | 'TODOS';
+    id_area?: number;
+    id_nivel?: number;
   }) {
     if (!Array.isArray(idAreas) || idAreas.length === 0) {
       return [];
     }
+    if (!id_area || !id_nivel) {
+      // Se requiere id_area e id_nivel para determinar el estado de la fase.
+      // Si no están, devolvemos una lista vacía o manejamos un error.
+      return [];
+    }
 
-    // Si llega id_area se usa ese número; caso contrario, se limita a las áreas asignadas
     const areaWhere =
       typeof id_area === 'number' && id_area > 0 ? id_area : { in: idAreas };
+
+    let filtroClasificacion: Prisma.inscripcionesWhereInput = {}; // 1. CONSULTAR EL ESTADO DE VALIDACIÓN DE LA FASE CLASIFICATORIA (ID 1)
+    const cierreClasificatoria = await this.prisma.cierres_fase.findUnique({
+      where: {
+        uq_cierre_unico: { id_fase: 1, id_area: id_area, id_nivel: id_nivel },
+      },
+      select: { estado_validacion: true },
+    });
+
+    const isClasificatoriaValidada =
+      cierreClasificatoria?.estado_validacion === 'VALIDADO'; // 2. APLICAR FILTRO: Si la Fase Clasificatoria está VALIDADA, estamos en Fase Final.
+
+    if (isClasificatoriaValidada) {
+      // En Fase Final, solo mostramos a los que CLASIFICARON
+      filtroClasificacion = { clasificacion: 'CLASIFICADO' };
+    } // 3. CALCULAR LA FASE ACTUAL para el filtro PENDIENTE/EVALUADO.
+    // 💡 ESTA DECLARACIÓN DEBE ESTAR FUERA DEL OBJETO 'where'.
+    const idFaseActual = isClasificatoriaValidada ? 2 : 1;
 
     return this.prisma.inscripciones.findMany({
       where: {
         id_area: areaWhere,
         ...(typeof id_nivel === 'number' && id_nivel > 0 ? { id_nivel } : {}),
+        ...filtroClasificacion,
+
         competidor: {
           OR: search
             ? [
-                { nombres:   { contains: search, mode: 'insensitive' } },
+                { nombres: { contains: search, mode: 'insensitive' } },
                 { apellidos: { contains: search, mode: 'insensitive' } },
-                { ci:        { contains: search, mode: 'insensitive' } },
-                { escuela:   { contains: search, mode: 'insensitive' } },
+                { ci: { contains: search, mode: 'insensitive' } },
+                { escuela: { contains: search, mode: 'insensitive' } },
               ]
             : undefined,
         },
+        // 4. USAR LA VARIABLE DENTRO DEL OBJETO
         ...(filtro === 'PENDIENTE'
-          ? { evaluaciones: { none: {} } }
+          ? { evaluaciones: { none: { id_fase: idFaseActual } } }
           : filtro === 'EVALUADO'
-          ? { evaluaciones: { some: {} } }
-          : {}),
+            ? { evaluaciones: { some: { id_fase: idFaseActual } } }
+            : {}),
       },
       select: {
         id_inscripcion: true,
         estado_inscripcion: true,
-        area:  { select: { nombre_area: true } },
+        area: { select: { nombre_area: true } },
         nivel: { select: { nombre_nivel: true } },
         clasificacion: true,
+        puntaje_clasificacion: true,
+        puntaje_final: true,
         competidor: {
           select: {
             id_competidor: true,
@@ -64,6 +92,7 @@ export class EvaluacionesAdminService {
           },
         },
         evaluaciones: {
+          where: { id_fase: idFaseActual },
           orderBy: { fecha_registro: 'desc' },
           take: 1,
           select: {
@@ -77,10 +106,15 @@ export class EvaluacionesAdminService {
     });
   }
 
-  // ====== el resto queda igual ======
   async registrarNota({
-    idInscripcion, idEvaluador, nota,
-  }: { idInscripcion: number; idEvaluador: number; nota: number; }) {
+    idInscripcion,
+    idEvaluador,
+    nota,
+  }: {
+    idInscripcion: number;
+    idEvaluador: number;
+    nota: number;
+  }) {
     const inscripcion = await this.prisma.inscripciones.findUnique({
       where: { id_inscripcion: idInscripcion },
     });
@@ -98,8 +132,14 @@ export class EvaluacionesAdminService {
   }
 
   async editarNota({
-    idEvaluacion, idUsuario, nuevaNota,
-  }: { idEvaluacion: number; idUsuario: number; nuevaNota: number; }) {
+    idEvaluacion,
+    idUsuario,
+    nuevaNota,
+  }: {
+    idEvaluacion: number;
+    idUsuario: number;
+    nuevaNota: number;
+  }) {
     const evaluacion = await this.prisma.evaluaciones.findUnique({
       where: { id_evaluacion: idEvaluacion },
     });
