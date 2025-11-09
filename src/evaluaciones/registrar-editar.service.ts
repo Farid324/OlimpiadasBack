@@ -112,6 +112,8 @@ export class EvaluacionesService {
     const idInscripcion = evaluacion.id_inscripcion;
     const nuevaClasificacion = calcularClasificacion(nuevaNota);
     const nuevaNotaDecimal = new Prisma.Decimal(nuevaNota);
+    const puntajeField =
+      evaluacion.id_fase === 1 ? 'puntaje_clasificacion' : 'puntaje_final';
 
     const actualizada = await this.prisma.$transaction(async (prisma) => {
       // 1) actualizar evaluacion
@@ -140,7 +142,7 @@ export class EvaluacionesService {
       await prisma.inscripciones.update({
         where: { id_inscripcion: idInscripcion },
         data: {
-          puntaje_clasificacion: nuevaNotaDecimal,
+          [puntajeField]: nuevaNotaDecimal,
           clasificacion: nuevaClasificacion,
           updated_at: new Date(),
         },
