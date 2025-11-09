@@ -67,10 +67,11 @@ export class EvaluacionesAdminService {
           orderBy: { fecha_registro: 'desc' },
           take: 1,
           select: {
-            id_evaluacion: true,
+            id_evaluacion: true, // 👈 ESTE CAMPO ES CRUCIAL
             nota: true,
-            estado_registro: true,
             comentario: true,
+            id_fase: true,
+            id_evaluador: true,
           },
         },
       },
@@ -145,10 +146,11 @@ export class EvaluacionesAdminService {
           orderBy: { fecha_registro: 'desc' },
           take: 1,
           select: {
-            id_evaluacion: true,
+            id_evaluacion: true, // 👈 ESTE CAMPO ES CRUCIAL
             nota: true,
-            estado_registro: true,
             comentario: true,
+            id_fase: true,
+            id_evaluador: true,
           },
         },
       },

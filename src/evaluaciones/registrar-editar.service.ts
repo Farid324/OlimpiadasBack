@@ -97,7 +97,7 @@ export class EvaluacionesService {
   }
 
   // ✏️ Editar una nota (transacción, agrega log)
-  async editarNota(dto: EditarNotaDto) {
+  async editarNota(dto: EditarNotaDto & { idFase: 1 | 2 }) {
     const { idEvaluacion, idUsuario, idEvaluador, nuevaNota, comentario } = dto;
 
     const evaluacion = await this.prisma.evaluaciones.findUnique({

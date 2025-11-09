@@ -105,7 +105,7 @@ export class EvaluacionesAdminController {
   }
 
   @Put('editar-nota')
-  async editarNota(@Body() dto: EditarNotaDto) {
+  async editarNota(@Body() dto: EditarNotaDto & { idFase: 1 | 2 }) {
     return this.registrarEditarService.editarNota(dto);
   }
 
