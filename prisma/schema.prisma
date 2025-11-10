@@ -16,6 +16,13 @@ datasource db {
 // ===================== Enums =====================
 // NUEVO
 
+enum tipo_premio {
+  ORO
+  PLATA
+  BRONCE
+  MENCION
+}
+
 enum clasificacion_estado {
   CLASIFICADO
   NO_CLASIFICADO
@@ -60,6 +67,28 @@ enum estado_area {
 }
 
 // ===================== Tablas =====================
+
+model premios_otorgados {
+  id_premio      Int          @id @default(autoincrement())
+  id_inscripcion Int
+  id_area        Int
+  id_nivel       Int
+  anio           Int
+  tipo           tipo_premio
+  fuente         fuente_lista?
+  generado_desde Int?
+  creado_en      DateTime     @default(now())
+
+  // relaciones
+  inscripcion inscripciones    @relation(fields: [id_inscripcion], references: [id_inscripcion], onDelete: Cascade)
+  area        areas            @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+  nivel       niveles          @relation(fields: [id_nivel], references: [id_nivel], onDelete: Cascade)
+  lista       listas_generadas? @relation(fields: [generado_desde], references: [id_lista])
+
+  @@unique([id_inscripcion, id_area, id_nivel, anio], name: "uq_premio_por_insc_area_nivel_anio")
+  @@index([id_area, id_nivel, anio])
+}
+
 model roles {
   id_rol   Int        @id @default(autoincrement()) @db.Integer
   nombre   String     @unique
@@ -116,6 +145,7 @@ model areas {
   evaluadores_area  evaluadores_area[]
   responsables_area responsables_area[]
   listas_generadas  listas_generadas[]
+  premios_otorgados premios_otorgados[]
 
   grupos grupos[] @relation("area_grupos")
 
@@ -132,6 +162,7 @@ model niveles {
   grupos           grupos[]           @relation("nivel_grupos")
 
   cierres_fase cierres_fase[]
+  premios_otorgados premios_otorgados[]
 
   @@index([nombre_nivel])
 }
@@ -233,6 +264,7 @@ model inscripciones {
   nivel      niveles      @relation(fields: [id_nivel], references: [id_nivel])
 
   evaluaciones evaluaciones[]
+  premios premios_otorgados[]
 
   @@unique([id_competidor, id_area, id_nivel], name: "uq_insc_unica")
   @@index([id_competidor])
@@ -372,6 +404,7 @@ model listas_generadas {
   usuario usuarios @relation(fields: [generado_por], references: [id_usuario])
 
   reordenamientos reordenamientos[]
+  premios_otorgados premios_otorgados[]
 
   @@index([id_area])
   @@index([id_nivel])

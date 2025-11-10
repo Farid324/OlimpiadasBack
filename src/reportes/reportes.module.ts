@@ -10,13 +10,23 @@ import { PublicReportService } from './public.service'; // 👈 AÑADIR
 //premiadosTAB
 import { PremiadosController } from './premiados.controller';
 import { PremiadosService } from './premiados.service';
+//certificadosTAB
+import { CertificadosController } from './certificados.controller';
+import { CertificadosService } from './certificados.service';
+
 @Module({
   imports: [PrismaModule, FasesModule],
   controllers: [
     ClasificadosController,
     PublicReportController,
     PremiadosController,
+    CertificadosController,
   ], // 👈 AÑADIR
-  providers: [ClasificadosService, PublicReportService, PremiadosService],
+  providers: [
+    ClasificadosService,
+    PublicReportService,
+    PremiadosService,
+    CertificadosService,
+  ],
 })
 export class ReportesModule {}
