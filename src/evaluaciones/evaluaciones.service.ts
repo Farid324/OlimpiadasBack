@@ -1,5 +1,11 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { PhaseType } from '../fases/dto/close-phase.dto';
+import { PhaseStatus } from '../fases/fases.service';
 
 @Injectable()
 export class EvaluacionesAdminService {
@@ -157,7 +163,19 @@ export class EvaluacionesAdminService {
       orderBy: [{ id_area: 'asc' }, { id_nivel: 'asc' }],
     });
   }
+  private async getFaseId(type: PhaseType): Promise<number> {
+    const nombre_fase =
+      type === PhaseType.CLASIFICACION ? 'CLASIFICATORIA' : 'FINAL';
+    const fase = await this.prisma.fases.findFirst({
+      where: { nombre_fase },
+      select: { id_fase: true },
+    });
+    if (!fase)
+      throw new BadRequestException('No se encontró la fase configurada.');
+    return fase.id_fase;
+  }
 
+  
   // ====== el resto queda igual ======
   async registrarNota({
     idInscripcion,
