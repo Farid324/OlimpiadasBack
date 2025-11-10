@@ -14,17 +14,23 @@ import { PublicReportService } from './public.service';
 import { CeremoniaController } from './ceremonia/ceremonia.controller';
 import { CeremoniaService } from './ceremonia/ceremonia.service';
 
+// ==================== PUBLICACION ====================
+import { PublicacionController } from './publicacion/publicacion.controller';
+import { PublicacionService } from './publicacion/publicacion.service';
+
 @Module({
   imports: [PrismaModule, FasesModule],
   controllers: [
     ClasificadosController,
     PublicReportController,
     CeremoniaController, // 👈 NUEVO
+    PublicacionController,
   ],
   providers: [
     ClasificadosService,
     PublicReportService,
     CeremoniaService, // 👈 NUEVO
+    PublicacionService,
   ],
 })
 export class ReportesModule {}

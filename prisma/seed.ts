@@ -1,6 +1,6 @@
 // prisma/seed.ts
 import 'dotenv/config';
-import { PrismaClient, Prisma, ciclo_nivel, tipo_premio } from '@prisma/client';
+import { PrismaClient, ciclo_nivel } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -133,9 +133,10 @@ async function main() {
   //             RESPONSABLES: 2 usuarios distintos para HU-08
   // ==========================================================
   // Ana Martínez -> Matemática
-  const respMathEmail = process.env.RESP_MATH_EMAIL ?? 'resp.math@olimpiadas.edu';
-  const respMathPass  = process.env.RESP_MATH_PASSWORD ?? 'olimpiadas2024';
-  const respMathHash  = await bcrypt.hash(respMathPass, 10);
+  const respMathEmail =
+    process.env.RESP_MATH_EMAIL ?? 'resp.math@olimpiadas.edu';
+  const respMathPass = process.env.RESP_MATH_PASSWORD ?? 'olimpiadas2024';
+  const respMathHash = await bcrypt.hash(respMathPass, 10);
 
   const responsableMath = await prisma.usuarios.upsert({
     where: { correo: respMathEmail },
@@ -161,9 +162,10 @@ async function main() {
   });
 
   // Luis Herrera -> Física
-  const respPhysEmail = process.env.RESP_PHYS_EMAIL ?? 'resp.phys@olimpiadas.edu';
-  const respPhysPass  = process.env.RESP_PHYS_PASSWORD ?? 'olimpiadas2024';
-  const respPhysHash  = await bcrypt.hash(respPhysPass, 10);
+  const respPhysEmail =
+    process.env.RESP_PHYS_EMAIL ?? 'resp.phys@olimpiadas.edu';
+  const respPhysPass = process.env.RESP_PHYS_PASSWORD ?? 'olimpiadas2024';
+  const respPhysHash = await bcrypt.hash(respPhysPass, 10);
 
   const responsablePhys = await prisma.usuarios.upsert({
     where: { correo: respPhysEmail },
@@ -196,8 +198,16 @@ async function main() {
   // Asociaciones correctas (uno por área)
   await prisma.responsables_area.createMany({
     data: [
-      { id_usuario: responsableMath.id_usuario, id_area: areaMate.id_area,  activo: true },
-      { id_usuario: responsablePhys.id_usuario, id_area: areaFisica.id_area, activo: true },
+      {
+        id_usuario: responsableMath.id_usuario,
+        id_area: areaMate.id_area,
+        activo: true,
+      },
+      {
+        id_usuario: responsablePhys.id_usuario,
+        id_area: areaFisica.id_area,
+        activo: true,
+      },
     ],
     skipDuplicates: true,
   });
@@ -341,8 +351,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        //puntaje_clasificacion: 95.5,
-        //clasificacion: 'CLASIFICADO',
+        puntaje_clasificacion: 95.5,
+        clasificacion: 'CLASIFICADO',
       },
       {
         id_competidor: getId('CI0002'),
@@ -352,8 +362,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        //puntaje_clasificacion: 93.0,
-        //clasificacion: 'CLASIFICADO',
+        puntaje_clasificacion: 93.0,
+        clasificacion: 'CLASIFICADO',
       },
       {
         id_competidor: getId('CI0003'),
@@ -363,8 +373,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        //puntaje_clasificacion: 92.0,
-        //clasificacion: 'CLASIFICADO',
+        puntaje_clasificacion: 92.0,
+        clasificacion: 'CLASIFICADO',
       },
       {
         id_competidor: getId('CI0005'),
@@ -374,8 +384,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        //puntaje_clasificacion: 45.0,
-        //clasificacion: 'NO_CLASIFICADO',
+        puntaje_clasificacion: 45.0,
+        clasificacion: 'NO_CLASIFICADO',
       },
       {
         id_competidor: getId('CI0006'),
@@ -385,8 +395,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        //puntaje_clasificacion: 50.5,
-        //clasificacion: 'NO_CLASIFICADO',
+        puntaje_clasificacion: 50.5,
+        clasificacion: 'NO_CLASIFICADO',
       },
       {
         id_competidor: getId('CI0007'),
@@ -396,8 +406,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        //puntaje_clasificacion: 70.0,
-        //clasificacion: 'DESCALIFICADO',
+        puntaje_clasificacion: 70.0,
+        clasificacion: 'DESCALIFICADO',
       },
       // Física / Secundaria
       {
@@ -408,8 +418,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        //puntaje_clasificacion: 89.5,
-        //clasificacion: 'CLASIFICADO',
+        puntaje_clasificacion: 89.5,
+        clasificacion: 'CLASIFICADO',
       },
       // Matemática / Primaria
       {
@@ -420,8 +430,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        //puntaje_clasificacion: 77.0,
-        //clasificacion: 'CLASIFICADO',
+        puntaje_clasificacion: 77.0,
+        clasificacion: 'CLASIFICADO',
       },
     ],
     skipDuplicates: true,
@@ -499,7 +509,7 @@ async function main() {
   //   });
   // }
 
-    // ============================================================
+  // ============================================================
   // PREMIOS PARA PRUEBAS DE CEREMONIA
   // - Damos premios a CI0001..3 (Mat/Sec), CI0004 (Fis/Sec), CI0008 (Mat/Pri)
   // - Dejamos SIN premio a CI0005, CI0006, CI0007 para validar exclusión
@@ -536,7 +546,7 @@ async function main() {
 
   // crear premios
   //const premiosData = [
-    // Matemática / Secundaria
+  // Matemática / Secundaria
   //  {
   //    id_inscripcion: getInscId('CI0001', areaMate.id_area, secundaria.id_nivel),
   //    id_area: areaMate.id_area,
@@ -568,7 +578,7 @@ async function main() {
   //    creado_en: new Date(),
   //  },
 
-    // Física / Secundaria
+  // Física / Secundaria
   //  {
   //    id_inscripcion: getInscId('CI0004', areaFisica.id_area, secundaria.id_nivel),
   //    id_area: areaFisica.id_area,
@@ -580,7 +590,7 @@ async function main() {
   //    creado_en: new Date(),
   //  },
 
-    // Matemática / Primaria
+  // Matemática / Primaria
   //  {
   //    id_inscripcion: getInscId('CI0008', areaMate.id_area, primaria.id_nivel),
   //    id_area: areaMate.id_area,
@@ -605,7 +615,6 @@ async function main() {
   //});
 
   //console.log('🏅 Premios de prueba creados para Ceremonia:', premiosData.length);
-
 
   console.log('✅ Seed OK: competidores e inscripciones cargados.');
 }
