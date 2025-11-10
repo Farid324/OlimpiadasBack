@@ -174,8 +174,48 @@ export class EvaluacionesAdminService {
       throw new BadRequestException('No se encontró la fase configurada.');
     return fase.id_fase;
   }
+  async isPhaseClosedForEvaluator(params: {
+    idUsuario: number;
+    idNivel: number;
+    type: PhaseType;
+  }): Promise<{ closed: boolean; status: PhaseStatus }> {
+    const { idUsuario, idNivel, type } = params;
 
-  
+    // 1️⃣ Buscar el área del evaluador
+    const evaluador = await this.prisma.evaluadores_area.findFirst({
+      where: { id_usuario: idUsuario, activo: true },
+      select: { id_area: true },
+    });
+
+    if (!evaluador) {
+      throw new BadRequestException(
+        'El evaluador no está asignado a ningún área.',
+      );
+    }
+
+    const id_area = evaluador.id_area;
+
+    // 2️⃣ Obtener id_fase (CLASIFICATORIA o FINAL)
+    const id_fase = await this.getFaseId(type);
+
+    // 3️⃣ Buscar cierre de fase para ese área + nivel
+    const cierre = await this.prisma.cierres_fase.findUnique({
+      where: { uq_cierre_unico: { id_fase, id_area, id_nivel: idNivel } },
+      select: { estado_validacion: true },
+    });
+
+    // 4️⃣ Evaluar estado
+    if (!cierre) {
+      return { closed: false, status: 'EN_PROCESO' };
+    }
+
+    if (cierre.estado_validacion === 'VALIDADO') {
+      return { closed: true, status: 'VALIDADA' };
+    }
+
+    return { closed: true, status: 'CERRADA' };
+  }
+
   // ====== el resto queda igual ======
   async registrarNota({
     idInscripcion,
