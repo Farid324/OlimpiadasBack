@@ -43,15 +43,13 @@ Equipo Organizador Oh! SanSi`,
         `,
       });
 
-      this.logger.log(`✅ Correo de bienvenida enviado a ${email}`);
+      this.logger.log(`Correo de bienvenida enviado a ${email}`);
       return { ok: true };
     } catch (err: unknown) {
       if (err instanceof Error) {
-        this.logger.error(`❌ Error al enviar correo a ${email}`, err.stack);
+        this.logger.error(`Error al enviar correo a ${email}`, err.stack);
       } else {
-        this.logger.error(
-          `❌ Error al enviar correo a ${email}: ${String(err)}`,
-        );
+        this.logger.error(`Error al enviar correo a ${email}: ${String(err)}`);
       }
       // En este caso, sí lanzamos el error para que el servicio que lo llamó se entere
       throw err;
@@ -83,19 +81,17 @@ Equipo Organizador Oh! SanSi`,
           <p>Saludos,<br/>Equipo Organizador Oh! SanSi</p>
         `,
       });
-      this.logger.log(
-        `✅ Correo de bienvenida (Responsable) enviado a ${email}`,
-      );
+      this.logger.log(`Correo de bienvenida (Responsable) enviado a ${email}`);
       return { ok: true };
     } catch (err: unknown) {
       if (err instanceof Error) {
         this.logger.error(
-          `❌ Error al enviar correo (Responsable) a ${email}`,
+          `Error al enviar correo (Responsable) a ${email}`,
           err.stack,
         );
       } else {
         this.logger.error(
-          `❌ Error al enviar correo (Responsable) a ${email}: ${String(err)}`,
+          `Error al enviar correo (Responsable) a ${email}: ${String(err)}`,
         );
       }
       // Como dice tu comentario, aquí no lanzamos el error

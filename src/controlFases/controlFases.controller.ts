@@ -8,7 +8,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { ADMIN, RESPONSABLE } from '../auth/constants';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(RESPONSABLE, ADMIN) 
+@Roles(RESPONSABLE, ADMIN)
 @Controller('control-fases')
 export class ControlFasesController {
   constructor(private readonly service: ControlFasesService) {}
@@ -18,4 +18,3 @@ export class ControlFasesController {
     return this.service.getControlFases();
   }
 }
-

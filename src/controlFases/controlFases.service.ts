@@ -152,9 +152,7 @@ export class ControlFasesService {
         const faseActual: 'Clasificación' | 'Evaluación Final' | 'Completado' =
           progresoHecho === 0
             ? 'Clasificación'
-            : clasificados > 0 &&
-              noClasificados === 0 &&
-              descalificados === 0
+            : clasificados > 0 && noClasificados === 0 && descalificados === 0
               ? 'Completado'
               : 'Evaluación Final';
 
@@ -194,8 +192,8 @@ export class ControlFasesService {
 
         return {
           id: `${id_area}-${id_nivel}`,
-          idArea: id_area,            
-          idNivel: id_nivel,          
+          idArea: id_area,
+          idNivel: id_nivel,
           area: area?.nombre_area ?? `Área ${id_area}`,
           nivel: nivel?.nombre_nivel ?? `Nivel ${id_nivel}`,
           faseActual,
@@ -223,15 +221,10 @@ export class ControlFasesService {
         const progresoHecho = clasificados + noClasificados + descalificados;
         const progresoTotal = Math.max(progresoHecho, 1);
 
-        const faseActual:
-          | 'Clasificación'
-          | 'Evaluación Final'
-          | 'Completado' =
+        const faseActual: 'Clasificación' | 'Evaluación Final' | 'Completado' =
           progresoHecho === 0
             ? 'Clasificación'
-            : clasificados > 0 &&
-              noClasificados === 0 &&
-              descalificados === 0
+            : clasificados > 0 && noClasificados === 0 && descalificados === 0
               ? 'Completado'
               : 'Evaluación Final';
 
@@ -263,8 +256,8 @@ export class ControlFasesService {
 
         return {
           id: `${id_area}-${id_nivel}`,
-          idArea: id_area,            // ✅ añadido
-          idNivel: id_nivel,          // ✅ añadido
+          idArea: id_area, // ✅ añadido
+          idNivel: id_nivel, // ✅ añadido
           area: area?.nombre_area ?? `Área ${id_area}`,
           nivel: nivel?.nombre_nivel ?? `Nivel ${id_nivel}`,
           faseActual,

@@ -3,7 +3,7 @@
 export type RoleName = 'ADMINISTRADOR' | 'EVALUADOR' | 'RESPONSABLE_DE_AREA';
 
 export interface JwtPayload {
-  sub: string; 
+  sub: string;
   email: string;
   role: RoleName;
   roleId?: string;
