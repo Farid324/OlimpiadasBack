@@ -113,8 +113,13 @@ export class EvaluacionesAdminService {
 
         // ✅ solo inscripciones con al menos una evaluación firmada
         evaluaciones: {
-          some: { estado_registro: 'FIRMADA' },
+          some: {
+            id_fase: 1,
+            estado_registro: 'FIRMADA',
+          },
         },
+
+        ...(typeof id_nivel === 'number' && id_nivel > 0 ? { id_nivel } : {}),
 
         // ✅ búsqueda flexible por nombre, apellidos, ci o escuela
         competidor: search
@@ -144,16 +149,14 @@ export class EvaluacionesAdminService {
             departamento: true,
           },
         },
-        // ✅ solo muestra la última evaluación firmada
+
+        // ✅ Traemos las evaluaciones de FASE 2 (para mostrar/editar en la fase final)
         evaluaciones: {
-          where: {
-            estado_registro: 'FIRMADA',
-            id_fase: 2,
-          },
+          where: { id_fase: 2 },
           orderBy: { fecha_registro: 'desc' },
           take: 1,
           select: {
-            id_evaluacion: true, // 👈 ESTE CAMPO ES CRUCIAL
+            id_evaluacion: true,
             nota: true,
             comentario: true,
             id_fase: true,
@@ -279,7 +282,7 @@ export class EvaluacionesAdminService {
   }
 
   async getResumenEvaluador(idEvaluador: number, idFase: number) {
-    // 1️⃣ Obtener las áreas que tiene asignadas el evaluador
+    // 1️⃣ Obtener las áreas asignadas al evaluador
     const areasAsignadas = await this.prisma.evaluadores_area.findMany({
       where: { id_usuario: idEvaluador, activo: true },
       select: { id_area: true },
@@ -291,41 +294,89 @@ export class EvaluacionesAdminService {
       return { total: 0, pendientes: 0, evaluados: 0, clasificados: 0 };
     }
 
-    // 2️⃣ Contar inscripciones totales dentro de las áreas asignadas
-    const total = await this.prisma.inscripciones.count({
-      where: { id_area: { in: areaIds } },
-    });
+    // 2️⃣ Cálculo de totales según la fase
+    let total: number;
+    let pendientes: number;
+    let evaluados: number;
+    let clasificados: number;
 
-    // 3️⃣ Contar inscripciones sin evaluación en esta fase
-    const pendientes = await this.prisma.inscripciones.count({
-      where: {
-        id_area: { in: areaIds },
-        evaluaciones: {
-          none: { id_evaluador: idEvaluador, id_fase: idFase },
+    if (idFase === 1) {
+      // 🟦 FASE CLASIFICATORIA
+      total = await this.prisma.inscripciones.count({
+        where: { id_area: { in: areaIds } },
+      });
+
+      pendientes = await this.prisma.inscripciones.count({
+        where: {
+          id_area: { in: areaIds },
+          evaluaciones: {
+            none: { id_evaluador: idEvaluador, id_fase: 1 },
+          },
         },
-      },
-    });
+      });
 
-    // 4️⃣ Contar inscripciones con evaluación en esta fase
-    const evaluados = await this.prisma.inscripciones.count({
-      where: {
-        id_area: { in: areaIds },
-        evaluaciones: {
-          some: { id_evaluador: idEvaluador, id_fase: idFase },
+      evaluados = await this.prisma.inscripciones.count({
+        where: {
+          id_area: { in: areaIds },
+          evaluaciones: {
+            some: { id_evaluador: idEvaluador, id_fase: 1 },
+          },
         },
-      },
-    });
+      });
 
-    // 5️⃣ Clasificados solo aplican si es fase de clasificación (idFase = 1)
-    const clasificados =
-      idFase === 1
-        ? await this.prisma.inscripciones.count({
-            where: {
-              id_area: { in: areaIds },
-              clasificacion: 'CLASIFICADO',
+      clasificados = await this.prisma.inscripciones.count({
+        where: {
+          id_area: { in: areaIds },
+          clasificacion: 'CLASIFICADO',
+        },
+      });
+    } else {
+      // 🟩 FASE FINAL
+      // Total: solo clasificados con evaluación firmada
+      total = await this.prisma.inscripciones.count({
+        where: {
+          id_area: { in: areaIds },
+          clasificacion: 'CLASIFICADO',
+          evaluaciones: {
+            some: {
+              id_fase: 1,
+              estado_registro: 'FIRMADA',
             },
-          })
-        : 0;
+          },
+        },
+      });
+
+      // Pendientes: clasificados que aún no tienen evaluación FIRMADA
+      pendientes = await this.prisma.inscripciones.count({
+        where: {
+          id_area: { in: areaIds },
+          clasificacion: 'CLASIFICADO',
+          evaluaciones: {
+            none: {
+              id_fase: 2,
+              id_evaluador: idEvaluador,
+            },
+          },
+        },
+      });
+
+      // Evaluados: clasificados con evaluación FIRMADA en fase 2
+      evaluados = await this.prisma.inscripciones.count({
+        where: {
+          id_area: { in: areaIds },
+          clasificacion: 'CLASIFICADO',
+          evaluaciones: {
+            some: {
+              id_fase: 2,
+              id_evaluador: idEvaluador,
+            },
+          },
+        },
+      });
+
+      // En fase final no contamos nuevos "clasificados"
+      clasificados = 0;
+    }
 
     return { total, pendientes, evaluados, clasificados };
   }
