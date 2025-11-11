@@ -34,14 +34,14 @@ export class GruposController {
   }
 
   @Get(':id')
-  @Roles('ADMINISTRADOR')
+  @Roles('ADMINISTRADOR', 'RESPONSABLE_DE_AREA')
   async findOne(@Param('id') id: string) {
     const grupoId = Number(id);
     return this.service.getGrupoDetalle(grupoId);
   }
 
   @Post('register')
-  @Roles('ADMINISTRADOR')
+  @Roles('ADMINISTRADOR', 'RESPONSABLE_DE_AREA')
   async register(@Body() body: CreateGrupoDto, @Req() req: any) {
     return this.service.registerGrupo(
       body,
@@ -50,7 +50,7 @@ export class GruposController {
   }
 
   @Post('register-csv')
-  @Roles('ADMINISTRADOR')
+  @Roles('ADMINISTRADOR', 'RESPONSABLE_DE_AREA')
   @UseInterceptors(FileInterceptor('file'))
   async registerCsv(
     @UploadedFile() file: Express.Multer.File,
