@@ -8,6 +8,7 @@ import {
   Post,
   Req,
   Param,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { JwtPayload } from 'src/interfaces/jwt-payload.interface';
@@ -132,12 +133,40 @@ export class EvaluacionesAdminController {
     });
   }
 
+  @Get('adminListaFinal')
+  async listarEvaluacionesFinales(
+    @Query('areaId') areaId?: string,
+    @Query('nivelId') nivelId?: string,
+    @Query('search') search?: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '50',
+  ) {
+    return this.adminEvaluaciones.listarEvaluacionesFaseFinal({
+      areaId: areaId ? Number(areaId) : undefined,
+      nivelId: nivelId ? Number(nivelId) : undefined,
+      search,
+      page: Number(page),
+      limit: Number(limit),
+    });
+  }
+
   @Get('adminStats')
   async stats(
     @Query('areaId') areaId?: string,
     @Query('nivelId') nivelId?: string,
   ) {
     return this.adminEvaluaciones.estadisticasPorAreaNivel(
+      areaId ? Number(areaId) : undefined,
+      nivelId ? Number(nivelId) : undefined,
+    );
+  }
+
+  @Get('adminStatsFinales')
+  async statsFinales(
+    @Query('areaId') areaId?: string,
+    @Query('nivelId') nivelId?: string,
+  ) {
+    return this.adminEvaluaciones.estadisticasFinales(
       areaId ? Number(areaId) : undefined,
       nivelId ? Number(nivelId) : undefined,
     );
@@ -156,5 +185,18 @@ export class EvaluacionesAdminController {
   @Get(':id')
   async getDetalle(@Param('id') id: string) {
     return this.adminEvaluaciones.obtenerDetalleEvaluacion(Number(id));
+  }
+
+  @Get('fase-dos/:id')
+  async getDetalleFaseDos(@Param('id') id: string) {
+    const idEvaluacion = Number(id);
+
+    if (isNaN(idEvaluacion)) {
+      throw new BadRequestException(
+        'El parámetro id debe ser un número válido',
+      );
+    }
+
+    return this.adminEvaluaciones.obtenerDetalleEvaluacionFaseDos(idEvaluacion);
   }
 }
