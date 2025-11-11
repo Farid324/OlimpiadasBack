@@ -278,38 +278,54 @@ export class EvaluacionesAdminService {
     return actualizada;
   }
 
-  async getResumenEvaluador(idEvaluador: number) {
+  async getResumenEvaluador(idEvaluador: number, idFase: number) {
+    // 1️⃣ Obtener las áreas que tiene asignadas el evaluador
     const areasAsignadas = await this.prisma.evaluadores_area.findMany({
       where: { id_usuario: idEvaluador, activo: true },
       select: { id_area: true },
     });
+
     const areaIds = areasAsignadas.map((a) => a.id_area);
 
     if (areaIds.length === 0) {
       return { total: 0, pendientes: 0, evaluados: 0, clasificados: 0 };
     }
 
+    // 2️⃣ Contar inscripciones totales dentro de las áreas asignadas
     const total = await this.prisma.inscripciones.count({
       where: { id_area: { in: areaIds } },
     });
 
+    // 3️⃣ Contar inscripciones sin evaluación en esta fase
     const pendientes = await this.prisma.inscripciones.count({
       where: {
         id_area: { in: areaIds },
-        evaluaciones: { none: { id_evaluador: idEvaluador } },
+        evaluaciones: {
+          none: { id_evaluador: idEvaluador, id_fase: idFase },
+        },
       },
     });
 
+    // 4️⃣ Contar inscripciones con evaluación en esta fase
     const evaluados = await this.prisma.inscripciones.count({
       where: {
         id_area: { in: areaIds },
-        evaluaciones: { some: { id_evaluador: idEvaluador } },
+        evaluaciones: {
+          some: { id_evaluador: idEvaluador, id_fase: idFase },
+        },
       },
     });
 
-    const clasificados = await this.prisma.inscripciones.count({
-      where: { id_area: { in: areaIds }, clasificacion: 'CLASIFICADO' },
-    });
+    // 5️⃣ Clasificados solo aplican si es fase de clasificación (idFase = 1)
+    const clasificados =
+      idFase === 1
+        ? await this.prisma.inscripciones.count({
+            where: {
+              id_area: { in: areaIds },
+              clasificacion: 'CLASIFICADO',
+            },
+          })
+        : 0;
 
     return { total, pendientes, evaluados, clasificados };
   }

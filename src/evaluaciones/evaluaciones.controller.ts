@@ -93,9 +93,13 @@ export class EvaluacionesAdminController {
 
   // Resumen para las cards de la vista de evaluador
   @Get('resumen')
-  async getResumenEvaluador(@Req() req: RequestWithUser) {
+  async getResumenEvaluador(
+    @Req() req: RequestWithUser,
+    @Query('idFase') idFase?: string, // 👈 capturamos desde query param
+  ) {
     const idEvaluador = Number(req.user.sub);
-    return this.service.getResumenEvaluador(idEvaluador);
+    const fase = Number(idFase) || 1; // por defecto 1 si no envían nada
+    return this.service.getResumenEvaluador(idEvaluador, fase);
   }
 
   // Registrar / Editar nota

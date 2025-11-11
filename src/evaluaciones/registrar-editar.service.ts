@@ -81,13 +81,19 @@ export class EvaluacionesService {
       });
 
       // 3) actualizar inscripcion: puntaje_clasificacion y clasificacion
+
+      const updateData: Prisma.inscripcionesUpdateInput = {
+        [puntajeField]: notaDecimal,
+        updated_at: new Date(),
+      };
+
+      if (idFase === 1) {
+        updateData.clasificacion = clasificacion;
+      }
+
       await prisma.inscripciones.update({
         where: { id_inscripcion: idInscripcion },
-        data: {
-          [puntajeField]: notaDecimal,
-          clasificacion: clasificacion, // coincide con enum en prisma
-          updated_at: new Date(),
-        },
+        data: updateData,
       });
 
       return nuevaEval;
@@ -138,14 +144,20 @@ export class EvaluacionesService {
         },
       });
 
-      // 3) actualizar inscripcion (puntaje_clasificacion y clasificacion)
+      // 3) actualizar inscripción
+      const updateData: Prisma.inscripcionesUpdateInput = {
+        [puntajeField]: nuevaNotaDecimal,
+        updated_at: new Date(),
+      };
+
+      // Solo actualizar clasificación si es fase 1
+      if (evaluacion.id_fase === 1) {
+        updateData.clasificacion = nuevaClasificacion;
+      }
+
       await prisma.inscripciones.update({
         where: { id_inscripcion: idInscripcion },
-        data: {
-          [puntajeField]: nuevaNotaDecimal,
-          clasificacion: nuevaClasificacion,
-          updated_at: new Date(),
-        },
+        data: updateData,
       });
 
       return evalActualizada;

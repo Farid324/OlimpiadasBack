@@ -141,6 +141,7 @@ CREATE TABLE "public"."inscripciones" (
     "updated_at" TIMESTAMP(3) NOT NULL,
     "puntaje_clasificacion" DECIMAL(5,2),
     "clasificacion" "public"."clasificacion_estado" DEFAULT 'NO_CLASIFICADO',
+    "puntaje_final" DECIMAL(5,2),
 
     CONSTRAINT "inscripciones_pkey" PRIMARY KEY ("id_inscripcion")
 );
