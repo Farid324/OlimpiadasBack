@@ -223,6 +223,7 @@ CREATE TABLE "public"."evaluadores_area" (
 CREATE TABLE "public"."medallero_config" (
     "id_medallero" SERIAL NOT NULL,
     "id_area" INTEGER NOT NULL,
+    "id_nivel" INTEGER NOT NULL,
     "oros" INTEGER NOT NULL DEFAULT 0,
     "platas" INTEGER NOT NULL DEFAULT 0,
     "bronces" INTEGER NOT NULL DEFAULT 0,
@@ -413,6 +414,12 @@ CREATE UNIQUE INDEX "evaluadores_area_id_usuario_id_area_key" ON "public"."evalu
 CREATE INDEX "medallero_config_id_area_idx" ON "public"."medallero_config"("id_area");
 
 -- CreateIndex
+CREATE INDEX "medallero_config_id_nivel_idx" ON "public"."medallero_config"("id_nivel");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "medallero_config_id_area_id_nivel_key" ON "public"."medallero_config"("id_area", "id_nivel");
+
+-- CreateIndex
 CREATE INDEX "cierres_fase_id_area_idx" ON "public"."cierres_fase"("id_area");
 
 -- CreateIndex
@@ -510,6 +517,9 @@ ALTER TABLE "public"."evaluadores_area" ADD CONSTRAINT "evaluadores_area_id_area
 
 -- AddForeignKey
 ALTER TABLE "public"."medallero_config" ADD CONSTRAINT "medallero_config_id_area_fkey" FOREIGN KEY ("id_area") REFERENCES "public"."areas"("id_area") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."medallero_config" ADD CONSTRAINT "medallero_config_id_nivel_fkey" FOREIGN KEY ("id_nivel") REFERENCES "public"."niveles"("id_nivel") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."cierres_fase" ADD CONSTRAINT "cierres_fase_id_fase_fkey" FOREIGN KEY ("id_fase") REFERENCES "public"."fases"("id_fase") ON DELETE RESTRICT ON UPDATE CASCADE;
