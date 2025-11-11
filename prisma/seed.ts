@@ -351,8 +351,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 95.5,
-        clasificacion: 'CLASIFICADO',
+        // puntaje_clasificacion: 95.5,
+        // clasificacion: 'CLASIFICADO',
       },
       {
         id_competidor: getId('CI0002'),
@@ -362,8 +362,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 93.0,
-        clasificacion: 'CLASIFICADO',
+        // puntaje_clasificacion: 93.0,
+        // clasificacion: 'CLASIFICADO',
       },
       {
         id_competidor: getId('CI0003'),
@@ -373,8 +373,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 92.0,
-        clasificacion: 'CLASIFICADO',
+        // puntaje_clasificacion: 92.0,
+        // clasificacion: 'CLASIFICADO',
       },
       {
         id_competidor: getId('CI0005'),
@@ -384,8 +384,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 45.0,
-        clasificacion: 'NO_CLASIFICADO',
+        // puntaje_clasificacion: 45.0,
+        // clasificacion: 'NO_CLASIFICADO',
       },
       {
         id_competidor: getId('CI0006'),
@@ -395,8 +395,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 50.5,
-        clasificacion: 'NO_CLASIFICADO',
+        // puntaje_clasificacion: 50.5,
+        // clasificacion: 'NO_CLASIFICADO',
       },
       {
         id_competidor: getId('CI0007'),
@@ -406,8 +406,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 70.0,
-        clasificacion: 'DESCALIFICADO',
+        // puntaje_clasificacion: 70.0,
+        // clasificacion: 'DESCALIFICADO',
       },
       // Física / Secundaria
       {
@@ -418,8 +418,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 89.5,
-        clasificacion: 'CLASIFICADO',
+        // puntaje_clasificacion: 89.5,
+        // clasificacion: 'CLASIFICADO',
       },
       // Matemática / Primaria
       {
@@ -430,8 +430,8 @@ async function main() {
         observaciones: null,
         created_at: now,
         updated_at: now,
-        puntaje_clasificacion: 77.0,
-        clasificacion: 'CLASIFICADO',
+        // puntaje_clasificacion: 77.0,
+        // clasificacion: 'CLASIFICADO',
       },
     ],
     skipDuplicates: true,
