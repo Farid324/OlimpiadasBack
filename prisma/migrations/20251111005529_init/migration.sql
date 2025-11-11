@@ -1,4 +1,7 @@
 -- CreateEnum
+CREATE TYPE "public"."tipo_premio" AS ENUM ('ORO', 'PLATA', 'BRONCE', 'MENCION');
+
+-- CreateEnum
 CREATE TYPE "public"."clasificacion_estado" AS ENUM ('CLASIFICADO', 'NO_CLASIFICADO', 'DESCALIFICADO');
 
 -- CreateEnum
@@ -24,6 +27,21 @@ CREATE TYPE "public"."ciclo_nivel" AS ENUM ('PRIMARIA', 'SECUNDARIA');
 
 -- CreateEnum
 CREATE TYPE "public"."accion_log" AS ENUM ('REGISTRO', 'MODIFICACION');
+
+-- CreateTable
+CREATE TABLE "public"."premios_otorgados" (
+    "id_premio" SERIAL NOT NULL,
+    "id_inscripcion" INTEGER NOT NULL,
+    "id_area" INTEGER NOT NULL,
+    "id_nivel" INTEGER NOT NULL,
+    "anio" INTEGER NOT NULL,
+    "tipo" "public"."tipo_premio" NOT NULL,
+    "fuente" "public"."fuente_lista",
+    "generado_desde" INTEGER,
+    "creado_en" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "premios_otorgados_pkey" PRIMARY KEY ("id_premio")
+);
 
 -- CreateTable
 CREATE TABLE "public"."roles" (
@@ -272,6 +290,12 @@ CREATE TABLE "public"."import_csv" (
 );
 
 -- CreateIndex
+CREATE INDEX "premios_otorgados_id_area_id_nivel_anio_idx" ON "public"."premios_otorgados"("id_area", "id_nivel", "anio");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "premios_otorgados_id_inscripcion_id_area_id_nivel_anio_key" ON "public"."premios_otorgados"("id_inscripcion", "id_area", "id_nivel", "anio");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "roles_nombre_key" ON "public"."roles"("nombre");
 
 -- CreateIndex
@@ -414,6 +438,18 @@ CREATE INDEX "reordenamientos_id_lista_idx" ON "public"."reordenamientos"("id_li
 
 -- CreateIndex
 CREATE INDEX "import_csv_ejecutado_por_idx" ON "public"."import_csv"("ejecutado_por");
+
+-- AddForeignKey
+ALTER TABLE "public"."premios_otorgados" ADD CONSTRAINT "premios_otorgados_id_inscripcion_fkey" FOREIGN KEY ("id_inscripcion") REFERENCES "public"."inscripciones"("id_inscripcion") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."premios_otorgados" ADD CONSTRAINT "premios_otorgados_id_area_fkey" FOREIGN KEY ("id_area") REFERENCES "public"."areas"("id_area") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."premios_otorgados" ADD CONSTRAINT "premios_otorgados_id_nivel_fkey" FOREIGN KEY ("id_nivel") REFERENCES "public"."niveles"("id_nivel") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."premios_otorgados" ADD CONSTRAINT "premios_otorgados_generado_desde_fkey" FOREIGN KEY ("generado_desde") REFERENCES "public"."listas_generadas"("id_lista") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."usuarios" ADD CONSTRAINT "usuarios_id_rol_fkey" FOREIGN KEY ("id_rol") REFERENCES "public"."roles"("id_rol") ON DELETE RESTRICT ON UPDATE CASCADE;

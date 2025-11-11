@@ -1,5 +1,4 @@
 // src/reportes/reportes.module.ts
-
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { FasesModule } from '../fases/fases.module';
@@ -18,6 +17,13 @@ import { CeremoniaService } from './ceremonia/ceremonia.service';
 import { PublicacionController } from './publicacion/publicacion.controller';
 import { PublicacionService } from './publicacion/publicacion.service';
 
+//premiadosTAB
+import { PremiadosController } from './premiados.controller';
+import { PremiadosService } from './premiados.service';
+//certificadosTAB
+import { CertificadosController } from './certificados.controller';
+import { CertificadosService } from './certificados.service';
+
 @Module({
   imports: [PrismaModule, FasesModule],
   controllers: [
@@ -31,6 +37,10 @@ import { PublicacionService } from './publicacion/publicacion.service';
     PublicReportService,
     CeremoniaService, // 👈 NUEVO
     PublicacionService,
-  ],
+    PremiadosController,
+    CertificadosController,
+    PremiadosService,
+    CertificadosService,
+  ], // 👈 AÑADIR
 })
 export class ReportesModule {}
