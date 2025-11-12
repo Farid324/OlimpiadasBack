@@ -237,40 +237,44 @@ export class PremiadosService {
 
   async buildHtmlTable(f: { id_area?: number; id_nivel?: number }) {
     const lista = await this.list({ ...f });
-    // HTML muy sencillo con UTF-8
+
     const rows = lista
-      .map(
-        (it) => `
+      .map((it) => {
+        const nota =
+          typeof it.puntuacion === 'number' ? it.puntuacion.toFixed(1) : '';
+        return `
         <tr>
           <td>${it.posicion}</td>
           <td>${it.nombreCompleto}</td>
           <td>${it.premio}</td>
           <td>${it.area}</td>
           <td>${it.nivel}</td>
+          <td>${nota}</td>
           <td>${it.unidadEducativa}</td>
           <td>${it.departamento}</td>
-        </tr>`,
-      )
+        </tr>`;
+      })
       .join('\n');
 
     return `
-      <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-        <thead style="background:#f1f5f9;">
-          <tr>
-            <th>#</th>
-            <th>Nombre completo</th>
-            <th>Premio</th>
-            <th>Área</th>
-            <th>Nivel</th>
-            <th>Unidad educativa</th>
-            <th>Departamento</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows}
-        </tbody>
-      </table>
-    `;
+    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;width:100%;font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+      <thead style="background:#f1f5f9;">
+        <tr>
+          <th>#</th>
+          <th>Nombre completo</th>
+          <th>Premio</th>
+          <th>Área</th>
+          <th>Nivel</th>
+          <th>Puntuación</th>
+          <th>Unidad educativa</th>
+          <th>Departamento</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  `;
   }
 
   // HU-015:guardar orden sin tocar datos existentes
@@ -371,3 +375,4 @@ export class PremiadosService {
     }));
   }
 }
+
