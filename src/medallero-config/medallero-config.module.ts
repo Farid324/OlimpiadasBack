@@ -10,4 +10,3 @@ import { PrismaModule } from 'src/prisma/prisma.module';
   exports: [MedalleroConfigService],
 })
 export class MedalleroConfigModule {}
-

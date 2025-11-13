@@ -61,8 +61,8 @@ export class PremiadosService {
 
     // 1)medallero del area
     const medallero = await this.prisma.medallero_config.findFirst({
-      where: { id_area },
-      orderBy: { vigente_desde: 'desc' },
+      where: { id_area, id_nivel },
+      orderBy: { id_medallero: 'desc' },
     });
 
     const cfg = {
@@ -375,4 +375,3 @@ export class PremiadosService {
     }));
   }
 }
-
