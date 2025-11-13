@@ -1,7 +1,7 @@
 // prisma/seed.ts
 import 'dotenv/config';
 import { PrismaClient, ciclo_nivel} from '@prisma/client';
-import { tipo_premio} from '@prisma/client';
+//import { tipo_premio} from '@prisma/client';
 import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -515,154 +515,154 @@ async function main() {
   // - Damos premios a CI0001..3 (Mat/Sec), CI0004 (Fis/Sec), CI0008 (Mat/Pri)
   // - Dejamos SIN premio a CI0005, CI0006, CI0007 para validar exclusión
   // ============================================================
-const anioActual = new Date().getFullYear();
+// const anioActual = new Date().getFullYear();
 
-// helper: obtener id_inscripcion por CI/Área/Nivel
-const inscByCiAreaNivel = await prisma.inscripciones.findMany({
-  where: {
-    id_area: { in: [areaMate.id_area, areaFisica.id_area] },
-    id_nivel: { in: [primaria.id_nivel, secundaria.id_nivel] },
-    competidor: { ci: { in: dataCompetidores.map(c => c.ci) } },
-  },
-  include: { competidor: true },
-});
+// // helper: obtener id_inscripcion por CI/Área/Nivel
+// const inscByCiAreaNivel = await prisma.inscripciones.findMany({
+//   where: {
+//     id_area: { in: [areaMate.id_area, areaFisica.id_area] },
+//     id_nivel: { in: [primaria.id_nivel, secundaria.id_nivel] },
+//     competidor: { ci: { in: dataCompetidores.map(c => c.ci) } },
+//   },
+//   include: { competidor: true },
+// });
 
-const getInscId = (ci: string, idArea: number, idNivel: number) => {
-  const insc = inscByCiAreaNivel.find(
-    i => i.competidor?.ci === ci && i.id_area === idArea && i.id_nivel === idNivel
-  );
-  if (!insc) {
-    throw new Error(
-      `No se encontró la inscripción de ${ci} (area=${idArea}, nivel=${idNivel}).`,
-    );
-  }
-  return insc.id_inscripcion;
-};
+// const getInscId = (ci: string, idArea: number, idNivel: number) => {
+//   const insc = inscByCiAreaNivel.find(
+//     i => i.competidor?.ci === ci && i.id_area === idArea && i.id_nivel === idNivel
+//   );
+//   if (!insc) {
+//     throw new Error(
+//       `No se encontró la inscripción de ${ci} (area=${idArea}, nivel=${idNivel}).`,
+//     );
+//   }
+//   return insc.id_inscripcion;
+// };
 
-// limpiar premios de este año para estos competidores (por si re-seedeas)
-await prisma.premios_otorgados.deleteMany({
-  where: {
-    anio: anioActual,
-    inscripcion: {
-      id_competidor: { in: compList.map(c => c.id_competidor) },
-    },
-  },
-});
+// // limpiar premios de este año para estos competidores (por si re-seedeas)
+// await prisma.premios_otorgados.deleteMany({
+//   where: {
+//     anio: anioActual,
+//     inscripcion: {
+//       id_competidor: { in: compList.map(c => c.id_competidor) },
+//     },
+//   },
+// });
 
-// crear premios
-const premiosData = [
-  // Matemática / Secundaria
-  {
-    id_inscripcion: getInscId('CI0001', areaMate.id_area, secundaria.id_nivel),
-    id_area: areaMate.id_area,
-    id_nivel: secundaria.id_nivel,
-    anio: anioActual,
-    tipo: tipo_premio.ORO,
-    fuente: 'FINAL' as const,
-    generado_desde: null,
-    creado_en: new Date(),
-  },
-  {
-    id_inscripcion: getInscId('CI0002', areaMate.id_area, secundaria.id_nivel),
-    id_area: areaMate.id_area,
-    id_nivel: secundaria.id_nivel,
-    anio: anioActual,
-    tipo: tipo_premio.PLATA,
-    fuente: 'FINAL' as const,
-    generado_desde: null,
-    creado_en: new Date(),
-  },
-  {
-    id_inscripcion: getInscId('CI0003', areaMate.id_area, secundaria.id_nivel),
-    id_area: areaMate.id_area,
-    id_nivel: secundaria.id_nivel,
-    anio: anioActual,
-    tipo: tipo_premio.BRONCE,
-    fuente: 'FINAL' as const,
-    generado_desde: null,
-    creado_en: new Date(),
-  },
+// // crear premios
+// const premiosData = [
+//   // Matemática / Secundaria
+//   {
+//     id_inscripcion: getInscId('CI0001', areaMate.id_area, secundaria.id_nivel),
+//     id_area: areaMate.id_area,
+//     id_nivel: secundaria.id_nivel,
+//     anio: anioActual,
+//     tipo: tipo_premio.ORO,
+//     fuente: 'FINAL' as const,
+//     generado_desde: null,
+//     creado_en: new Date(),
+//   },
+//   {
+//     id_inscripcion: getInscId('CI0002', areaMate.id_area, secundaria.id_nivel),
+//     id_area: areaMate.id_area,
+//     id_nivel: secundaria.id_nivel,
+//     anio: anioActual,
+//     tipo: tipo_premio.PLATA,
+//     fuente: 'FINAL' as const,
+//     generado_desde: null,
+//     creado_en: new Date(),
+//   },
+//   {
+//     id_inscripcion: getInscId('CI0003', areaMate.id_area, secundaria.id_nivel),
+//     id_area: areaMate.id_area,
+//     id_nivel: secundaria.id_nivel,
+//     anio: anioActual,
+//     tipo: tipo_premio.BRONCE,
+//     fuente: 'FINAL' as const,
+//     generado_desde: null,
+//     creado_en: new Date(),
+//   },
 
-  // Física / Secundaria
-  {
-    id_inscripcion: getInscId('CI0004', areaFisica.id_area, secundaria.id_nivel),
-    id_area: areaFisica.id_area,
-    id_nivel: secundaria.id_nivel,
-    anio: anioActual,
-    tipo: tipo_premio.MENCION,
-    fuente: 'FINAL' as const,
-    generado_desde: null,
-    creado_en: new Date(),
-  },
+//   // Física / Secundaria
+//   {
+//     id_inscripcion: getInscId('CI0004', areaFisica.id_area, secundaria.id_nivel),
+//     id_area: areaFisica.id_area,
+//     id_nivel: secundaria.id_nivel,
+//     anio: anioActual,
+//     tipo: tipo_premio.MENCION,
+//     fuente: 'FINAL' as const,
+//     generado_desde: null,
+//     creado_en: new Date(),
+//   },
 
-  // Matemática / Primaria
-  {
-    id_inscripcion: getInscId('CI0008', areaMate.id_area, primaria.id_nivel),
-    id_area: areaMate.id_area,
-    id_nivel: primaria.id_nivel,
-    anio: anioActual,
-    tipo: tipo_premio.ORO,
-    fuente: 'FINAL' as const,
-    generado_desde: null,
-    creado_en: new Date(),
-  },
-];
+//   // Matemática / Primaria
+//   {
+//     id_inscripcion: getInscId('CI0008', areaMate.id_area, primaria.id_nivel),
+//     id_area: areaMate.id_area,
+//     id_nivel: primaria.id_nivel,
+//     anio: anioActual,
+//     tipo: tipo_premio.ORO,
+//     fuente: 'FINAL' as const,
+//     generado_desde: null,
+//     creado_en: new Date(),
+//   },
+// ];
 
-await prisma.premios_otorgados.createMany({
-  data: premiosData,
-  skipDuplicates: true,
-});
+// await prisma.premios_otorgados.createMany({
+//   data: premiosData,
+//   skipDuplicates: true,
+// });
 
-// (Opcional) marcamos esas inscripciones como PREMIADO para que sea más visible en otras vistas
-await prisma.inscripciones.updateMany({
-  where: { id_inscripcion: { in: premiosData.map(p => p.id_inscripcion) } },
-  data: { estado_inscripcion: 'PREMIADO' },
-});
+// // (Opcional) marcamos esas inscripciones como PREMIADO para que sea más visible en otras vistas
+// await prisma.inscripciones.updateMany({
+//   where: { id_inscripcion: { in: premiosData.map(p => p.id_inscripcion) } },
+//   data: { estado_inscripcion: 'PREMIADO' },
+// });
 
-// ========= NUEVO: poner Departamento y Unidad Educativa a los competidores =========
-const patchCompetidores = [
-  {
-    ci: 'CI0001',
-    departamento: 'Cochabamba',
-    escuela: 'Unidad Educativa San Martín',
-  },
-  {
-    ci: 'CI0002',
-    departamento: 'Cochabamba',
-    escuela: 'Colegio Técnico Bolívar',
-  },
-  {
-    ci: 'CI0003',
-    departamento: 'La Paz',
-    escuela: 'Colegio Don Bosco',
-  },
-  {
-    ci: 'CI0004',
-    departamento: 'Santa Cruz',
-    escuela: 'Unidad Educativa Cristo Rey',
-  },
-  {
-    ci: 'CI0008',
-    departamento: 'Cochabamba',
-    escuela: 'Escuela Fiscal Simón Rodríguez',
-  },
-];
+// // ========= NUEVO: poner Departamento y Unidad Educativa a los competidores =========
+// const patchCompetidores = [
+//   {
+//     ci: 'CI0001',
+//     departamento: 'Cochabamba',
+//     escuela: 'Unidad Educativa San Martín',
+//   },
+//   {
+//     ci: 'CI0002',
+//     departamento: 'Cochabamba',
+//     escuela: 'Colegio Técnico Bolívar',
+//   },
+//   {
+//     ci: 'CI0003',
+//     departamento: 'La Paz',
+//     escuela: 'Colegio Don Bosco',
+//   },
+//   {
+//     ci: 'CI0004',
+//     departamento: 'Santa Cruz',
+//     escuela: 'Unidad Educativa Cristo Rey',
+//   },
+//   {
+//     ci: 'CI0008',
+//     departamento: 'Cochabamba',
+//     escuela: 'Escuela Fiscal Simón Rodríguez',
+//   },
+// ];
 
-for (const pc of patchCompetidores) {
-  const comp = compList.find(c => c.ci === pc.ci);
-  if (!comp) continue; // por si acaso
+// for (const pc of patchCompetidores) {
+//   const comp = compList.find(c => c.ci === pc.ci);
+//   if (!comp) continue; // por si acaso
 
-  await prisma.competidores.update({
-    where: { id_competidor: comp.id_competidor },
-    data: {
-      departamento: pc.departamento,
-      escuela: pc.escuela,
-    },
-  });
-}
+//   await prisma.competidores.update({
+//     where: { id_competidor: comp.id_competidor },
+//     data: {
+//       departamento: pc.departamento,
+//       escuela: pc.escuela,
+//     },
+//   });
+// }
 
-console.log('🏅 Premios de prueba creados para Ceremonia:', premiosData.length);
-console.log('📚 Departamentos y unidades educativas actualizados para:', patchCompetidores.length);
+// console.log('🏅 Premios de prueba creados para Ceremonia:', premiosData.length);
+// console.log('📚 Departamentos y unidades educativas actualizados para:', patchCompetidores.length);
 
   console.log('✅ Seed OK: competidores e inscripciones cargados.');
 }
