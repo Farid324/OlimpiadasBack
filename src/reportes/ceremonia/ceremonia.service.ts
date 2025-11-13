@@ -46,14 +46,11 @@ export class CeremoniaService {
 
     let rows = premios.map((p) => ({
       area: p.area?.nombre_area ?? p.inscripcion?.area?.nombre_area ?? '',
-      nivel:
-        p.nivel?.nombre_nivel ?? p.inscripcion?.nivel?.nombre_nivel ?? '',
+      nivel: p.nivel?.nombre_nivel ?? p.inscripcion?.nivel?.nombre_nivel ?? '',
       anio: p.anio,
       premio: p.tipo,
       ci: p.inscripcion?.competidor?.ci ?? null,
-      competidor: `${p.inscripcion?.competidor?.nombres ?? ''} ${
-        p.inscripcion?.competidor?.apellidos ?? ''
-      }`.trim(),
+      competidor: `${p.inscripcion?.competidor?.nombres ?? ''} ${p.inscripcion?.competidor?.apellidos ?? ''}`.trim(),
     }));
 
     if (query.q) {
@@ -83,26 +80,19 @@ export class CeremoniaService {
     return rows;
   }
 
+  /** Devuelve claves que espera el front: { oro, plata, bronce, mencion, total } */
   async resumen(query: QueryCeremoniaDto) {
     const rows = await this.findRows(query);
-    const totales = rows.length;
-    const byPremio = {
-      ORO: 0,
-      PLATA: 0,
-      BRONCE: 0,
-      MENCION: 0,
-    } as Record<string, number>;
 
-    rows.forEach((r) => {
-      byPremio[r.premio] = (byPremio[r.premio] ?? 0) + 1;
-    });
+    const byPremio = { ORO: 0, PLATA: 0, BRONCE: 0, MENCION: 0 } as Record<string, number>;
+    for (const r of rows) byPremio[r.premio] = (byPremio[r.premio] ?? 0) + 1;
 
     return {
-      totales,
-      oros: byPremio.ORO || 0,
-      platas: byPremio.PLATA || 0,
-      bronces: byPremio.BRONCE || 0,
-      menciones: byPremio.MENCION || 0,
+      total: rows.length,
+      oro: byPremio.ORO || 0,
+      plata: byPremio.PLATA || 0,
+      bronce: byPremio.BRONCE || 0,
+      mencion: byPremio.MENCION || 0,
     };
   }
 }
