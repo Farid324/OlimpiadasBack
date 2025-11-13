@@ -20,7 +20,7 @@ import { User } from '../common/decorators/user.decorator';
 import { ClosePhaseDto, PhaseType } from './dto/close-phase.dto';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(RESPONSABLE, ADMIN)
+@Roles(RESPONSABLE)
 @Controller('phases')
 export class FasesController {
   constructor(private readonly fases: fasesService.FasesService) {}

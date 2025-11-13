@@ -27,7 +27,7 @@ export class ControlFasesRespController {
   ) {}
 
   @Get()
-  @Roles(RESPONSABLE, ADMIN) // deja ADMIN para probar; luego puedes quitarlo
+  @Roles(RESPONSABLE) // deja ADMIN para probar; luego puedes quitarlo
   async getMisFases(@Req() req: Request) {
     const anyReq = req as any;
     const u = anyReq?.user ?? {};
@@ -50,7 +50,7 @@ export class ControlFasesRespController {
   }
 
   @Post(':id/approve')
-  @Roles(RESPONSABLE, ADMIN)
+  @Roles(RESPONSABLE)
   async approveFila(@Param('id') id: string, @Req() req: Request) {
     // el front te manda algo como "3-2" (area-nivel)
     const [areaStr, nivelStr] = id.split('-');
