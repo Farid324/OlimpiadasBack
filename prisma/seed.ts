@@ -531,7 +531,11 @@ const getInscId = (ci: string, idArea: number, idNivel: number) => {
   const insc = inscByCiAreaNivel.find(
     i => i.competidor?.ci === ci && i.id_area === idArea && i.id_nivel === idNivel
   );
-  if (!insc) throw new Error(`No se encontró la inscripción de ${ci} (area=${idArea}, nivel=${idNivel}).`);
+  if (!insc) {
+    throw new Error(
+      `No se encontró la inscripción de ${ci} (area=${idArea}, nivel=${idNivel}).`,
+    );
+  }
   return insc.id_inscripcion;
 };
 
@@ -615,7 +619,50 @@ await prisma.inscripciones.updateMany({
   data: { estado_inscripcion: 'PREMIADO' },
 });
 
+// ========= NUEVO: poner Departamento y Unidad Educativa a los competidores =========
+const patchCompetidores = [
+  {
+    ci: 'CI0001',
+    departamento: 'Cochabamba',
+    escuela: 'Unidad Educativa San Martín',
+  },
+  {
+    ci: 'CI0002',
+    departamento: 'Cochabamba',
+    escuela: 'Colegio Técnico Bolívar',
+  },
+  {
+    ci: 'CI0003',
+    departamento: 'La Paz',
+    escuela: 'Colegio Don Bosco',
+  },
+  {
+    ci: 'CI0004',
+    departamento: 'Santa Cruz',
+    escuela: 'Unidad Educativa Cristo Rey',
+  },
+  {
+    ci: 'CI0008',
+    departamento: 'Cochabamba',
+    escuela: 'Escuela Fiscal Simón Rodríguez',
+  },
+];
+
+for (const pc of patchCompetidores) {
+  const comp = compList.find(c => c.ci === pc.ci);
+  if (!comp) continue; // por si acaso
+
+  await prisma.competidores.update({
+    where: { id_competidor: comp.id_competidor },
+    data: {
+      departamento: pc.departamento,
+      escuela: pc.escuela,
+    },
+  });
+}
+
 console.log('🏅 Premios de prueba creados para Ceremonia:', premiosData.length);
+console.log('📚 Departamentos y unidades educativas actualizados para:', patchCompetidores.length);
 
   console.log('✅ Seed OK: competidores e inscripciones cargados.');
 }

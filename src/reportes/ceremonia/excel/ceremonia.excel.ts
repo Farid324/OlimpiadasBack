@@ -8,26 +8,22 @@ export type CeremoniaRow = {
   premio: string;            // ORO | PLATA | BRONCE | MENCION
   ci: string | null;         // (no se usa en el Excel, pero lo mantenemos por compatibilidad)
   competidor: string;
-  departamento?: string;     // NUEVO
-  unidadEducativa?: string;  // NUEVO
+  departamento?: string;
+  unidadEducativa?: string;
 };
 
 export async function buildCeremoniaExcel(
   rows: CeremoniaRow[],
-  title = 'Ceremonia de Premiación',
+  title = 'LISTA DE PREMIADOS',
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Ceremonia');
 
   // ───────── Encabezado institucional (2 filas) ─────────
-  const now = new Date();
-  const dd = String(now.getDate()).padStart(2, '0');
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const yyyy = String(now.getFullYear());
-  const fecha = `${dd}/${mm}/${yyyy}`;
-
   const titulo = 'Sistema de Registro y Evaluaciones Oh SanSi – 2025';
-  const subtitulo = `LISTA DE PREMIADOS – ${fecha}`;
+
+  // Ahora el subtítulo viene desde el controller (incluye filtros y fecha)
+  const subtitulo = title;
 
   // Las columnas de la tabla (7 columns)
   const headers = [
@@ -35,7 +31,7 @@ export async function buildCeremoniaExcel(
     'Área',
     'Nivel',
     'Premio',
-    'Competidor',
+    'Olimpista',      // 👈 antes: "Competidor"
     'Departamento',
     'Unidad Educativa',
   ] as const;
@@ -52,7 +48,7 @@ export async function buildCeremoniaExcel(
   };
   const last = colLetter(totalCols);
 
-  ws.addRow([titulo]);   // A1
+  ws.addRow([titulo]);    // A1
   ws.addRow([subtitulo]); // A2
   ws.mergeCells(`A1:${last}1`);
   ws.mergeCells(`A2:${last}2`);
@@ -103,7 +99,7 @@ export async function buildCeremoniaExcel(
     rows: tableRows,
   });
 
-  // Bordes sutiles para toda el área de datos (opcional)
+  // Bordes sutiles para toda el área de datos
   const firstDataRow = startRow + 1;
   const lastDataRow = firstDataRow + tableRows.length - 1;
   for (let r = startRow; r <= lastDataRow; r++) {
