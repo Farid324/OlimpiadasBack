@@ -1,6 +1,6 @@
 // src/reportes/ceremonia/ceremonia.controller.ts
 import { Controller, Get, Query, Res } from '@nestjs/common';
-import type { Response } from 'express';                  // 👈 type-only
+import type { Response } from 'express';
 import { CeremoniaService } from './ceremonia.service';
 import { QueryCeremoniaDto } from './dto/query-ceremonia.dto';
 import { buildCeremoniaExcel } from './excel/ceremonia.excel';
@@ -25,13 +25,40 @@ export class CeremoniaController {
   @Get('export')
   async export(@Query() query: QueryCeremoniaDto, @Res() res: Response) {
     const rows = await this.service.findRows(query);
-    const buf = await buildCeremoniaExcel(rows, 'Ceremonia de Premiación');
+
+    // ==== Fecha ====
+    const now = new Date();
+    const dd = String(now.getDate()).padStart(2, '0');
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const yyyy = String(now.getFullYear());
+    const fecha = `${dd}/${mm}/${yyyy}`;
+
+    // ==== Textos de filtros para mostrar en el subtítulo ====
+    const first = rows[0];
+
+    let areaLabel = 'Todas las áreas';
+    let nivelLabel = 'Todos los niveles';
+
+    if (query.id_area) {
+      areaLabel = first?.area || 'Área seleccionada';
+    }
+
+    if (query.id_nivel) {
+      nivelLabel = first?.nivel || 'Nivel seleccionado';
+    }
+
+    const subtitle = `LISTA DE PREMIADOS – Área: ${areaLabel} – Nivel: ${nivelLabel} – ${fecha}`;
+
+    const buf = await buildCeremoniaExcel(rows, subtitle);
 
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
-    res.setHeader('Content-Disposition', 'attachment; filename="ceremonia.xlsx"');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="ceremonia.xlsx"',
+    );
     res.send(buf);
   }
 }
