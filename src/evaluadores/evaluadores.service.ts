@@ -1,4 +1,4 @@
-// src/evaluadores/evaluadores.service.ts
+//src/evaluadores/evaluadores.service.ts
 import {
   Injectable,
   BadRequestException,
@@ -242,6 +242,11 @@ export class EvaluadoresService {
         activo,
         id_areas,
       } = dto;
+
+      // 🔹 experiencia por defecto: si viene undefined/null, se usa 1 año
+      const experienciaFinal =
+        experiencia === undefined || experiencia === null ? 1 : experiencia;
+
       if (!ci || !ci.trim()) {
         throw new BadRequestException(
           'El CI es obligatorio para generar la contraseña inicial.',
@@ -293,7 +298,8 @@ export class EvaluadoresService {
         ...(ci !== undefined ? { ci: tempPassword } : {}), // Guardamos el CI
         ...(institucion !== undefined ? { institucion } : {}),
         ...(especialidad !== undefined ? { especialidad } : {}),
-        ...(experiencia !== undefined ? { experiencia } : {}),
+        // usamos experienciaFinal para garantizar mínimo 1 año
+        ...(experienciaFinal !== undefined ? { experiencia: experienciaFinal } : {}),
       };
 
       const created = await this.prisma.usuarios.create({
