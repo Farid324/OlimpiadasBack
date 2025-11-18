@@ -1,5 +1,7 @@
 // src/controlFases/controlFases.types.ts
 
+export type PhaseTypeCF = 'CLASIFICACION' | 'FINAL';
+
 export type AccionColor = 'primary' | 'neutral' | 'success';
 
 export type FilaFase = {
