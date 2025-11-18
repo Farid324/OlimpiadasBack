@@ -1,7 +1,7 @@
-//src/controlFases/controlFases.controller.ts
-import { Controller, Get, UseGuards } from '@nestjs/common';
+// src/controlFases/controlFases.controller.ts
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ControlFasesService } from './controlFases.service';
-import { ControlFasesResponse } from './controlFases.types';
+import type { ControlFasesResponse, PhaseTypeCF } from './controlFases.types';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -14,7 +14,8 @@ export class ControlFasesController {
   constructor(private readonly service: ControlFasesService) {}
 
   @Get()
-  async findAll(): Promise<ControlFasesResponse> {
-    return this.service.getControlFases();
+  async get(@Query('type') type?: PhaseTypeCF): Promise<ControlFasesResponse> {
+    const phaseType: PhaseTypeCF = type === 'FINAL' ? 'FINAL' : 'CLASIFICACION';
+    return this.service.getControlFases(phaseType);
   }
 }

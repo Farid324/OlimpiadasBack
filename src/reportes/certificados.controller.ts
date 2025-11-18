@@ -39,14 +39,10 @@ export class CertificadosController {
 
     // mismo candado que en clasificados: solo si la fase está cerrada/validada
     if (area && nivel) {
-      const st = await this.fases.getStatus(
-        area,
-        nivel,
-        PhaseType.CLASIFICACION,
-      );
-      if (st !== 'CERRADA' && st !== 'VALIDADA') {
+      const st = await this.fases.getStatus(area, nivel, PhaseType.FINAL);
+      if (st !== 'CERRADA' && st !== 'VALIDADA') { //elimnar st = cerrada para pruebas
         throw new HttpException(
-          'Fase Bloqueada. La fase de clasificación aún no ha sido aprobada.',
+          'Fase Bloqueada. La fase final aún no ha sido aprobada.',
           HttpStatus.LOCKED,
         );
       }
@@ -86,7 +82,7 @@ export class CertificadosController {
         nivel,
         PhaseType.CLASIFICACION,
       );
-      if (st !== 'CERRADA' && st !== 'VALIDADA') {
+      if (st !== 'CERRADA' && st !== 'VALIDADA') { // eliminar st = cerrada para pruebas
         throw new HttpException(
           'Fase Bloqueada. La fase de clasificación aún no ha sido aprobada.',
           HttpStatus.LOCKED,

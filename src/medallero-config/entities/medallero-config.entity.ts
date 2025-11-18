@@ -1,3 +1,4 @@
+//src/medallero-config/entities/medallero-config.entity.ts
 import { areas } from '@prisma/client';
 
 export class MedalleroConfigEntity {

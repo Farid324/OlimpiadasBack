@@ -54,7 +54,8 @@ export class CertificadosService {
         if (!insc) return null;
         return {
           id_inscripcion: insc.id_inscripcion,
-          nombreCompleto: `${insc.competidor.nombres} ${insc.competidor.apellidos}`.trim(),
+          nombreCompleto:
+            `${insc.competidor.nombres} ${insc.competidor.apellidos}`.trim(),
           ci: insc.competidor.ci ?? '',
           area: insc.area.nombre_area,
           nivel: insc.nivel.nombre_nivel,
@@ -71,8 +72,7 @@ export class CertificadosService {
         const t2 = TIPO_ORDER[b.tipoPremio];
         if (t1 !== t2) return t1 - t2;
         if (a.area !== b.area) return a.area.localeCompare(b.area, 'es');
-        if (a.nivel !== b.nivel)
-          return a.nivel.localeCompare(b.nivel, 'es');
+        if (a.nivel !== b.nivel) return a.nivel.localeCompare(b.nivel, 'es');
         return a.nombreCompleto.localeCompare(b.nombreCompleto, 'es');
       });
 
@@ -210,7 +210,8 @@ export class CertificadosService {
     const now = new Date();
     const fecha = now.toLocaleDateString('es-BO');
 
-    const titulo = 'Sistema de Registro y Evaluaciones Oh SanSi – Participación';
+    const titulo =
+      'Sistema de Registro y Evaluaciones Oh SanSi – Participación';
     const subtitulo = `LISTA DE CLASIFICADOS SIN PREMIO – ${fecha}`;
 
     const headers = [
@@ -299,9 +300,10 @@ export class CertificadosService {
     // para generar necesitamos área y nivel
     if (!id_area || !id_nivel) return [];
 
+    // Medallero por area+nivel
     const medallero = await this.prisma.medallero_config.findFirst({
-      where: { id_area },
-      orderBy: { vigente_desde: 'desc' },
+      where: { id_area, id_nivel },
+      orderBy: { id_medallero: 'desc' },
     });
 
     const cfg = {
@@ -312,19 +314,40 @@ export class CertificadosService {
     };
 
     // inscripciones CLASIFICADO ordenadas por puntaje
-    const inscripciones = await this.prisma.inscripciones.findMany({
-      where: {
-        id_area,
-        id_nivel,
-        clasificacion: 'CLASIFICADO',
-      },
-      orderBy: {
-        puntaje_clasificacion: 'desc',
-      },
-      select: {
-        id_inscripcion: true,
-      },
+    //
+
+    // === FINAL: obtener promedios de evaluaciones FINALES FIRMADAS ===
+    const faseFinal = await this.prisma.fases.findFirst({
+      where: { nombre_fase: 'FINAL' },
+      select: { id_fase: true },
     });
+    if (!faseFinal) return [];
+
+    // inscripciones del par area+nivel
+    const inscs = await this.prisma.inscripciones.findMany({
+      where: { id_area, id_nivel },
+      select: { id_inscripcion: true },
+    });
+    if (!inscs.length) return [];
+    const ids = inscs.map((i) => i.id_inscripcion);
+
+    const evals = await this.prisma.evaluaciones.groupBy({
+      by: ['id_inscripcion'],
+      where: {
+        id_inscripcion: { in: ids },
+        id_fase: faseFinal.id_fase,
+        estado_registro: 'FIRMADA',
+      },
+      _avg: { nota: true },
+    });
+
+    // ordenar por score desc y desempatar por id asc
+    const ordenados = evals
+      .map((e) => ({
+        id_inscripcion: e.id_inscripcion,
+        score: Number(e._avg.nota ?? 0),
+      }))
+      .sort((a, b) => b.score - a.score || a.id_inscripcion - b.id_inscripcion);
 
     // armar premios según posiciones
     const toCreate: Array<{
@@ -336,11 +359,11 @@ export class CertificadosService {
     }> = [];
 
     let pos = 1;
-    for (const insc of inscripciones) {
+    for (const e of ordenados) {
       const tipo = this.tipoPorPosicion(pos, cfg);
       if (!tipo) break;
       toCreate.push({
-        id_inscripcion: insc.id_inscripcion,
+        id_inscripcion: e.id_inscripcion,
         id_area,
         id_nivel,
         anio,

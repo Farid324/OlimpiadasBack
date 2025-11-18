@@ -1,3 +1,4 @@
+// src/evaluaciones/dto/registrar-nota.dto.ts
 import { IsInt, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class RegistrarNotaDto {

@@ -36,19 +36,8 @@ export class FasesService {
   private async esResponsableDelAreaYNivel(
     idUsuario: number,
     idArea: number,
-    _idNivel: number, // nivel no se usa porque no existe en responsables_area
+    _idNivel: number,
   ): Promise<boolean> {
-    // Si es ADMIN, pasa directo, en caso de no querer que el admins apruebe fase quitar este bloque
-    const user = await this.prisma.usuarios.findUnique({
-      where: { id_usuario: idUsuario },
-      select: {
-        rol: { select: { nombre: true } },
-      },
-    });
-
-    if (user?.rol?.nombre === 'ADMINISTRADOR') {
-      return true; // 👈 ADMIN siempre puede
-    }
     const responsable = await this.prisma.responsables_area.findFirst({
       where: {
         id_usuario: idUsuario,
@@ -205,7 +194,15 @@ export class FasesService {
 
   async isPhaseEnabledGlobally(type: PhaseType): Promise<boolean> {
     const id_fase = await this.getFaseId(type);
-    const count = await this.prisma.cierres_fase.count({ where: { id_fase } });
+
+    // Solo consideramos cierres VALIDADOS.
+    const count = await this.prisma.cierres_fase.count({
+      where: {
+        id_fase,
+        estado_validacion: 'VALIDADO',
+      },
+    });
+
     return count > 0;
   }
 

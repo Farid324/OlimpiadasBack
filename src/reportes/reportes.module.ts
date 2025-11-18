@@ -31,14 +31,14 @@ import { CertificadosService } from './certificados.service';
     PublicReportController,
     CeremoniaController, // 👈 NUEVO
     PublicacionController,
+    PremiadosController,
+    CertificadosController,
   ],
   providers: [
     ClasificadosService,
     PublicReportService,
     CeremoniaService, // 👈 NUEVO
     PublicacionService,
-    PremiadosController,
-    CertificadosController,
     PremiadosService,
     CertificadosService,
   ], // 👈 AÑADIR
