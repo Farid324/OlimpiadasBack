@@ -1,3 +1,4 @@
+//src/medallero-config/dto/update-medallero-config.dto.ts
 import { IsInt, Min, IsOptional } from 'class-validator';
 
 export class UpdateMedalleroConfigDto {

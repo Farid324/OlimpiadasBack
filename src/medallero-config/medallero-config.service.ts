@@ -1,3 +1,4 @@
+//src/medallero-config/medallero-config.service.ts
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UpdateMedalleroConfigDto } from './dto/update-medallero-config.dto';

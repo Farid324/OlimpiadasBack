@@ -1,3 +1,4 @@
+//src/medallero-config/medallero-config.controller.ts
 import { Controller, Get, Put, Post, Body, Param, Logger } from '@nestjs/common';
 import { MedalleroConfigService } from './medallero-config.service';
 import { UpdateMedalleroConfigDto } from './dto/update-medallero-config.dto';

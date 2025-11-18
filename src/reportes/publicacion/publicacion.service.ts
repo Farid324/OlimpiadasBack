@@ -1,3 +1,4 @@
+//src/reportes/publicacion/publicacion.service.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QueryPublicacionDto } from './dto/query-publicacion.dto';

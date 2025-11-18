@@ -1,3 +1,4 @@
+//src/medallero-config/medallero-config.module.ts
 import { Module } from '@nestjs/common';
 import { MedalleroConfigController } from './medallero-config.controller';
 import { MedalleroConfigService } from './medallero-config.service';
