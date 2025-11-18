@@ -92,6 +92,12 @@ export class EvaluacionesAdminController {
     });
   }
 
+  @Get('mis-areas')
+  async getAreasAsignadas(@Req() req: RequestWithUser) {
+    const idEvaluador = Number(req.user.sub);
+    return await this.service.getAreasAsignadasForSelect(idEvaluador);
+  }
+
   // Resumen para las cards de la vista de evaluador
   @Get('resumen')
   async getResumenEvaluador(
