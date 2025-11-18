@@ -1,10 +1,5 @@
 // src/reportes/premiados.service.ts
-import {
-  HttpException,
-  HttpStatus,
-  Injectable,
-  ForbiddenException,
-} from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FasesService } from '../fases/fases.service';
 import { PhaseType } from '../fases/dto/close-phase.dto';
@@ -106,15 +101,26 @@ export class PremiadosService {
 
     // 4) ordenar por puntaje descendente y id_inscripcion ascendente
     const ordenados = [...inscripciones]
-      .map((insc) => ({
-        inscripcion: insc,
-        score: scoreMap.get(insc.id_inscripcion) ?? 0,
-      }))
+      .map((insc) => {
+        const raw =
+          (insc as any).puntaje_final ?? scoreMap.get(insc.id_inscripcion);
+        const score = raw === null || raw === undefined ? null : Number(raw);
+
+        return {
+          inscripcion: insc,
+          score,
+        };
+      })
+      // ⬇️ EXCLUIMOS sin nota final ni promedio firmado
+      .filter((x) => typeof x.score === 'number' && !Number.isNaN(x.score))
       .sort(
         (a, b) =>
-          b.score - a.score ||
+          (b.score as number) - (a.score as number) ||
           a.inscripcion.id_inscripcion - b.inscripcion.id_inscripcion,
       );
+
+    // Si nadie tiene nota, no hay premiados
+    if (ordenados.length === 0) return [];
 
     // 5) asignar medallas
     const salida: Array<{
@@ -135,10 +141,7 @@ export class PremiadosService {
       pos += 1;
       const { inscripcion, score } = item;
       const med = this.medallaDePosicion(pos, cfg);
-      if (!med.tipo) {
-        // fuera de rango de medallero->no se publica
-        continue;
-      }
+      if (!med.tipo) continue;
       salida.push({
         id_inscripcion: inscripcion.id_inscripcion,
         posicion: pos,
@@ -148,7 +151,7 @@ export class PremiadosService {
         estadoPremio: med.tipo,
         area: inscripcion.area.nombre_area,
         nivel: inscripcion.nivel.nombre_nivel,
-        puntuacion: score,
+        puntuacion: Number(score),
         unidadEducativa: inscripcion.competidor.escuela ?? '',
         departamento: inscripcion.competidor.departamento ?? '',
       });
