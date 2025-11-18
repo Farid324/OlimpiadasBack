@@ -66,6 +66,11 @@ enum estado_area {
   COMPLETADO
 }
 
+enum tipo_area_config {
+  INDIVIDUAL
+  GRUPAL
+}
+
 // ===================== Tablas =====================
 
 model premios_otorgados {
@@ -138,6 +143,11 @@ model areas {
   nombre_area String      @unique
   activo      Boolean     @default(true)
   estado      estado_area @default(EVALUANDO)
+
+  // 2. Agrega estos campos nuevos
+  nota_aprobacion Int?              @default(51) // Del 51 al 100
+  tipo            tipo_area_config? @default(INDIVIDUAL)
+  niveles_target  String?           // Guardaremos "Primaria, Secundaria" o uno solo como texto simple por simplicidad
 
   inscripciones     inscripciones[]
   medallero_config  medallero_config[]

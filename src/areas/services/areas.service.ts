@@ -1,6 +1,7 @@
+// src/areas/services/areas.service.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-
+import { CreateAreaDto } from '../dto/create-area.dto';
 @Injectable()
 export class AreasService {
   constructor(private prisma: PrismaService) {}
@@ -11,6 +12,39 @@ export class AreasService {
       orderBy: { nombre_area: 'asc' },
     });
   }
+  // far
+  async create(data: CreateAreaDto) {
+    return this.prisma.areas.create({
+      data: {
+        nombre_area: data.nombre_area,
+        nota_aprobacion: data.nota_aprobacion,
+        tipo: data.tipo,
+        niveles_target: data.niveles_target,
+        activo: true,
+      },
+    });
+  }
+
+  async update(id: number, data: CreateAreaDto) {
+    return this.prisma.areas.update({
+      where: { id_area: id },
+      data: {
+        nombre_area: data.nombre_area,
+        nota_aprobacion: data.nota_aprobacion,
+        tipo: data.tipo,
+        niveles_target: data.niveles_target,
+      },
+    });
+  }
+
+  async remove(id: number) {
+    // Soft delete (solo desactivar)
+    return this.prisma.areas.update({
+      where: { id_area: id },
+      data: { activo: false },
+    });
+  }
+
   //rodri
   async getAreasConEstadisticas() {
     console.log('💡 Iniciando consulta a Prisma...');
