@@ -144,7 +144,6 @@ export class ResponsablesService {
       }
 
       // 2. Validar Área Ocupada (TU LOGICA RESTAURADA)
-      // Tus amigos habían borrado esto, es crítico para que no haya 2 responsables activos.
       const ocupada = await this.prisma.responsables_area.findFirst({
         where: { id_area: dto.id_area, activo: true },
       });
@@ -164,6 +163,12 @@ export class ResponsablesService {
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
       const idRolResponsable = await this.getResponsableRoleId();
 
+      // ⬇️ Experiencia: si no se envía o es 0, usamos 1 año por defecto
+      const experienciaFinal =
+        typeof dto.experiencia === 'number' && dto.experiencia > 0
+          ? dto.experiencia
+          : 1;
+
       // 4. Crear Usuario y Relación
       const usuario = await this.prisma.usuarios.create({
         data: {
@@ -173,7 +178,7 @@ export class ResponsablesService {
           hash_password: hashedPassword,
           telefono: dto.telefono,
           institucion: dto.institucion,
-          experiencia: dto.experiencia,
+          experiencia: experienciaFinal,              // ⬅️ USAMOS experienciaFinal
           especialidad: dto.especialidad,
           ci: dto.ci,
           rol: { connect: { id_rol: idRolResponsable } },
@@ -228,7 +233,6 @@ export class ResponsablesService {
 
   async update(id: number, dto: UpdateResponsableDto) {
     // TU LÓGICA DE UPDATE RESTAURADA
-    // El código de tus amigos no manejaba el cambio de área correctamente (cuando quitas a uno para poner a otro)
     const usuario = await this.prisma.usuarios.findUnique({
       where: { id_usuario: id },
     });
@@ -267,7 +271,6 @@ export class ResponsablesService {
         where: { id_usuario: id },
       });
 
-      // Si cambia el área, validar que la nueva no esté ocupada
       if (!relacionActual || relacionActual.id_area !== dto.id_area) {
         const ocupada = await this.prisma.responsables_area.findFirst({
           where: { id_area: dto.id_area, activo: true },
@@ -279,13 +282,11 @@ export class ResponsablesService {
         }
 
         if (relacionActual) {
-          // actualizar a nueva área
           await this.prisma.responsables_area.update({
             where: { id_responsable_area: relacionActual.id_responsable_area },
             data: { id_area: dto.id_area },
           });
         } else {
-          // crear relación si no existía
           await this.prisma.responsables_area.create({
             data: { id_usuario: id, id_area: dto.id_area },
           });
@@ -310,7 +311,6 @@ export class ResponsablesService {
   }
 
   async remove(id_usuario: number) {
-    // Usamos tu nombre de función 'remove' y tu lógica de eliminar relación primero
     const rel = await this.prisma.responsables_area.findFirst({
       where: { id_usuario },
     });
@@ -341,7 +341,6 @@ export class ResponsablesService {
   }
 
   // --- CHECKERS (TU CÓDIGO RESTAURADO) ---
-  // Tus amigos borraron el checkArea, que es vital para el frontend
   async checkTelefono(telefono: string) {
     const exists = await this.prisma.usuarios.findFirst({
       where: { telefono },
