@@ -1,11 +1,11 @@
-// src/areas/services/areas.service.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAreaDto } from '../dto/create-area.dto';
+
 @Injectable()
 export class AreasService {
   constructor(private prisma: PrismaService) {}
-  
+
   // jaumpi y vivi
   findAll() {
     return this.prisma.areas.findMany({
@@ -13,6 +13,7 @@ export class AreasService {
       orderBy: { nombre_area: 'asc' },
     });
   }
+
   // far
   async create(data: CreateAreaDto) {
     return this.prisma.areas.create({
@@ -46,30 +47,86 @@ export class AreasService {
     });
   }
 
-  //rodri
-  
-  //rodri - MODIFICADO para devolver por Área y Nivel con conteo correcto
+  /* ============================================================
+   * 1) Estadísticas GENERALES (formato agrupado por área)
+   *    -> Usar en las demás pestañas
+   * ============================================================ */
   async getAreasConEstadisticas() {
-    console.log('💡 Iniciando consulta a Prisma...');
-    
-    // 1. Obtener todas las áreas activas con sus inscripciones y niveles
+    console.log('💡 Iniciando consulta a Prisma (general)...');
+
     const areas = await this.prisma.areas.findMany({
       where: { activo: true },
       include: {
         inscripciones: {
-          // Solo necesitamos seleccionar los campos para contar y obtener el detalle del nivel
-          select: { 
-              id_inscripcion: true, 
-              nivel: { select: { id_nivel: true, nombre_nivel: true } }
+          include: { nivel: true },
+        },
+      },
+    });
+
+    console.log('💡 Consulta realizada, areas:', areas.length);
+
+    const mapped = areas.map((area) => {
+      const nivelesMap: Record<
+        string,
+        { id_nivel: number; nombre_nivel: string; inscritos: number }
+      > = {};
+
+      area.inscripciones.forEach((insc) => {
+        if (!insc.nivel) return;
+        const nivelIdStr = insc.nivel.id_nivel.toString();
+        if (!nivelesMap[nivelIdStr]) {
+          nivelesMap[nivelIdStr] = {
+            id_nivel: Number(insc.nivel.id_nivel), // BigInt -> number
+            nombre_nivel: insc.nivel.nombre_nivel,
+            inscritos: 0,
+          };
+        }
+        nivelesMap[nivelIdStr].inscritos += 1;
+      });
+
+      return {
+        id_area: Number(area.id_area), // BigInt -> number
+        nombre_area: area.nombre_area,
+        estado: area.estado,
+        niveles: Object.values(nivelesMap),
+      };
+    });
+
+    console.log('💡 Datos devueltos por el servicio (general):', mapped.length);
+    return mapped;
+  }
+
+  /* =================================================================
+   * 2) Estadísticas para PANEL PRINCIPAL
+   *    - Una tarjeta por combinación (Área + Nivel)
+   *    - Sólo niveles de Primaria y Secundaria
+   * ================================================================= */
+  async getAreasConEstadisticasPanelPrincipal() {
+    console.log('💡 Iniciando consulta a Prisma (panel principal)...');
+
+    // Niveles que quieres mostrar en el panel principal
+    const NIVELES_PERMITIDOS = ['PRIMARIA', 'SECUNDARIA'];
+
+    const areas = await this.prisma.areas.findMany({
+      where: { activo: true },
+      include: {
+        inscripciones: {
+          select: {
+            id_inscripcion: true,
+            nivel: {
+              select: {
+                id_nivel: true,
+                nombre_nivel: true,
+              },
+            },
           },
         },
       },
       orderBy: { nombre_area: 'asc' },
     });
-    
-    console.log('💡 Consulta realizada, áreas base:', areas.length);
 
-    // 2. Mapeo para agrupar las inscripciones por (Área, Nivel)
+    console.log('💡 Consulta realizada, áreas base (panel):', areas.length);
+
     const combinaciones: {
       id_area: number;
       nombre_area: string;
@@ -78,62 +135,66 @@ export class AreasService {
       nombre_nivel: string;
       total_inscritos: number;
     }[] = [];
-    
-    areas.forEach(area => {
-        const nivelesMap = new Map<number, number>(); // Map<id_nivel, count>
-        const nivelDetails = new Map<number, {id: number, nombre: string}>(); // Map<id_nivel, details>
-        
-        area.inscripciones.forEach(inscripcion => {
-            if (inscripcion.nivel) {
-                // Convertir BigInt a number
-                const idNivel = Number(inscripcion.nivel.id_nivel); 
-                
-                // 1. Contar los inscritos por nivel
-                nivelesMap.set(idNivel, (nivelesMap.get(idNivel) || 0) + 1);
-                
-                // 2. Guardar los detalles del nivel (nombre)
-                if (!nivelDetails.has(idNivel)) {
-                    nivelDetails.set(idNivel, {
-                        id: idNivel,
-                        nombre: inscripcion.nivel.nombre_nivel
-                    });
-                }
-            }
-        });
-        
-        // 3. Generar una entrada (tarjeta) para cada combinación (Área + Nivel)
-        nivelesMap.forEach((count, id_nivel) => {
-            const details = nivelDetails.get(id_nivel);
 
-            // Solo agregamos la combinación si el nivel existe (para evitar undefined)
-            if (details) {
-                 combinaciones.push({
-                    id_area: Number(area.id_area),
-                    nombre_area: area.nombre_area,
-                    estado: area.estado,
-                    id_nivel: details.id,
-                    nombre_nivel: details.nombre,
-                    total_inscritos: count, 
-                });
-            }
+    areas.forEach((area) => {
+      const nivelesMap = new Map<number, number>(); // Map<id_nivel, count>
+      const nivelDetails = new Map<number, { id: number; nombre: string }>(); // detalles nivel
+
+      area.inscripciones.forEach((inscripcion) => {
+        if (!inscripcion.nivel) return;
+
+        const idNivel = Number(inscripcion.nivel.id_nivel);
+        const nombreNivel = inscripcion.nivel.nombre_nivel?.toUpperCase() ?? '';
+
+        // Filtrar sólo niveles permitidos (Primaria / Secundaria)
+        const esNivelPermitido = NIVELES_PERMITIDOS.some((niv) =>
+          nombreNivel.includes(niv),
+        );
+        if (!esNivelPermitido) return;
+
+        // 1. Contar inscritos por nivel
+        nivelesMap.set(idNivel, (nivelesMap.get(idNivel) || 0) + 1);
+
+        // 2. Guardar detalles del nivel
+        if (!nivelDetails.has(idNivel)) {
+          nivelDetails.set(idNivel, {
+            id: idNivel,
+            nombre: inscripcion.nivel.nombre_nivel,
+          });
+        }
+      });
+
+      // Generar una entrada por combinación (Área + Nivel permitido)
+      nivelesMap.forEach((count, id_nivel) => {
+        const details = nivelDetails.get(id_nivel);
+        if (!details) return;
+
+        combinaciones.push({
+          id_area: Number(area.id_area),
+          nombre_area: area.nombre_area,
+          estado: area.estado,
+          id_nivel: details.id,
+          nombre_nivel: details.nombre,
+          total_inscritos: count,
         });
-        
-        // Si el área no tiene inscripciones, se puede decidir si se muestra.
-        // Por simplicidad, si no hay inscripciones, no se genera una tarjeta.
+      });
     });
 
-    // Ordenar por Nombre de Área y luego por Nombre de Nivel
+    // Ordenar por área y luego por nivel
     combinaciones.sort((a, b) => {
       if (a.nombre_area < b.nombre_area) return -1;
       if (a.nombre_area > b.nombre_area) return 1;
       return a.nombre_nivel.localeCompare(b.nombre_nivel);
     });
 
-    console.log('💡 Datos devueltos por el servicio (combinaciones A/N):', combinaciones.length);
+    console.log(
+      '💡 Datos devueltos por el servicio (panel principal, combinaciones A/N):',
+      combinaciones.length,
+    );
     return combinaciones;
   }
-  
-  //Fabia y max
+
+  // Fabia y max
   findAllActive() {
     return this.prisma.areas.findMany({
       where: { activo: true },
