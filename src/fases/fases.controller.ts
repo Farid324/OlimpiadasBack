@@ -78,6 +78,7 @@ export class FasesController {
   }
 
   @Get('availability')
+  @Roles(RESPONSABLE, ADMIN)
   async availability(@Query('type') type: PhaseType) {
     if (type !== PhaseType.CLASIFICACION && type !== PhaseType.FINAL) {
       throw new BadRequestException('Tipo de fase inválido.');

@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PhaseType } from './dto/close-phase.dto';
-
+import { estado_validacion } from '@prisma/client';
 export type PhaseStatus = 'EN_PROCESO' | 'CERRADA' | 'VALIDADA';
 
 @Injectable()
@@ -219,7 +219,9 @@ export class FasesService {
     const count = await this.prisma.cierres_fase.count({
       where: {
         id_fase,
-        estado_validacion: 'VALIDADO',
+        estado_validacion: {
+          in: [estado_validacion.PENDIENTE, estado_validacion.VALIDADO],
+        },
       },
     });
 
