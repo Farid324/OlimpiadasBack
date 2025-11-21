@@ -171,6 +171,26 @@ export class FasesService {
       });
     }
 
+    if (type === PhaseType.CLASIFICACION) {
+      // EVALUANDO → CLASIFICANDO
+      await this.prisma.areas.updateMany({
+        where: {
+          id_area,
+          estado: 'EVALUANDO',
+        },
+        data: { estado: 'CLASIFICANDO' },
+      });
+    } else if (type === PhaseType.FINAL) {
+      // CLASIFICANDO → COMPLETADO
+      await this.prisma.areas.updateMany({
+        where: {
+          id_area,
+          estado: 'CLASIFICANDO',
+        },
+        data: { estado: 'COMPLETADO' },
+      });
+    }
+
     return {
       ok: true,
       message:
