@@ -23,6 +23,9 @@ CREATE TYPE "public"."fuente_lista" AS ENUM ('CLASIFICATORIA', 'FINAL');
 CREATE TYPE "public"."estado_area" AS ENUM ('EVALUANDO', 'CLASIFICANDO', 'COMPLETADO');
 
 -- CreateEnum
+CREATE TYPE "public"."tipo_area_config" AS ENUM ('INDIVIDUAL', 'GRUPAL');
+
+-- CreateEnum
 CREATE TYPE "public"."ciclo_nivel" AS ENUM ('PRIMARIA', 'SECUNDARIA');
 
 -- CreateEnum
@@ -77,6 +80,9 @@ CREATE TABLE "public"."areas" (
     "nombre_area" TEXT NOT NULL,
     "activo" BOOLEAN NOT NULL DEFAULT true,
     "estado" "public"."estado_area" NOT NULL DEFAULT 'EVALUANDO',
+    "nota_aprobacion" INTEGER DEFAULT 51,
+    "tipo" "public"."tipo_area_config" DEFAULT 'INDIVIDUAL',
+    "niveles_target" TEXT,
 
     CONSTRAINT "areas_pkey" PRIMARY KEY ("id_area")
 );

@@ -1,3 +1,4 @@
+// src/areas/dto/create-area.dto.ts
 import { IsString, IsInt, IsEnum, Min, Max, IsOptional } from 'class-validator';
 
 export class CreateAreaDto {

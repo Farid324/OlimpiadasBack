@@ -1,3 +1,4 @@
+// src/areas/services/areas.service.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAreaDto } from '../dto/create-area.dto';
@@ -85,9 +86,15 @@ export class AreasService {
       });
 
       return {
-        id_area: Number(area.id_area), // BigInt -> number
+        id_area: Number(area.id_area),
         nombre_area: area.nombre_area,
         estado: area.estado,
+        // ✅ AGREGA ESTOS CAMPOS QUE FALTABAN:
+        nota_aprobacion: area.nota_aprobacion,
+        tipo: area.tipo,
+        niveles_target: area.niveles_target,
+        activo: area.activo,
+
         niveles: Object.values(nivelesMap),
       };
     });
