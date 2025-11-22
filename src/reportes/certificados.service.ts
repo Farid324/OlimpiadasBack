@@ -183,15 +183,26 @@ export class CertificadosService {
     }
 
     // 2. premiados para excluirlos
-    const premiados = await this.prisma.premios_otorgados.findMany({
-      where: {
+    let premiadosIds: number[] = [];
+
+    if (f.id_area && f.id_nivel) {
+      // Para un área+nivel concreto, asegúrate de que los premios existen
+      const premios = await this.ensurePremiosGenerados({
+        id_area: f.id_area,
+        id_nivel: f.id_nivel,
         anio,
-        ...(f.id_area ? { id_area: f.id_area } : {}),
-        ...(f.id_nivel ? { id_nivel: f.id_nivel } : {}),
-      },
-      select: { id_inscripcion: true },
-    });
-    const premiadosSet = new Set(premiados.map((p) => p.id_inscripcion));
+      });
+      premiadosIds = premios.map((p) => p.id_inscripcion);
+    } else {
+      //usa lo que ya esté en premios_otorgados
+      const premios = await this.prisma.premios_otorgados.findMany({
+        where: { anio },
+        select: { id_inscripcion: true },
+      });
+      premiadosIds = premios.map((p) => p.id_inscripcion);
+    }
+
+    const premiadosSet = new Set(premiadosIds);
 
     const participantes = clasificados.filter(
       (c) => !premiadosSet.has(c.id_inscripcion),
@@ -199,7 +210,7 @@ export class CertificadosService {
 
     if (!participantes.length) {
       throw new BadRequestException(
-        'Todos los clasificados de este filtro tienen premio.',
+        'No hay clasificados sin premio para exportar certificados de participación.',
       );
     }
 
