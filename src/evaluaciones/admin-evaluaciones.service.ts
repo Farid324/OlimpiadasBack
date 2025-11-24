@@ -23,7 +23,6 @@ export class AdminEvaluacionesService {
     if (areaId) whereInscripciones.id_area = Number(areaId);
     if (nivelId) whereInscripciones.id_nivel = Number(nivelId);
 
-    // búsqueda en campos del competidor
     if (search) {
       whereInscripciones.OR = [
         { competidor: { nombres: { contains: search, mode: 'insensitive' } } },
@@ -49,7 +48,6 @@ export class AdminEvaluacionesService {
         },
         area: { select: { id_area: true, nombre_area: true } },
         nivel: { select: { id_nivel: true, nombre_nivel: true } },
-        // traer evaluación más relevante (ejemplo: fase 1, la más reciente)
         evaluaciones: {
           where: { id_fase: 1 },
           orderBy: { fecha_registro: 'desc' },
@@ -72,7 +70,6 @@ export class AdminEvaluacionesService {
       take: limit,
     });
 
-    // transformar a forma amigable para frontend
     return items.map((i) => ({
       id_inscripcion: i.id_inscripcion,
       competidor: i.competidor,
@@ -222,7 +219,6 @@ export class AdminEvaluacionesService {
         },
         area: { select: { id_area: true, nombre_area: true } },
         nivel: { select: { id_nivel: true, nombre_nivel: true } },
-        // ✅ Solo incluir evaluaciones de fase 2 (Final)
         evaluaciones: {
           where: { id_fase: 2 },
           orderBy: { fecha_registro: 'desc' },
@@ -272,7 +268,7 @@ export class AdminEvaluacionesService {
   }
 
   async estadisticasFinales(areaId?: number, nivelId?: number) {
-    // 🔹 Filtro base: inscripciones clasificadas y con evaluación firmada en fase 1
+    // Filtro base: inscripciones clasificadas y con evaluación firmada en fase 1
     const baseWhere: Prisma.inscripcionesWhereInput = {
       clasificacion: 'CLASIFICADO',
       evaluaciones: {
@@ -286,12 +282,12 @@ export class AdminEvaluacionesService {
     if (areaId) baseWhere.id_area = areaId;
     if (nivelId) baseWhere.id_nivel = nivelId;
 
-    // 🔸 Total de inscripciones válidas (clasificados con eval fase 1 firmada)
+    // Total de inscripciones válidas (clasificados con eval fase 1 firmada)
     const total = await this.prisma.inscripciones.count({
       where: baseWhere,
     });
 
-    // 🔸 Evaluaciones completadas (fase 2 firmadas)
+    // Evaluaciones completadas (fase 2 firmadas)
     const completadas = await this.prisma.evaluaciones.count({
       where: {
         id_fase: 2,
@@ -302,7 +298,7 @@ export class AdminEvaluacionesService {
       },
     });
 
-    // 🔸 En proceso (fase 2 en borrador)
+    // En proceso (fase 2 en borrador)
     const enProceso = await this.prisma.evaluaciones.count({
       where: {
         id_fase: 2,
@@ -313,7 +309,7 @@ export class AdminEvaluacionesService {
       },
     });
 
-    // 🔸 Cuántas inscripciones ya tienen al menos una evaluación de fase 2 (en cualquier estado)
+    // Cuántas inscripciones ya tienen al menos una evaluación de fase 2 (en cualquier estado)
     const evaluadasFase2 = await this.prisma.evaluaciones.aggregate({
       _count: { id_inscripcion: true },
       where: {
@@ -326,7 +322,7 @@ export class AdminEvaluacionesService {
 
     const evaluadasCount = Number(evaluadasFase2._count.id_inscripcion || 0);
 
-    // 🔸 Pendientes = inscripciones válidas - las que ya tienen alguna evaluación en fase 2
+    // Pendientes = inscripciones válidas - las que ya tienen alguna evaluación en fase 2
     const pendientes = Math.max(0, total - evaluadasCount);
 
     return { total, completadas, enProceso, pendientes };
@@ -348,7 +344,6 @@ export class AdminEvaluacionesService {
       },
     });
 
-    // ⚠️ Validar existencia y fase
     if (!ev) {
       throw new NotFoundException('Evaluación no encontrada');
     }

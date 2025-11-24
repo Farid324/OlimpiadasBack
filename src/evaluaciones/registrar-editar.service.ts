@@ -165,17 +165,4 @@ export class EvaluacionesService {
 
     return actualizada;
   }
-
-  // Obtener logs (ya lo tenías; lo mantengo)
-  async obtenerLogsCambios(idEvaluacion: number) {
-    return this.prisma.log_cambios_nota.findMany({
-      where: { id_evaluacion: idEvaluacion },
-      include: {
-        usuario: {
-          select: { id_usuario: true, nombre: true, apellido: true, rol: true },
-        },
-      },
-      orderBy: { ts: 'desc' },
-    });
-  }
 }
