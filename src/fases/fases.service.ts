@@ -78,19 +78,33 @@ export class FasesService {
       return sinPuntaje > 0;
     }
 
-    // FINAL
+    //solo finalistas y solo evaluaciones de la fase FINAL
+    const id_fase_final = await this.getFaseId(PhaseType.FINAL);
+
     const inscIds = await this.prisma.inscripciones.findMany({
-      where: { id_area, id_nivel },
+      where: {
+        id_area,
+        id_nivel,
+        clasificacion: 'CLASIFICADO',
+        // opcional si quieres amarrarlo también al umbral
+        // puntaje_clasificacion: 60
+      },
       select: { id_inscripcion: true },
     });
-    if (inscIds.length === 0) return true;
+
+    if (inscIds.length === 0) {
+      // No hay nadie clasificado en este área/nivel entonces nada que evaluar en FINAL
+      return false;
+    }
 
     const ids = inscIds.map((i) => i.id_inscripcion);
+
     const abiertas = await this.prisma.evaluaciones
       .count({
         where: {
           id_inscripcion: { in: ids },
-          estado_registro: { not: 'FIRMADA' },
+          id_fase: id_fase_final,
+          estado_registro: { not: 'BORRADOR' },
         },
       })
       .catch(() => 0);
