@@ -128,6 +128,25 @@ export class ControlFasesRespService {
       return emptyResponse;
     }
 
+    // Para fase FINAL, queremos saber si existe al menos un puntaje_final por cada área nivel donde haya clasificados.
+    let finalScoresByKey = new Map<string, number>();
+
+    if (isFinal) {
+      const finales = await this.prisma.inscripciones.groupBy({
+        by: ['id_area', 'id_nivel'],
+        where: {
+          id_area: { in: areaIds },
+          clasificacion: 'CLASIFICADO',
+          puntaje_final: { not: null },
+        },
+        _count: { _all: true },
+      });
+
+      finalScoresByKey = new Map(
+        finales.map((f) => [`${f.id_area}:${f.id_nivel}`, f._count._all]),
+      );
+    }
+
     // 3) Catálogos
     const nivelIds = Array.from(new Set(grouped.map((g) => g.id_nivel)));
 
@@ -267,6 +286,11 @@ export class ControlFasesRespService {
         const pend = pendMap.get(key) ?? 0;
         const sinPendientes = pend === 0;
 
+        const tienePuntajeFinal =
+          isFinal && finalScoresByKey.size > 0
+            ? (finalScoresByKey.get(key) ?? 0) > 0
+            : !isFinal;
+
         // Fase actual en función del tipo (igual que admin)
         let faseActual: 'Clasificación' | 'Evaluación Final' | 'Completado';
 
@@ -286,10 +310,18 @@ export class ControlFasesRespService {
         let estadoUI: 'En progreso' | 'Completado' | 'Listo para aprobar';
         if (statusFase === 'CERRADA' || statusFase === 'VALIDADA') {
           estadoUI = 'Completado';
-        } else if (clasificados > 0 && sinPendientes) {
-          estadoUI = 'Listo para aprobar';
+        } else if (isFinal) {
+          if (clasificados > 0 && tienePuntajeFinal) {
+            estadoUI = 'Listo para aprobar';
+          } else {
+            estadoUI = 'En progreso';
+          }
         } else {
-          estadoUI = 'En progreso';
+          if (clasificados > 0 && sinPendientes) {
+            estadoUI = 'Listo para aprobar';
+          } else {
+            estadoUI = 'En progreso';
+          }
         }
 
         // Botón / acción (igual que admin)
