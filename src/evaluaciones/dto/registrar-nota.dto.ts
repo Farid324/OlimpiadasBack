@@ -13,6 +13,7 @@ export class RegistrarNotaDto {
 
   @IsOptional()
   @IsString()
+  descripConceptual?: string | null;
   comentario?: string | null;
 }
 
@@ -32,5 +33,6 @@ export class EditarNotaDto {
 
   @IsOptional()
   @IsString()
+  descripConceptual?: string | null;
   comentario?: string | null;
 }

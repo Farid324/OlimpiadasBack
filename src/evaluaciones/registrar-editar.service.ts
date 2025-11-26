@@ -8,6 +8,7 @@ type RegistrarNotaDto = {
   idInscripcion: number;
   idEvaluador: number;
   nota: number;
+  descripConceptual?: string | null;
   comentario?: string | null;
   idFase: 1 | 2;
 };
@@ -17,6 +18,7 @@ type EditarNotaDto = {
   idUsuario: number;
   idEvaluador?: number;
   nuevaNota: number;
+  descripConceptual?: string | null;
   comentario?: string | null;
   idFase: 1 | 2;
 };
@@ -59,7 +61,14 @@ export class EvaluacionesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async registrarNota(dto: RegistrarNotaDto) {
-    const { idInscripcion, idEvaluador, nota, comentario, idFase } = dto;
+    const {
+      idInscripcion,
+      idEvaluador,
+      nota,
+      descripConceptual,
+      comentario,
+      idFase,
+    } = dto;
 
     const inscripcion = await this.prisma.inscripciones.findUnique({
       where: { id_inscripcion: idInscripcion },
@@ -84,6 +93,7 @@ export class EvaluacionesService {
           nota: notaDecimal,
           fecha_registro: new Date(),
           estado_registro: 'BORRADOR',
+          descripConceptual: descripConceptual ?? null,
           comentario: comentario ?? null,
         },
       });
@@ -117,7 +127,14 @@ export class EvaluacionesService {
   }
 
   async editarNota(dto: EditarNotaDto) {
-    const { idEvaluacion, idUsuario, idEvaluador, nuevaNota, comentario } = dto;
+    const {
+      idEvaluacion,
+      idUsuario,
+      idEvaluador,
+      nuevaNota,
+      descripConceptual,
+      comentario,
+    } = dto;
 
     const evaluacion = await this.prisma.evaluaciones.findUnique({
       where: { id_evaluacion: idEvaluacion },
@@ -152,6 +169,7 @@ export class EvaluacionesService {
           id_evaluador: idEvaluador ?? evaluacion.id_evaluador,
           nota: nuevaNotaDecimal,
           fecha_registro: new Date(),
+          descripConceptual: descripConceptual ?? evaluacion.descripConceptual,
           comentario: comentario ?? evaluacion.comentario,
         },
       });
