@@ -1,3 +1,4 @@
+//src/olimpistas/olimpistas.service.ts
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegistroOlimpistaDto } from './dto/registro-olimpista.dto';
@@ -41,16 +42,16 @@ export class OlimpistasService {
       s === 'primaria'
         ? 'Primaria'
         : s === 'secundaria'
-        ? 'Secundaria'
-        : s === 'primaria '
-        ? 'Primaria'
-        : s === ' secundaria'
-        ? 'Secundaria'
-        : s === 'primaria.'
-        ? 'Primaria'
-        : s === 'secundaria.'
-        ? 'Secundaria'
-        : null;
+          ? 'Secundaria'
+          : s === 'primaria '
+            ? 'Primaria'
+            : s === ' secundaria'
+              ? 'Secundaria'
+              : s === 'primaria.'
+                ? 'Primaria'
+                : s === 'secundaria.'
+                  ? 'Secundaria'
+                  : null;
 
     if (canon) {
       const nivel = await this.prisma.niveles.findFirst({
@@ -74,20 +75,124 @@ export class OlimpistasService {
       select: { id_nivel: true, nombre_nivel: true },
       orderBy: { id_nivel: 'asc' },
     });
-    const disponibles = all.map((n) => `${n.id_nivel}:${n.nombre_nivel}`).join(', ');
+    const disponibles = all
+      .map((n) => `${n.id_nivel}:${n.nombre_nivel}`)
+      .join(', ');
 
     throw new BadRequestException(
       `Nivel no encontrado: "${raw}". Niveles disponibles en BD: [${disponibles}]`,
     );
   }
 
-  // Áreas asignadas a un responsable
   private async getAreaNamesOfUser(userId: number): Promise<string[]> {
     const rows = await this.prisma.responsables_area.findMany({
       where: { id_usuario: userId, activo: true },
       include: { area: { select: { nombre_area: true } } },
     });
     return rows.map((r) => r.area.nombre_area);
+  }
+
+  private parseNivelFromColumn(rawNivel: string | undefined): {
+    nivel: 'Primaria' | 'Secundaria';
+    grado: number;
+  } {
+    if (!rawNivel) {
+      throw new BadRequestException(
+        'El campo "nivel" es obligatorio en el CSV.',
+      );
+    }
+
+    const original = rawNivel;
+    const compact = rawNivel.replace(/\s+/g, '').toLowerCase();
+    const s = rawNivel.trim().toLowerCase();
+
+    let m = /^(\d{1,2})(?:º)?([ps])$/.exec(compact);
+    if (m) {
+      const grado = Number(m[1]);
+      if (grado < 1 || grado > 6) {
+        throw new BadRequestException(
+          `Grado inválido en nivel="${original}". Debe estar entre 1 y 6.`,
+        );
+      }
+      const nivel =
+        m[2].toLowerCase() === 'p'
+          ? ('Primaria' as const)
+          : ('Secundaria' as const);
+      return { nivel, grado };
+    }
+
+    m =
+      /^(\d{1,2})\s*(?:º|ro|do|to)?\s*(?:de\s+)?(primaria|secundaria|p|s)/i.exec(
+        s,
+      );
+    if (m) {
+      const grado = Number(m[1]);
+      if (grado < 1 || grado > 6) {
+        throw new BadRequestException(
+          `Grado inválido en nivel="${original}". Debe estar entre 1 y 6.`,
+        );
+      }
+
+      const tag = m[2].toLowerCase();
+      const nivel =
+        tag === 'primaria' || tag === 'p'
+          ? ('Primaria' as const)
+          : ('Secundaria' as const);
+
+      return { nivel, grado };
+    }
+
+    if (s === 'primaria' || s === 'primaria.') {
+      throw new BadRequestException(
+        `El nivel "${original}" no especifica grado. Use por ejemplo "1ro Primaria".`,
+      );
+    }
+    if (s === 'secundaria' || s === 'secundaria.') {
+      throw new BadRequestException(
+        `El nivel "${original}" no especifica grado. Use por ejemplo "1ro Secundaria".`,
+      );
+    }
+
+    throw new BadRequestException(
+      `Formato de nivel inválido: "${original}". Use formatos como "1ºP" o "1ro Primaria".`,
+    );
+  }
+
+  private deriveEscolaridad(dto: RegistroOlimpistaDto): {
+    nivel: 'Primaria' | 'Secundaria';
+    grado?: number;
+  } {
+    // 1) Caso registro manual: ya vienen grado/gradoEscolar
+    if (
+      (dto.gradoEscolar && dto.gradoEscolar.trim().length > 0) ||
+      typeof dto.grado === 'number'
+    ) {
+      const escolar = resolveNivelYGrado({
+        nivelCompetidor:
+          dto.nivelCompetidor ??
+          (dto.nivel as 'Primaria' | 'Secundaria' | undefined),
+        grado: dto.grado,
+        gradoEscolar: dto.gradoEscolar,
+      });
+
+      if (!escolar.nivel) {
+        throw new BadRequestException(
+          `Nivel no encontrado: "${dto.nivel ?? dto.gradoEscolar ?? ''}"`,
+        );
+      }
+
+      const nivelCanon =
+        escolar.nivel === 'Primaria'
+          ? ('Primaria' as const)
+          : ('Secundaria' as const);
+      const gradoCanon = escolar.grado;
+
+      return { nivel: nivelCanon, grado: gradoCanon };
+    }
+
+    // 2) Caso CSV: solo viene dto.nivel
+    const parsed = this.parseNivelFromColumn(dto.nivel);
+    return parsed;
   }
 
   async existsByCi(ci: string): Promise<boolean> {
@@ -102,28 +207,11 @@ export class OlimpistasService {
   async registerOne(dto: RegistroOlimpistaDto, userId?: number) {
     const idArea = await this.getAreaIdByName(dto.area);
 
-    const escolar = resolveNivelYGrado({
-      nivelCompetidor: dto.nivel as any,
-      grado: dto.grado as any,
-      gradoEscolar: dto.gradoEscolar,
-    });
+    // Unifica lógica para manual + CSV
+    const escolar = this.deriveEscolaridad(dto);
+    const nivelCanon = escolar.nivel;
+    const gradoCanon = escolar.grado;
 
-    let nivelCanon = escolar.nivel as 'Primaria' | 'Secundaria' | undefined;
-    let gradoCanon: number | undefined = escolar.grado ?? dto.grado;
-
-    if (!nivelCanon && typeof dto.nivel === 'string') {
-      const m = /(\d+)\s*º\s*([pPsS])/.exec(dto.nivel.trim());
-      if (m) {
-        gradoCanon = Number(m[1]);
-        nivelCanon = m[2].toLowerCase() === 'p' ? 'Primaria' : 'Secundaria';
-      }
-    }
-
-    if (!nivelCanon) {
-      throw new BadRequestException(
-        `Nivel no encontrado: "${dto.nivel ?? dto.gradoEscolar ?? ''}"`,
-      );
-    }
     const idNivel = await this.getNivelIdByName(nivelCanon);
 
     const { nombres, apellidos } = splitNombreCompleto(dto.nombreCompleto);
@@ -156,12 +244,11 @@ export class OlimpistasService {
         tutorContacto: dto.tutorContacto,
         id_tutor: tutor.id_tutor,
         activo: true,
-        nivel: escolar.nivel
-          ? escolar.nivel === 'Primaria'
-            ? 'PRIMARIA'
-            : 'SECUNDARIA'
-          : undefined,
-        grado: escolar.grado ?? undefined,
+        nivel:
+          nivelCanon === 'Primaria'
+            ? ('PRIMARIA' as const)
+            : ('SECUNDARIA' as const),
+        grado: gradoCanon ?? undefined,
       },
     });
 
@@ -240,7 +327,6 @@ export class OlimpistasService {
       'tutorContacto',
       'unidadEducativa',
       'departamento',
-      'gradoEscolar',
       'area',
       'nivel',
     ];
@@ -263,12 +349,20 @@ export class OlimpistasService {
       };
       for (let i = 0; i < rows.length; i++) {
         try {
-          await this.getAreaIdByName(rows[i].area);
-          await this.getNivelIdByName(rows[i].nivel);
-          splitNombreCompleto(rows[i].nombreCompleto);
-          if (await this.existsByCi(rows[i].ci)) {
+          const dto = rows[i] as RegistroOlimpistaDto;
+
+          await this.getAreaIdByName(dto.area);
+
+          const escolar = this.deriveEscolaridad(dto);
+
+          await this.getNivelIdByName(escolar.nivel);
+
+          splitNombreCompleto(dto.nombreCompleto);
+
+          if (await this.existsByCi(dto.ci)) {
             throw new BadRequestException('El CI ya está registrado');
           }
+
           summary.ok++;
         } catch (e: unknown) {
           const ci = rows[i]?.ci ?? 's/n';
@@ -302,84 +396,90 @@ export class OlimpistasService {
    * - si limitToUserAreasOf llega con userId => restringe a sus áreas
    */
   // ✅ Sin restricciones por área para ningún rol
-async listOlimpistas(params: ListParams) {
-  const { area, q } = params ?? {};
+  async listOlimpistas(params: ListParams) {
+    const { area, q } = params ?? {};
 
-  const where: Record<string, unknown> = {
-    ...(area
-      ? { area: { nombre_area: { equals: area, mode: 'insensitive' } } }
-      : {}),
-    ...(q
-      ? {
-          OR: [
-            { competidor: { nombres: { contains: q, mode: 'insensitive' } } },
-            { competidor: { apellidos: { contains: q, mode: 'insensitive' } } },
-            { competidor: { escuela: { contains: q, mode: 'insensitive' } } },
-            { competidor: { departamento: { contains: q, mode: 'insensitive' } } },
-            { competidor: { ci: { contains: q, mode: 'insensitive' } } },
-            { area: { nombre_area: { contains: q, mode: 'insensitive' } } },
-          ],
-        }
-      : {}),
-  };
-
-  const insc = await this.prisma.inscripciones.findMany({
-    where,
-    include: {
-      competidor: true,
-      area: true,
-      nivel: true,
-      evaluaciones: { select: { nota: true } },
-    },
-    orderBy: { id_inscripcion: 'desc' },
-  });
-
-  return insc.map((it) => {
-    const manual =
-      it.puntaje_clasificacion !== null && it.puntaje_clasificacion !== undefined
-        ? Number(it.puntaje_clasificacion)
-        : null;
-
-    const avg =
-      !manual && it.evaluaciones.length
-        ? it.evaluaciones.reduce((s, e) => s + Number(e.nota), 0) /
-          it.evaluaciones.length
-        : null;
-
-    const puntuacion = manual ?? avg ?? null;
-
-    return {
-      id: it.id_inscripcion,
-      nombreCompleto: `${it.competidor.nombres} ${it.competidor.apellidos}`.trim(),
-      area: it.area.nombre_area,
-      nivel: it.nivel.nombre_nivel,
-      puntuacion,
-      unidadEducativa: it.competidor.escuela ?? '',
-      departamento: it.competidor.departamento ?? '',
+    const where: Record<string, unknown> = {
+      ...(area
+        ? { area: { nombre_area: { equals: area, mode: 'insensitive' } } }
+        : {}),
+      ...(q
+        ? {
+            OR: [
+              { competidor: { nombres: { contains: q, mode: 'insensitive' } } },
+              {
+                competidor: { apellidos: { contains: q, mode: 'insensitive' } },
+              },
+              { competidor: { escuela: { contains: q, mode: 'insensitive' } } },
+              {
+                competidor: {
+                  departamento: { contains: q, mode: 'insensitive' },
+                },
+              },
+              { competidor: { ci: { contains: q, mode: 'insensitive' } } },
+              { area: { nombre_area: { contains: q, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
     };
-  });
-}
 
+    const insc = await this.prisma.inscripciones.findMany({
+      where,
+      include: {
+        competidor: true,
+        area: true,
+        nivel: true,
+        evaluaciones: { select: { nota: true } },
+      },
+      orderBy: { id_inscripcion: 'desc' },
+    });
+
+    return insc.map((it) => {
+      const manual =
+        it.puntaje_clasificacion !== null &&
+        it.puntaje_clasificacion !== undefined
+          ? Number(it.puntaje_clasificacion)
+          : null;
+
+      const avg =
+        !manual && it.evaluaciones.length
+          ? it.evaluaciones.reduce((s, e) => s + Number(e.nota), 0) /
+            it.evaluaciones.length
+          : null;
+
+      const puntuacion = manual ?? avg ?? null;
+
+      return {
+        id: it.id_inscripcion,
+        nombreCompleto:
+          `${it.competidor.nombres} ${it.competidor.apellidos}`.trim(),
+        area: it.area.nombre_area,
+        nivel: it.nivel.nombre_nivel,
+        puntuacion,
+        unidadEducativa: it.competidor.escuela ?? '',
+        departamento: it.competidor.departamento ?? '',
+      };
+    });
+  }
 
   /**
    * GET /olimpistas/areas-counters
    * - si llega userId => restringe a sus áreas
    */
   // ✅ Contadores sin restricciones por área
-async getAreasCounters(_limitToUserAreasOf: number | null = null) {
-  const data = await this.prisma.areas.findMany({
-    where: { activo: true },
-    select: {
-      nombre_area: true,
-      _count: { select: { inscripciones: true } },
-    },
-    orderBy: { nombre_area: 'asc' },
-  });
+  async getAreasCounters(_limitToUserAreasOf: number | null = null) {
+    const data = await this.prisma.areas.findMany({
+      where: { activo: true },
+      select: {
+        nombre_area: true,
+        _count: { select: { inscripciones: true } },
+      },
+      orderBy: { nombre_area: 'asc' },
+    });
 
-  return data.map((a) => ({
-    nombre_area: a.nombre_area,
-    total: a._count.inscripciones,
-  }));
-}
-
+    return data.map((a) => ({
+      nombre_area: a.nombre_area,
+      total: a._count.inscripciones,
+    }));
+  }
 }

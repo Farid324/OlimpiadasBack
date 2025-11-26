@@ -2,9 +2,22 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as ExcelJS from 'exceljs';
+import { PremiadosService } from './premiados.service';
 
 type TipoPremio = 'ORO' | 'PLATA' | 'BRONCE' | 'MENCION';
 type ExportFiltros = { id_area?: number; id_nivel?: number; anio?: number };
+type PremiadoRowLite = {
+  id_inscripcion: number;
+  posicion: number | null;
+  nombreCompleto: string;
+  premio: string;
+  estadoPremio: 'ORO' | 'PLATA' | 'BRONCE' | 'MENCION';
+  area: string;
+  nivel: string;
+  puntuacion: number;
+  unidadEducativa: string;
+  departamento: string;
+};
 
 const TIPO_ORDER: Record<TipoPremio, number> = {
   ORO: 1,
@@ -15,7 +28,10 @@ const TIPO_ORDER: Record<TipoPremio, number> = {
 
 @Injectable()
 export class CertificadosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly premiadosService: PremiadosService,
+  ) {}
 
   /* ======================================================
      1) PREMIADOS → EXCEL
@@ -23,19 +39,22 @@ export class CertificadosService {
   async exportarExcelPremiados(f: ExportFiltros): Promise<Buffer> {
     const anio = f.anio ?? new Date().getFullYear();
 
-    // asegurar que existan premios
-    const premios = await this.ensurePremiosGenerados({
+    // 1) Obtener la misma lista que ve el usuario en el tab de "Premiados"
+    const lista = (await this.premiadosService.list({
       id_area: f.id_area,
       id_nivel: f.id_nivel,
-      anio,
-    });
+      // sin filtro de estado: traemos todos los premiados (oro, plata, bronce, mención)
+      estado: undefined,
+      actorId: undefined,
+    })) as PremiadoRowLite[];
 
-    if (!premios.length) {
+    if (!lista.length) {
       throw new BadRequestException('No hay premiados para exportar.');
     }
 
-    // traer inscripciones + competidor + área + nivel
-    const inscIds = premios.map((p) => p.id_inscripcion);
+    // 2) Obtener CI y otros datos adicionales desde inscripciones/competidor
+    const inscIds = lista.map((p) => p.id_inscripcion);
+
     const inscripciones = await this.prisma.inscripciones.findMany({
       where: { id_inscripcion: { in: inscIds } },
       include: {
@@ -45,28 +64,32 @@ export class CertificadosService {
       },
     });
 
-    // armar filas
-    const rows = premios
+    // índice para buscar rápido
+    const inscMap = new Map<number, (typeof inscripciones)[number]>();
+    for (const insc of inscripciones) {
+      inscMap.set(insc.id_inscripcion, insc);
+    }
+
+    // 3) Armar filas combinando la info de la lista + CI + año
+    const rows = lista
       .map((p) => {
-        const insc = inscripciones.find(
-          (i) => i.id_inscripcion === p.id_inscripcion,
-        );
+        const insc = inscMap.get(p.id_inscripcion);
         if (!insc) return null;
+
         return {
-          id_inscripcion: insc.id_inscripcion,
-          nombreCompleto:
-            `${insc.competidor.nombres} ${insc.competidor.apellidos}`.trim(),
+          id_inscripcion: p.id_inscripcion,
+          nombreCompleto: p.nombreCompleto,
           ci: insc.competidor.ci ?? '',
-          area: insc.area.nombre_area,
-          nivel: insc.nivel.nombre_nivel,
-          tipoPremio: p.tipo as TipoPremio,
-          unidadEducativa: insc.competidor.escuela ?? '',
-          departamento: insc.competidor.departamento ?? '',
-          anio: p.anio,
+          area: p.area,
+          nivel: p.nivel,
+          tipoPremio: p.estadoPremio as TipoPremio,
+          unidadEducativa: p.unidadEducativa || insc.competidor.escuela || '',
+          departamento: p.departamento || insc.competidor.departamento || '',
+          anio,
         };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
-      // orden: tipo de premio → nivel → nombre
+      // orden: tipo de premio → área → nivel → nombre
       .sort((a, b) => {
         const t1 = TIPO_ORDER[a.tipoPremio];
         const t2 = TIPO_ORDER[b.tipoPremio];
@@ -76,7 +99,11 @@ export class CertificadosService {
         return a.nombreCompleto.localeCompare(b.nombreCompleto, 'es');
       });
 
-    // generar excel
+    if (!rows.length) {
+      throw new BadRequestException('No hay premiados para exportar.');
+    }
+
+    // 4) Generar el Excel (misma estructura que ya tenías)
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Premiados');
 
@@ -183,15 +210,26 @@ export class CertificadosService {
     }
 
     // 2. premiados para excluirlos
-    const premiados = await this.prisma.premios_otorgados.findMany({
-      where: {
+    let premiadosIds: number[] = [];
+
+    if (f.id_area && f.id_nivel) {
+      // Para un área+nivel concreto, asegúrate de que los premios existen
+      const premios = await this.ensurePremiosGenerados({
+        id_area: f.id_area,
+        id_nivel: f.id_nivel,
         anio,
-        ...(f.id_area ? { id_area: f.id_area } : {}),
-        ...(f.id_nivel ? { id_nivel: f.id_nivel } : {}),
-      },
-      select: { id_inscripcion: true },
-    });
-    const premiadosSet = new Set(premiados.map((p) => p.id_inscripcion));
+      });
+      premiadosIds = premios.map((p) => p.id_inscripcion);
+    } else {
+      //usa lo que ya esté en premios_otorgados
+      const premios = await this.prisma.premios_otorgados.findMany({
+        where: { anio },
+        select: { id_inscripcion: true },
+      });
+      premiadosIds = premios.map((p) => p.id_inscripcion);
+    }
+
+    const premiadosSet = new Set(premiadosIds);
 
     const participantes = clasificados.filter(
       (c) => !premiadosSet.has(c.id_inscripcion),
@@ -199,7 +237,7 @@ export class CertificadosService {
 
     if (!participantes.length) {
       throw new BadRequestException(
-        'Todos los clasificados de este filtro tienen premio.',
+        'No hay clasificados sin premio para exportar certificados de participación.',
       );
     }
 
