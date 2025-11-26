@@ -15,13 +15,13 @@ import { PhaseType } from '../fases/dto/close-phase.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { ADMIN } from '../auth/constants';
+import { ADMIN, RESPONSABLE } from '../auth/constants';
 import * as ExcelJS from 'exceljs';
 
 type EstadoMedalla = 'ORO' | 'PLATA' | 'BRONCE' | 'MENCION' | 'TODOS';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(ADMIN)
+@Roles(ADMIN, RESPONSABLE)
 @Controller('reportes/premiados')
 export class PremiadosController {
   constructor(
