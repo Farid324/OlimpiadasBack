@@ -221,7 +221,7 @@ export class EvaluacionesAdminService {
         where: {
           id_area: { in: areaIds },
           evaluaciones: {
-            none: { id_evaluador: idEvaluador, id_fase: 1 },
+            none: { id_fase: 1 },
           },
         },
       });
@@ -230,7 +230,7 @@ export class EvaluacionesAdminService {
         where: {
           id_area: { in: areaIds },
           evaluaciones: {
-            some: { id_evaluador: idEvaluador, id_fase: 1 },
+            some: { id_fase: 1 },
           },
         },
       });
@@ -265,7 +265,6 @@ export class EvaluacionesAdminService {
             },
             none: {
               id_fase: 2,
-              id_evaluador: idEvaluador,
             },
           },
         },
@@ -277,7 +276,6 @@ export class EvaluacionesAdminService {
           evaluaciones: {
             some: {
               id_fase: 2,
-              id_evaluador: idEvaluador,
             },
           },
         },
