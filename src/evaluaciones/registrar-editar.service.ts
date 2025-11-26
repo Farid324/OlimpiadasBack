@@ -2,8 +2,6 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma, clasificacion_estado } from '@prisma/client';
 
-// Asumo que estás en un servicio NestJS con this.prisma disponible.
-// Ajusta nombres e imports según tu archivo real.
 type clasificacion_estadoType = clasificacion_estado | null;
 
 type RegistrarNotaDto = {
@@ -11,52 +9,74 @@ type RegistrarNotaDto = {
   idEvaluador: number;
   nota: number;
   comentario?: string | null;
+  idFase: 1 | 2;
 };
 
 type EditarNotaDto = {
   idEvaluacion: number;
-  idUsuario: number; // quien realiza la edición (para el log)
-  idEvaluador?: number; // opcional, si se puede cambiar el evaluador
+  idUsuario: number;
+  idEvaluador?: number;
   nuevaNota: number;
   comentario?: string | null;
+  idFase: 1 | 2;
 };
 
-function calcularClasificacion(
+async function getArea(
+  id_area: number,
+  prisma: PrismaService | Prisma.TransactionClient,
+): Promise<{
+  nota_aprobacion: number | null;
+  tipo: string | null;
+  niveles_target: string | null;
+} | null> {
+  return prisma.areas.findUnique({
+    where: { id_area },
+    select: {
+      nota_aprobacion: true,
+      tipo: true,
+      niveles_target: true,
+    },
+  });
+}
+
+function calcularClasificacionPorArea(
   nota: number | null | undefined,
+  notaAprobacion: number | null | undefined,
 ): clasificacion_estadoType {
   if (nota === null || nota === undefined) return null;
   if (nota === -1) return 'DESCALIFICADO';
-  // Nota > 60 -> CLASIFICADO
-  // Nota >= 0 and <= 60 -> NO_CLASIFICADO
-  if (nota > 60) return 'CLASIFICADO';
+
+  const minimo = notaAprobacion ?? 60;
+
+  if (nota >= minimo) return 'CLASIFICADO';
   if (nota >= 0) return 'NO_CLASIFICADO';
+
   return null;
 }
+
 @Injectable()
 export class EvaluacionesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // 📝 Registrar una nueva nota (transacción)
-  async registrarNota(dto: RegistrarNotaDto & { idFase: 1 | 2 }) {
+  async registrarNota(dto: RegistrarNotaDto) {
     const { idInscripcion, idEvaluador, nota, comentario, idFase } = dto;
 
-    // Recuperar la inscripción (valida existencia y permite usar area/nivel si es necesario)
     const inscripcion = await this.prisma.inscripciones.findUnique({
       where: { id_inscripcion: idInscripcion },
     });
-    if (!inscripcion) {
-      throw new NotFoundException('Inscripción no encontrada');
-    }
+    if (!inscripcion) throw new NotFoundException('Inscripción no encontrada');
 
-    const clasificacion = calcularClasificacion(nota);
+    // ✔ obtener área real de la inscripción
+    const area = await getArea(inscripcion.id_area, this.prisma);
+    const notaAprobacion = area?.nota_aprobacion ?? 60;
+
+    const clasificacion = calcularClasificacionPorArea(nota, notaAprobacion);
     const notaDecimal = new Prisma.Decimal(nota);
     const puntajeField =
       idFase === 1 ? 'puntaje_clasificacion' : 'puntaje_final';
 
-    // Hacemos todo en una única transacción atómica correctamente:
-    const result = await this.prisma.$transaction(async (prisma) => {
-      // 1) crear evaluacion
-      const nuevaEval = await prisma.evaluaciones.create({
+    const result = await this.prisma.$transaction(async (tx) => {
+      const nuevaEval = await tx.evaluaciones.create({
         data: {
           id_inscripcion: idInscripcion,
           id_fase: idFase,
@@ -68,30 +88,24 @@ export class EvaluacionesService {
         },
       });
 
-      // 2) crear log de cambios
-      await prisma.log_cambios_nota.create({
+      await tx.log_cambios_nota.create({
         data: {
           id_evaluacion: nuevaEval.id_evaluacion,
-          id_usuario: idEvaluador, // el usuario que registra (evaluador)
+          id_usuario: idEvaluador,
           accion: 'REGISTRO',
           valor_anterior: null,
           valor_nuevo: notaDecimal,
-          // ts por default
         },
       });
-
-      // 3) actualizar inscripcion: puntaje_clasificacion y clasificacion
 
       const updateData: Prisma.inscripcionesUpdateInput = {
         [puntajeField]: notaDecimal,
         updated_at: new Date(),
       };
 
-      if (idFase === 1) {
-        updateData.clasificacion = clasificacion;
-      }
+      if (idFase === 1) updateData.clasificacion = clasificacion;
 
-      await prisma.inscripciones.update({
+      await tx.inscripciones.update({
         where: { id_inscripcion: idInscripcion },
         data: updateData,
       });
@@ -102,8 +116,7 @@ export class EvaluacionesService {
     return result;
   }
 
-  // ✏️ Editar una nota (transacción, agrega log)
-  async editarNota(dto: EditarNotaDto & { idFase: 1 | 2 }) {
+  async editarNota(dto: EditarNotaDto) {
     const { idEvaluacion, idUsuario, idEvaluador, nuevaNota, comentario } = dto;
 
     const evaluacion = await this.prisma.evaluaciones.findUnique({
@@ -111,19 +124,29 @@ export class EvaluacionesService {
     });
     if (!evaluacion) throw new NotFoundException('Evaluación no encontrada');
 
-    const notaAnterior = evaluacion.nota;
-
-    // Calculamos la nueva clasificación para la inscripción relacionada
-    // Necesitamos el id_inscripcion (está en la evaluación)
     const idInscripcion = evaluacion.id_inscripcion;
-    const nuevaClasificacion = calcularClasificacion(nuevaNota);
+
+    const inscripcion = await this.prisma.inscripciones.findUnique({
+      where: { id_inscripcion: idInscripcion },
+    });
+    if (!inscripcion) throw new NotFoundException('Inscripción no encontrada');
+
+    const area = await getArea(inscripcion.id_area, this.prisma);
+    const notaAprobacion = area?.nota_aprobacion ?? 60;
+
+    const nuevaClasificacion = calcularClasificacionPorArea(
+      nuevaNota,
+      notaAprobacion,
+    );
+
+    const notaAnterior = evaluacion.nota;
     const nuevaNotaDecimal = new Prisma.Decimal(nuevaNota);
+
     const puntajeField =
       evaluacion.id_fase === 1 ? 'puntaje_clasificacion' : 'puntaje_final';
 
-    const actualizada = await this.prisma.$transaction(async (prisma) => {
-      // 1) actualizar evaluacion
-      const evalActualizada = await prisma.evaluaciones.update({
+    const result = await this.prisma.$transaction(async (tx) => {
+      const evalActualizada = await tx.evaluaciones.update({
         where: { id_evaluacion: idEvaluacion },
         data: {
           id_evaluador: idEvaluador ?? evaluacion.id_evaluador,
@@ -133,8 +156,7 @@ export class EvaluacionesService {
         },
       });
 
-      // 2) crear log con datos
-      await prisma.log_cambios_nota.create({
+      await tx.log_cambios_nota.create({
         data: {
           id_evaluacion: idEvaluacion,
           id_usuario: idUsuario,
@@ -144,18 +166,15 @@ export class EvaluacionesService {
         },
       });
 
-      // 3) actualizar inscripción
       const updateData: Prisma.inscripcionesUpdateInput = {
         [puntajeField]: nuevaNotaDecimal,
         updated_at: new Date(),
       };
 
-      // Solo actualizar clasificación si es fase 1
-      if (evaluacion.id_fase === 1) {
+      if (evaluacion.id_fase === 1)
         updateData.clasificacion = nuevaClasificacion;
-      }
 
-      await prisma.inscripciones.update({
+      await tx.inscripciones.update({
         where: { id_inscripcion: idInscripcion },
         data: updateData,
       });
@@ -163,6 +182,6 @@ export class EvaluacionesService {
       return evalActualizada;
     });
 
-    return actualizada;
+    return result;
   }
 }
