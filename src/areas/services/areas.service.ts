@@ -1,7 +1,13 @@
 // src/areas/services/areas.service.ts
+
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAreaDto } from '../dto/create-area.dto';
+// ⚠️ Importar los nuevos DTOs
+import { DashboardResponse, DashboardMetrics } from '../dto/dashboard-response.dto'; 
+
+// Define el tipo de estado para que sea reconocido en este archivo
+type estado_area = 'EVALUANDO' | 'CLASIFICANDO' | 'COMPLETADO';
 
 @Injectable()
 export class AreasService {
@@ -50,7 +56,7 @@ export class AreasService {
 
   /* ============================================================
    * 1) Estadísticas GENERALES (formato agrupado por área)
-   *    -> Usar en las demás pestañas
+   * -> Usar en las demás pestañas
    * ============================================================ */
   async getAreasConEstadisticas() {
     console.log('💡 Iniciando consulta a Prisma (general)...');
@@ -104,22 +110,22 @@ export class AreasService {
   }
 
   /* =================================================================
-   * 2) Estadísticas para PANEL PRINCIPAL
-   *    - Una tarjeta por combinación (Área + Nivel)
-   *    - Sólo niveles de Primaria y Secundaria
+   * 2) Estadísticas para PANEL PRINCIPAL (CORREGIDO)
+   * - Devuelve combinaciones Área + Nivel (mantenida intacta)
    * ================================================================= */
   async getAreasConEstadisticasPanelPrincipal() {
     console.log('💡 Iniciando consulta a Prisma (panel principal)...');
 
-    // Niveles que quieres mostrar en el panel principal
     const NIVELES_PERMITIDOS = ['PRIMARIA', 'SECUNDARIA'];
 
+    // 1. Consulta inicial para obtener áreas e inscripciones (IDs y nombres)
     const areas = await this.prisma.areas.findMany({
       where: { activo: true },
-      include: {
+      select: {
+        id_area: true,
+        nombre_area: true,
         inscripciones: {
           select: {
-            id_inscripcion: true,
             nivel: {
               select: {
                 id_nivel: true,
@@ -132,20 +138,103 @@ export class AreasService {
       orderBy: { nombre_area: 'asc' },
     });
 
-    console.log('💡 Consulta realizada, áreas base (panel):', areas.length);
+    // --- Preparación para obtener el estado específico por A/N ---
+
+    const areaNivelKeys = new Set<string>(); // Para almacenar "id_area-id_nivel"
+    const nivelDetailsMap = new Map<number, { id: number; nombre: string }>(); 
+
+    areas.forEach((area) => {
+      area.inscripciones.forEach((inscripcion) => {
+        if (!inscripcion.nivel) return;
+
+        const idNivel = Number(inscripcion.nivel.id_nivel);
+        const nombreNivel = inscripcion.nivel.nombre_nivel?.toUpperCase() ?? '';
+
+        const esNivelPermitido = NIVELES_PERMITIDOS.some((niv) =>
+          nombreNivel.includes(niv),
+        );
+        if (!esNivelPermitido) return;
+
+        areaNivelKeys.add(`${area.id_area}-${idNivel}`);
+        if (!nivelDetailsMap.has(idNivel)) {
+            nivelDetailsMap.set(idNivel, {
+                id: idNivel,
+                nombre: inscripcion.nivel.nombre_nivel,
+            });
+        }
+      });
+    });
+    
+    // Obtenemos listas de IDs únicos para la consulta batch
+    const areaIds = Array.from(new Set(Array.from(areaNivelKeys).map(k => Number(k.split('-')[0]))));
+    const nivelIds = Array.from(new Set(Array.from(areaNivelKeys).map(k => Number(k.split('-')[1]))));
+    
+    // 2. Consultar todas las FASES para entender el orden de avance
+    const fases = await this.prisma.fases.findMany({
+        orderBy: { orden_fase: 'asc' },
+        select: { id_fase: true, orden_fase: true },
+    });
+
+    // 3. Consultar TODOS los cierres relevantes en UNA sola query (EFICIENTE)
+    // ✅ INCLUYE ESTADOS 'VALIDADO' y 'PENDIENTE' para reflejar el avance inmediato
+    const cierresValidados = await this.prisma.cierres_fase.findMany({
+      where: {
+        id_area: { in: areaIds },
+        id_nivel: { in: nivelIds },
+        estado_validacion: { in: ['VALIDADO', 'PENDIENTE'] }, 
+      },
+      select: {
+        id_area: true,
+        id_nivel: true,
+        id_fase: true,
+      },
+    });
+
+    // 4. Mapear cierres a un estado por combinación (Area-Nivel)
+    const estadoPorAreaNivel = new Map<string, estado_area>();
+    
+    for (const key of areaNivelKeys) {
+        const [id_area, id_nivel] = key.split('-').map(Number);
+        const cierresAreaNivel = cierresValidados.filter(c => 
+            c.id_area === id_area && c.id_nivel === id_nivel
+        );
+
+        let estado: estado_area = 'EVALUANDO'; // Estado por defecto
+        
+        if (cierresAreaNivel.length > 0) {
+            // Encontrar el ORDEN de la fase más avanzada (mayor orden_fase) que ha sido CERRADA
+            const maxOrdenFaseCerrada = cierresAreaNivel.reduce((maxOrden, currentCierre) => {
+                const currentFase = fases.find(f => f.id_fase === currentCierre.id_fase);
+                return Math.max(maxOrden, currentFase?.orden_fase ?? 0); 
+            }, 0);
+
+            // ⚠️ LÓGICA DE NEGOCIO: ASIGNAR ESTADO BASADO EN LA FASE CERRADA
+            if (maxOrdenFaseCerrada >= 2) {
+                // Si la Fase 2 (o superior) está cerrada/validada/pendiente
+                estado = 'COMPLETADO';
+            } else if (maxOrdenFaseCerrada >= 1) {
+                // Si la Fase 1 está cerrada/validada/pendiente
+                estado = 'CLASIFICANDO';
+            }
+        }
+        
+        estadoPorAreaNivel.set(key, estado);
+    }
+
+    // --- Generación de la Respuesta Final ---
 
     const combinaciones: {
       id_area: number;
       nombre_area: string;
-      estado: string;
+      estado: estado_area; 
       id_nivel: number;
       nombre_nivel: string;
       total_inscritos: number;
     }[] = [];
-
+    
+    // Re-procesar áreas para calcular el total de inscritos y asignar el estado calculado
     areas.forEach((area) => {
       const nivelesMap = new Map<number, number>(); // Map<id_nivel, count>
-      const nivelDetails = new Map<number, { id: number; nombre: string }>(); // detalles nivel
 
       area.inscripciones.forEach((inscripcion) => {
         if (!inscripcion.nivel) return;
@@ -153,33 +242,27 @@ export class AreasService {
         const idNivel = Number(inscripcion.nivel.id_nivel);
         const nombreNivel = inscripcion.nivel.nombre_nivel?.toUpperCase() ?? '';
 
-        // Filtrar sólo niveles permitidos (Primaria / Secundaria)
         const esNivelPermitido = NIVELES_PERMITIDOS.some((niv) =>
           nombreNivel.includes(niv),
         );
         if (!esNivelPermitido) return;
 
-        // 1. Contar inscritos por nivel
+        // Contar inscritos por nivel
         nivelesMap.set(idNivel, (nivelesMap.get(idNivel) || 0) + 1);
-
-        // 2. Guardar detalles del nivel
-        if (!nivelDetails.has(idNivel)) {
-          nivelDetails.set(idNivel, {
-            id: idNivel,
-            nombre: inscripcion.nivel.nombre_nivel,
-          });
-        }
       });
 
-      // Generar una entrada por combinación (Área + Nivel permitido)
+      // Generar la entrada de combinación con el estado específico
       nivelesMap.forEach((count, id_nivel) => {
-        const details = nivelDetails.get(id_nivel);
+        const details = nivelDetailsMap.get(id_nivel);
         if (!details) return;
+
+        const key = `${area.id_area}-${id_nivel}`;
+        const estadoEspecifico = estadoPorAreaNivel.get(key) || 'EVALUANDO'; 
 
         combinaciones.push({
           id_area: Number(area.id_area),
           nombre_area: area.nombre_area,
-          estado: area.estado,
+          estado: estadoEspecifico, 
           id_nivel: details.id,
           nombre_nivel: details.nombre,
           total_inscritos: count,
@@ -199,6 +282,73 @@ export class AreasService {
       combinaciones.length,
     );
     return combinaciones;
+  }
+  
+  /* =================================================================
+   * 3) FUNCIÓN PRINCIPAL DEL DASHBOARD: Métricas Globales + Stats A/N
+   * ================================================================= */
+
+  async getDashboardData(): Promise<DashboardResponse> {
+
+    // --- 1. Obtener los detalles de Área/Nivel (Tu lógica existente) ---
+    const areasStats = await this.getAreasConEstadisticasPanelPrincipal();
+
+    // --- 2. Obtener todos los contadores globales en paralelo (6 queries) ---
+    const [
+        totalRegistrosCount,
+        totalEvaluadoresCount,
+        totalResponsablesCount, // ✅ NUEVO CONTADOR
+        areasActivasCount,
+        totalClasificadosCount,
+        totalPremiadosCount,
+    ] = await Promise.all([
+        // 1. Total Olimpistas (Inscripciones)
+        this.prisma.inscripciones.count({}), 
+        
+        // 2. Total Evaluadores (Asignados activos)
+        this.prisma.evaluadores_area.count({ 
+            where: { activo: true } 
+        }),
+        
+        // 3. Total Responsables (Asignados activos)
+        this.prisma.responsables_area.count({ 
+            where: { activo: true } 
+        }),
+
+        // 4. Áreas Activas (Disciplinas únicas)
+        this.prisma.areas.count({ where: { activo: true } }),
+
+        // 5. Total Clasificados
+        this.prisma.inscripciones.count({ 
+            where: { clasificacion: 'CLASIFICADO' } 
+        }),
+        
+        // 6. Total Premiados
+        this.prisma.premios_otorgados.count({}), 
+    ]);
+
+    // 7. Áreas en Evaluación (basado en las combinaciones A/N)
+    const areasEnEvaluacion = areasStats.filter(
+        a => a.estado === 'EVALUANDO' || a.estado === 'CLASIFICANDO'
+    ).length;
+
+    // --- 3. Construir el objeto de métricas final ---
+    const metrics: DashboardMetrics = {
+        totalOlimpiadas: 1, 
+        totalRegistros: totalRegistrosCount, 
+        totalAreas: areasActivasCount, 
+        areasActivas: areasActivasCount, 
+        totalEvaluadores: totalEvaluadoresCount,
+        totalResponsables: totalResponsablesCount, // ✅ NUEVA MÉTRICA ASIGNADA
+        totalClasificados: totalClasificadosCount,
+        totalPremiados: totalPremiadosCount,
+        areasEnEvaluacion: areasEnEvaluacion, 
+    };
+
+    return {
+        metrics,
+        areasStats,
+    };
   }
 
   // Fabia y max

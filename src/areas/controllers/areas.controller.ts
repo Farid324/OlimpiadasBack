@@ -1,4 +1,5 @@
 // src/areas/controllers/areas.controller.ts
+
 import {
   Controller,
   Get,
@@ -19,17 +20,16 @@ export class AreasController {
   constructor(private readonly areasService: AreasService) {}
 
   // 🔹 Estadísticas generales (agrupado por área y niveles)
-  // Usar en las demás pestañas
   @Get()
   async getAreas() {
     return await this.areasService.getAreasConEstadisticas();
   }
 
   // 🔹 Estadísticas para PANEL PRINCIPAL
-  // Devuelve combinaciones Área + Nivel solo de Primaria / Secundaria
+  // ⚠️ CAMBIO AQUÍ: Llamamos al nuevo método que devuelve Métricas + Stats A/N
   @Get('panel-principal')
   async getAreasPanelPrincipal() {
-    return await this.areasService.getAreasConEstadisticasPanelPrincipal();
+    return await this.areasService.getDashboardData(); // <--- Mando el objeto completo
   }
 
   // Crear Área
