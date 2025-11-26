@@ -304,6 +304,7 @@ model evaluaciones {
   nota            Decimal         @db.Decimal(5, 2)
   fecha_registro  DateTime        @default(now())
   estado_registro estado_registro @default(BORRADOR)
+  descripConceptual String?
   comentario      String?
 
   inscripcion inscripciones @relation(fields: [id_inscripcion], references: [id_inscripcion], onDelete: Cascade)
