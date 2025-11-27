@@ -14,6 +14,19 @@ interface FiltrosPremiados {
   actorId?: number;
 }
 
+type PremiadoRow = {
+  id_inscripcion: number;
+  posicion: number;
+  nombreCompleto: string;
+  premio: string;
+  estadoPremio: EstadoMedalla;
+  area: string;
+  nivel: string;
+  puntuacion: number;
+  unidadEducativa: string;
+  departamento: string;
+};
+
 @Injectable()
 export class PremiadosService {
   constructor(
@@ -51,7 +64,10 @@ export class PremiadosService {
   }
 
   // construye la lista solo para un area+nivel que ya sabemos que esta validado
-  private async buildListForPair(id_area: number, id_nivel: number) {
+  private async buildListForPair(
+    id_area: number,
+    id_nivel: number,
+  ): Promise<PremiadoRow[]> {
     const id_fase_final = await this.getFinalPhaseId();
 
     // 1)medallero del area
@@ -123,18 +139,7 @@ export class PremiadosService {
     if (ordenados.length === 0) return [];
 
     // 5) asignar medallas
-    const salida: Array<{
-      id_inscripcion: number;
-      posicion: number;
-      nombreCompleto: string;
-      premio: string;
-      estadoPremio: EstadoMedalla;
-      area: string;
-      nivel: string;
-      puntuacion: number;
-      unidadEducativa: string;
-      departamento: string;
-    }> = [];
+    const salida: PremiadoRow[] = [];
 
     let pos = 0;
     for (const item of ordenados) {
@@ -144,16 +149,16 @@ export class PremiadosService {
       if (!med.tipo) continue;
       salida.push({
         id_inscripcion: inscripcion.id_inscripcion,
-        posicion: pos,
-        nombreCompleto:
-          `${inscripcion.competidor.nombres} ${inscripcion.competidor.apellidos}`.trim(),
-        premio: med.etiqueta ?? '',
-        estadoPremio: med.tipo,
-        area: inscripcion.area.nombre_area,
-        nivel: inscripcion.nivel.nombre_nivel,
-        puntuacion: Number(score),
-        unidadEducativa: inscripcion.competidor.escuela ?? '',
-        departamento: inscripcion.competidor.departamento ?? '',
+      posicion: pos,
+      nombreCompleto:
+        `${inscripcion.competidor.nombres} ${inscripcion.competidor.apellidos}`.trim(),
+      premio: med.etiqueta ?? '',
+      estadoPremio: med.tipo,
+      area: inscripcion.area.nombre_area,
+      nivel: inscripcion.nivel.nombre_nivel,
+      puntuacion: Number(score),
+      unidadEducativa: inscripcion.competidor.escuela ?? '',
+      departamento: inscripcion.competidor.departamento ?? '',
       });
     }
 

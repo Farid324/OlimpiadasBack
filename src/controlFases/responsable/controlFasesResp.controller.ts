@@ -8,6 +8,7 @@ import {
   Param,
   UseGuards,
   Post,
+  Query,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import { ControlFasesRespService } from './controlFasesResp.service';
@@ -28,7 +29,7 @@ export class ControlFasesRespController {
 
   @Get()
   @Roles(RESPONSABLE) // deja ADMIN para probar; luego puedes quitarlo
-  async getMisFases(@Req() req: Request) {
+  async getMisFases(@Req() req: Request, @Query('type') type?: string) {
     const anyReq = req as any;
     const u = anyReq?.user ?? {};
     let userId: number | null =
@@ -38,7 +39,6 @@ export class ControlFasesRespController {
           ? u.id
           : null;
 
-    // Fallback: intenta por correo si no vino id en el token
     const email: string | null =
       typeof u?.correo === 'string'
         ? u.correo
@@ -46,7 +46,9 @@ export class ControlFasesRespController {
           ? u.email
           : null;
 
-    return this.service.getMisFases({ userId, email });
+    const phaseType = type === 'FINAL' ? 'FINAL' : 'CLASIFICACION';
+
+    return this.service.getMisFases({ userId, email, type: phaseType });
   }
 
   @Post(':id/approve')

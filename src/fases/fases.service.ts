@@ -75,27 +75,23 @@ export class FasesService {
       const sinPuntaje = await this.prisma.inscripciones.count({
         where: { id_area, id_nivel, puntaje_clasificacion: null },
       });
+      // Mientras exista al menos una inscripcion sin puntaje_clasificacion, consideramos que hay pendientes.
       return sinPuntaje > 0;
     }
 
-    // FINAL
-    const inscIds = await this.prisma.inscripciones.findMany({
-      where: { id_area, id_nivel },
-      select: { id_inscripcion: true },
+    // FASE FINAL:
+    // Queremos asegurar que exista al menos 1 olimpista clasificado con puntaje_final registrado en este área/nivel.
+    const withFinalScore = await this.prisma.inscripciones.count({
+      where: {
+        id_area,
+        id_nivel,
+        clasificacion: 'CLASIFICADO',
+        puntaje_final: { not: null },
+      },
     });
-    if (inscIds.length === 0) return true;
 
-    const ids = inscIds.map((i) => i.id_inscripcion);
-    const abiertas = await this.prisma.evaluaciones
-      .count({
-        where: {
-          id_inscripcion: { in: ids },
-          estado_registro: { not: 'FIRMADA' },
-        },
-      })
-      .catch(() => 0);
-
-    return abiertas > 0;
+    // Si no hay ni un solo puntaje_final registrado, consideramos que aun hay pendientes.
+    return withFinalScore === 0;
   }
 
   async closePhase(params: {
