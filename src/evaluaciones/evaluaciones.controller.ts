@@ -30,7 +30,7 @@ export class EvaluacionesAdminController {
     private service: EvaluacionesAdminService, // “mis-competidores”
     private registrarEditarService: EvaluacionesService,
     private adminEvaluaciones: AdminEvaluacionesService, // admin endpoints
-  ) {}
+  ) { }
 
   // ====================  VISTA EVALUADOR  ====================
   @Get('mis-competidores')
@@ -49,12 +49,14 @@ export class EvaluacionesAdminController {
     const idAreas = areas.map((a) => a.id_area);
 
     return this.service.listarCompetidores({
+      evaluadorId: idUsuario,
       search,
       idAreas,
       filtro,
       id_area: id_area ? Number(id_area) : undefined,
       id_nivel: id_nivel ? Number(id_nivel) : undefined,
     });
+
   }
 
   @Get('listarCompetidoresFirmados')
@@ -76,11 +78,13 @@ export class EvaluacionesAdminController {
     }
 
     return this.service.listarCompetidoresFirmados({
+      evaluadorId: idUsuario,
       search,
       idAreas,
       id_area: id_area ? Number(id_area) : undefined,
       id_nivel: id_nivel ? Number(id_nivel) : undefined,
     });
+
   }
 
   @Get('mis-areas')
