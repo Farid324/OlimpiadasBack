@@ -74,7 +74,7 @@ enum tipo_area_config {
 // ===================== Tablas =====================
 
 model premios_otorgados {
-  id_premio      Int          @id @default(autoincrement())
+  id_premio      Int           @id @default(autoincrement())
   id_inscripcion Int
   id_area        Int
   id_nivel       Int
@@ -82,12 +82,12 @@ model premios_otorgados {
   tipo           tipo_premio
   fuente         fuente_lista?
   generado_desde Int?
-  creado_en      DateTime     @default(now())
+  creado_en      DateTime      @default(now())
 
   // relaciones
-  inscripcion inscripciones    @relation(fields: [id_inscripcion], references: [id_inscripcion], onDelete: Cascade)
-  area        areas            @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
-  nivel       niveles          @relation(fields: [id_nivel], references: [id_nivel], onDelete: Cascade)
+  inscripcion inscripciones     @relation(fields: [id_inscripcion], references: [id_inscripcion], onDelete: Cascade)
+  area        areas             @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+  nivel       niveles           @relation(fields: [id_nivel], references: [id_nivel], onDelete: Cascade)
   lista       listas_generadas? @relation(fields: [generado_desde], references: [id_lista])
 
   @@unique([id_inscripcion, id_area, id_nivel, anio], name: "uq_premio_por_insc_area_nivel_anio")
@@ -147,7 +147,7 @@ model areas {
   // 2. Agrega estos campos nuevos
   nota_aprobacion Int?              @default(51) // Del 51 al 100
   tipo            tipo_area_config? @default(INDIVIDUAL)
-  niveles_target  String?           // Guardaremos "Primaria, Secundaria" o uno solo como texto simple por simplicidad
+  niveles_target  String? // Guardaremos "Primaria, Secundaria" o uno solo como texto simple por simplicidad
 
   inscripciones     inscripciones[]
   medallero_config  medallero_config[]
@@ -171,9 +171,9 @@ model niveles {
   listas_generadas listas_generadas[]
   grupos           grupos[]           @relation("nivel_grupos")
 
-  cierres_fase cierres_fase[]
+  cierres_fase      cierres_fase[]
   premios_otorgados premios_otorgados[]
-  medallero_config medallero_config[]
+  medallero_config  medallero_config[]
 
   @@index([nombre_nivel])
 }
@@ -270,14 +270,14 @@ model inscripciones {
   puntaje_clasificacion Decimal?              @db.Decimal(5, 2)
   clasificacion         clasificacion_estado? @default(NO_CLASIFICADO)
 
-   puntaje_final Decimal? @db.Decimal(5, 2)
+  puntaje_final Decimal? @db.Decimal(5, 2)
 
   competidor competidores @relation(fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
   area       areas        @relation(fields: [id_area], references: [id_area])
   nivel      niveles      @relation(fields: [id_nivel], references: [id_nivel])
 
   evaluaciones evaluaciones[]
-  premios premios_otorgados[]
+  premios      premios_otorgados[]
 
   @@unique([id_competidor, id_area, id_nivel], name: "uq_insc_unica")
   @@index([id_competidor])
@@ -294,18 +294,20 @@ model fases {
 
   evaluaciones evaluaciones[]
   cierres_fase cierres_fase[]
+
+  asignaciones asignacion_evaluador_fase[]
 }
 
 model evaluaciones {
-  id_evaluacion   Int             @id @default(autoincrement()) @db.Integer
-  id_inscripcion  Int
-  id_fase         Int
-  id_evaluador    Int
-  nota            Decimal         @db.Decimal(5, 2)
-  fecha_registro  DateTime        @default(now())
-  estado_registro estado_registro @default(BORRADOR)
+  id_evaluacion     Int             @id @default(autoincrement()) @db.Integer
+  id_inscripcion    Int
+  id_fase           Int
+  id_evaluador      Int
+  nota              Decimal         @db.Decimal(5, 2)
+  fecha_registro    DateTime        @default(now())
+  estado_registro   estado_registro @default(BORRADOR)
   descripConceptual String?
-  comentario      String?
+  comentario        String?
 
   inscripcion inscripciones @relation(fields: [id_inscripcion], references: [id_inscripcion], onDelete: Cascade)
   fase        fases         @relation(fields: [id_fase], references: [id_fase])
@@ -317,6 +319,18 @@ model evaluaciones {
   @@index([id_inscripcion])
   @@index([id_fase])
   @@index([id_evaluador])
+}
+
+model asignacion_evaluador_fase {
+  id_asignacion     Int @id @default(autoincrement()) @db.Integer
+  id_evaluador_area Int
+  id_fase           Int
+  cupo              Int @default(0)
+
+  evaluador_area evaluadores_area @relation(fields: [id_evaluador_area], references: [id_evaluador_area], onDelete: Cascade)
+  fase           fases            @relation(fields: [id_fase], references: [id_fase])
+
+  @@unique([id_evaluador_area, id_fase], name: "uq_eval_area_fase")
 }
 
 model log_cambios_nota {
@@ -359,6 +373,8 @@ model evaluadores_area {
   usuario usuarios @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
   area    areas    @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
 
+  asignaciones asignacion_evaluador_fase[]
+
   @@unique([id_usuario, id_area], name: "uq_eval_area")
   @@index([id_usuario])
   @@index([id_area])
@@ -367,7 +383,7 @@ model evaluadores_area {
 model medallero_config {
   id_medallero  Int       @id @default(autoincrement()) @db.Integer
   id_area       Int
-  id_nivel        Int
+  id_nivel      Int
   oros          Int       @default(0)
   platas        Int       @default(0)
   bronces       Int       @default(0)
@@ -375,7 +391,7 @@ model medallero_config {
   vigente_desde DateTime? @db.Date
   vigente_hasta DateTime? @db.Date
 
-  area areas @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+  area  areas   @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
   nivel niveles @relation(fields: [id_nivel], references: [id_nivel])
 
   @@unique([id_area, id_nivel], name: "uq_medallero_area_nivel")
@@ -421,7 +437,7 @@ model listas_generadas {
   nivel   niveles? @relation(fields: [id_nivel], references: [id_nivel])
   usuario usuarios @relation(fields: [generado_por], references: [id_usuario])
 
-  reordenamientos reordenamientos[]
+  reordenamientos   reordenamientos[]
   premios_otorgados premios_otorgados[]
 
   @@index([id_area])

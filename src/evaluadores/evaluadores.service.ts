@@ -14,6 +14,8 @@ import { CreateEvaluadorDto } from './dto/create-evaluador.dto';
 import { UpdateEvaluadorDto } from './dto/update-evaluador.dto'; // ⬅️ nuevo
 import * as bcrypt from 'bcrypt';
 import { EmailService } from '../email/email.service';
+import { AsignarOlimpistasDto } from './dto/asignar-olimpistas.dto';
+
 
 function isKnownPrismaError(e: unknown): e is PrismaClientKnownRequestError {
   return e instanceof PrismaClientKnownRequestError;
@@ -528,4 +530,238 @@ export class EvaluadoresService {
       );
     }
   }
+
+    // ===========================================================================
+  // NUEVO: Asignar olimpistas por área (clasificación y final)
+  // ===========================================================================
+  async asignarOlimpistas(dto: AsignarOlimpistasDto) {
+    const { id_area, asignaciones } = dto;
+
+    if (!asignaciones?.length) {
+      throw new BadRequestException('Debes enviar al menos un evaluador.');
+    }
+
+    // Validar repetidos
+    const ids = asignaciones.map((a) => a.id_usuario);
+    const uniqueIds = new Set(ids);
+    if (uniqueIds.size !== ids.length) {
+      throw new BadRequestException('No repitas evaluadores en la asignación.');
+    }
+
+    // Verificar que todos sean evaluadores activos de esa área
+    const relaciones = await this.prisma.evaluadores_area.findMany({
+      where: {
+        id_area,
+        id_usuario: { in: Array.from(uniqueIds) },
+        activo: true,
+      },
+      select: {
+        id_evaluador_area: true,
+        id_usuario: true,
+      },
+    });
+
+    if (relaciones.length !== uniqueIds.size) {
+      throw new BadRequestException(
+        'Uno o más evaluadores no están activos en el área seleccionada.',
+      );
+    }
+
+    const mapUsuarioToEvalArea = new Map<number, number>();
+    for (const r of relaciones) {
+      mapUsuarioToEvalArea.set(r.id_usuario, r.id_evaluador_area);
+    }
+
+    // Contar olimpistas de clasificación (todos los inscritos de esa área)
+    const totalClasif = await this.prisma.inscripciones.count({
+      where: { id_area },
+    });
+
+    if (totalClasif === 0) {
+      throw new BadRequestException(
+        'No hay inscripciones registradas para esta área; no es posible asignar cupos.',
+      );
+    }
+
+    // Contar olimpistas que pasaron a fase final (clasificados)
+    const totalFinal = await this.prisma.inscripciones.count({
+      where: { id_area, clasificacion: 'CLASIFICADO' },
+    });
+
+    // Distribución para fase CLASIFICATORIA
+    const distClasif = this.distribuirCupos(
+      totalClasif,
+      asignaciones,
+      'cupo_clasificacion',
+    );
+
+    // Distribución para fase FINAL (solo si hay finalistas y se mandan cupos)
+    const hayCuposFinal = asignaciones.some(
+      (a) => typeof a.cupo_final === 'number' && a.cupo_final > 0,
+    );
+
+    let distFinal: Record<number, number> | null = null;
+
+    if (hayCuposFinal) {
+      if (totalFinal === 0) {
+        throw new BadRequestException(
+          'Aún no existen olimpistas clasificados a la fase final en esta área; no puedes asignar cupos de fase final.',
+        );
+      }
+      distFinal = this.distribuirCupos(
+        totalFinal,
+        asignaciones,
+        'cupo_final',
+      );
+    }
+
+    // Buscar id_fase para CLASIFICATORIA y FINAL
+    const faseClasif = await this.prisma.fases.findFirst({
+      where: { nombre_fase: 'CLASIFICATORIA' },
+    });
+    if (!faseClasif) {
+      throw new BadRequestException(
+        'No se encontró la configuración de la fase CLASIFICATORIA.',
+      );
+    }
+
+    const faseFinal =
+      hayCuposFinal &&
+      (await this.prisma.fases.findFirst({
+        where: { nombre_fase: 'FINAL' },
+      }));
+
+    if (hayCuposFinal && !faseFinal) {
+      throw new BadRequestException(
+        'No se encontró la configuración de la fase FINAL.',
+      );
+    }
+    
+    await this.prisma.$transaction(async (tx) => {
+      for (const a of asignaciones) {
+        const id_evaluador_area = mapUsuarioToEvalArea.get(a.id_usuario);
+        if (!id_evaluador_area) continue;
+
+        const cupoClasif = distClasif[a.id_usuario] ?? 0;
+
+        // Guardar cupo de fase CLASIFICATORIA
+        await tx.asignacion_evaluador_fase.upsert({
+          where: {
+            uq_eval_area_fase: {
+              id_evaluador_area,
+              id_fase: faseClasif.id_fase,
+            },
+          },
+          update: { cupo: cupoClasif },
+          create: {
+            id_evaluador_area,
+            id_fase: faseClasif.id_fase,
+            cupo: cupoClasif,
+          },
+        });
+
+        // Guardar cupo de fase FINAL (si aplica)
+        if (faseFinal && distFinal) {
+          const cupoFinal = distFinal[a.id_usuario] ?? 0;
+          await tx.asignacion_evaluador_fase.upsert({
+            where: {
+              uq_eval_area_fase: {
+                id_evaluador_area,
+                id_fase: faseFinal.id_fase,
+              },
+            },
+          update: { cupo: cupoFinal },
+          create: {
+              id_evaluador_area,
+              id_fase: faseFinal.id_fase,
+              cupo: cupoFinal,
+            },
+          });
+        }
+      }
+    });
+
+    return {
+      ok: true,
+      message: 'Cupos asignados correctamente.',
+      totalClasif,
+      totalFinal,
+      distribucionClasif: distClasif,
+      distribucionFinal: distFinal,
+    };
+  }
+
+  /**
+   * Reparte "total" olimpistas entre los evaluadores según el campo indicado:
+   * - Si todos tienen valor → la suma debe ser EXACTAMENTE igual a total.
+   * - Si uno solo queda sin valor → recibe todo el sobrante.
+   * - Si más de uno queda sin valor → error (ambigüedad).
+   */
+  private distribuirCupos(
+    total: number,
+    asignaciones: {
+      id_usuario: number;
+      cupo_clasificacion?: number;
+      cupo_final?: number;
+    }[],
+    key: 'cupo_clasificacion' | 'cupo_final',
+  ): Record<number, number> {
+    if (total <= 0) {
+      const allZero: Record<number, number> = {};
+      for (const a of asignaciones) {
+        allZero[a.id_usuario] = 0;
+      }
+      return allZero;
+    }
+
+    let sumaFija = 0;
+    const fijos: Record<number, number> = {};
+    const autos: number[] = [];
+
+    for (const a of asignaciones) {
+      const raw = a[key];
+      if (raw === undefined || raw === null || raw === 0) {
+        autos.push(a.id_usuario);
+        continue;
+      }
+
+      const val = Math.floor(raw);
+      if (val < 0) {
+        throw new BadRequestException('Los cupos no pueden ser negativos.');
+      }
+
+      sumaFija += val;
+      fijos[a.id_usuario] = val;
+    }
+
+    if (autos.length === 0) {
+      if (sumaFija !== total) {
+        throw new BadRequestException(
+          `La suma de cupos (${sumaFija}) no coincide con el total de olimpistas (${total}).`,
+        );
+      }
+      return fijos;
+    }
+
+    if (autos.length > 1) {
+      throw new BadRequestException(
+        'Debe quedar como máximo un evaluador sin cupo asignado para distribuir el resto automáticamente.',
+      );
+    }
+
+    const sobrante = total - sumaFija;
+    if (sobrante < 0) {
+      throw new BadRequestException(
+        `La suma de cupos (${sumaFija}) es mayor que el total de olimpistas (${total}).`,
+      );
+    }
+
+    const [idAuto] = autos;
+    return {
+      ...fijos,
+      [idAuto]: sobrante,
+    };
+  }
+
+
 }

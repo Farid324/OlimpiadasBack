@@ -18,6 +18,8 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ADMIN } from '../auth/constants';
+import { AsignarOlimpistasDto } from './dto/asignar-olimpistas.dto';
+
 
 @Controller('evaluadores')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -35,6 +37,12 @@ export class EvaluadoresController {
   findAll(@Query() query: { q?: string; telefono?: string; ci?: string }) {
     return this.service.findAll(query);
   }
+
+    @Post('asignar-olimpistas')
+  asignarOlimpistas(@Body() dto: AsignarOlimpistasDto) {
+    return this.service.asignarOlimpistas(dto);
+  }
+
 
   // 🔹 Necesario para "Editar"
   @Patch(':id')
