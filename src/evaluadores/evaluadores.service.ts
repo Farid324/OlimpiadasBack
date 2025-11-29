@@ -126,7 +126,7 @@ export class EvaluadoresService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
-  ) {}
+  ) { }
 
   /** GET /evaluadores */
   async findAll(query: QueryEvaluadorDto) {
@@ -172,13 +172,13 @@ export class EvaluadoresService {
         ...baseWhere,
         ...(q
           ? {
-              OR: [
-                { nombre: { contains: q, mode: 'insensitive' } },
-                { apellido: { contains: q, mode: 'insensitive' } },
-                { correo: { contains: q, mode: 'insensitive' } },
-                { institucion: { contains: q, mode: 'insensitive' } },
-              ],
-            }
+            OR: [
+              { nombre: { contains: q, mode: 'insensitive' } },
+              { apellido: { contains: q, mode: 'insensitive' } },
+              { correo: { contains: q, mode: 'insensitive' } },
+              { institucion: { contains: q, mode: 'insensitive' } },
+            ],
+          }
           : {}),
       },
       select,
@@ -347,6 +347,44 @@ export class EvaluadoresService {
       );
     }
   }
+
+
+  // Devuelve resumen de inscripciones y qué fase se puede editar
+  async getEstadoAsignacionArea(id_area: number) {
+    if (!id_area || Number.isNaN(Number(id_area))) {
+      throw new BadRequestException('id_area inválido');
+    }
+
+    // Total de inscripciones de esa área (fase clasificatoria)
+    const totalClasif = await this.prisma.inscripciones.count({
+      where: { id_area },
+    });
+
+    // Total de FINALISTAS en esa área
+    // (ajusta el criterio si en tu sistema se marca de otra forma)
+    const totalFinal = await this.prisma.inscripciones.count({
+      where: {
+        id_area,
+        clasificacion: 'CLASIFICADO',
+      },
+    });
+
+    // Regla:
+    //  - Mientras NO haya finalistas → solo se edita clasif.
+    //  - Cuando YA hay finalistas → solo se edita final.
+    const puedeEditarFinal = totalFinal > 0;
+    const puedeEditarClasificatoria = !puedeEditarFinal;
+
+    return {
+      id_area,
+      totalClasif,
+      totalFinal,
+      puedeEditarClasificatoria,
+      puedeEditarFinal,
+    };
+  }
+
+
 
   /** GET /evaluadores/check-telefono/:telefono */
   async existsByTelefono(telefono: string) {
@@ -531,7 +569,7 @@ export class EvaluadoresService {
     }
   }
 
-    // ===========================================================================
+  // ===========================================================================
   // NUEVO: Asignar olimpistas por área (clasificación y final)
   // ===========================================================================
   async asignarOlimpistas(dto: AsignarOlimpistasDto) {
@@ -636,7 +674,7 @@ export class EvaluadoresService {
         'No se encontró la configuración de la fase FINAL.',
       );
     }
-    
+
     await this.prisma.$transaction(async (tx) => {
       for (const a of asignaciones) {
         const id_evaluador_area = mapUsuarioToEvalArea.get(a.id_usuario);
@@ -670,8 +708,8 @@ export class EvaluadoresService {
                 id_fase: faseFinal.id_fase,
               },
             },
-          update: { cupo: cupoFinal },
-          create: {
+            update: { cupo: cupoFinal },
+            create: {
               id_evaluador_area,
               id_fase: faseFinal.id_fase,
               cupo: cupoFinal,

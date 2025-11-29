@@ -38,10 +38,15 @@ export class EvaluadoresController {
     return this.service.findAll(query);
   }
 
-    @Post('asignar-olimpistas')
-  asignarOlimpistas(@Body() dto: AsignarOlimpistasDto) {
-    return this.service.asignarOlimpistas(dto);
-  }
+  @Post('asignar-olimpistas')
+async asignarOlimpistas(@Body() dto: AsignarOlimpistasDto) {
+  return this.service.asignarOlimpistas(dto);
+}
+@Get('asignar-olimpistas/estado')
+async getEstadoAsignacion(@Query('id_area') id_area: string) {
+  const idAreaNum = Number(id_area);
+  return this.service.getEstadoAsignacionArea(idAreaNum);
+}
 
 
   // 🔹 Necesario para "Editar"
