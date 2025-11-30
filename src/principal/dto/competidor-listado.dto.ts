@@ -1,47 +1,20 @@
-// DTOs para simplificar las firmas de los métodos y manejar la estructura de datos.
-
-import { clasificacion_estado, tipo_premio } from '@prisma/client';
-
-/**
- * Filtros de búsqueda comunes para el front-end.
- */
-export interface CompetitorFilterDto {
-  areaId?: number;
-  levelId?: number;
-  searchCiOrName?: string;
-  medalType?: tipo_premio;
-}
-
-/**
- * Estructura de respuesta para un competidor, incluyendo detalles para el Front-end.
- */
-export interface CompetitorDetails {
-  id_inscripcion: number;
-  nombreCompleto: string;
-  ci: string;
-  escuela: string;
-  departamento: string;
-  area: string;
-  nivel: string;
-  gestionAnio: number;
+export class CompetidorListadoDto {
+  // Atributos de la tabla/front
+  idInscripcion: number; // id_inscripcion
+  nombre: string; // Nombre Completo del competidor
+  ci: string; // CI del competidor
+  area: string; // Nombre del Área
+  colegio: string | null; // Escuela del competidor (competidores.escuela)
+  ciudad: string | null; // Departamento del competidor (competidores.departamento)
+  anio: number; // anio de la gestión (gestiones.anio)
   
-  // Datos de Fase Clasificatoria
-  puntajeClasificacion: number | null;
-  estadoClasificacion: clasificacion_estado; // CLASIFICADO | NO_CLASIFICADO | DESCALIFICADO
+  // Atributos de estado y puntaje
+  puntaje: number | null; // puntaje_clasificacion o puntaje_final
+  medalla: 'ORO' | 'PLATA' | 'BRONCE' | 'MENCION' | null;
   
-  // Datos de Fase Final / Histórico
-  puntajeFinal: number | null;
-  medalla: tipo_premio | null; // ORO | PLATA | BRONCE | MENCION
+  // Estado general de la inscripción (INSCRITO, CLASIFICADO, FINALISTA, PREMIADO, DESCALIFICADO)
+  estadoInscripcion: 'INSCRITO' | 'CLASIFICADO' | 'FINALISTA' | 'PREMIADO' | 'DESCALIFICADO';
   
-  // Opcional: estado de inscripción general (para la Fase Final)
-  estadoInscripcion: string;
-}
-
-/**
- * Estructura de respuesta para la lista de gestiones históricas.
- */
-export interface HistoricalGestionDto {
-  id_gestion: number;
-  anio: number;
-  nombre: string;
+  // Opcional para Histórico
+  faseLlegada?: 'CLASIFICATORIA' | 'FINAL'; 
 }
