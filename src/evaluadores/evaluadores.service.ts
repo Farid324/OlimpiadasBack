@@ -14,6 +14,7 @@ import { CreateEvaluadorDto } from './dto/create-evaluador.dto';
 import { UpdateEvaluadorDto } from './dto/update-evaluador.dto'; // ⬅️ nuevo
 import * as bcrypt from 'bcrypt';
 import { EmailService } from '../email/email.service';
+import { AsignarOlimpistasDto } from './dto/asignar-olimpistas.dto';
 
 function isKnownPrismaError(e: unknown): e is PrismaClientKnownRequestError {
   return e instanceof PrismaClientKnownRequestError;
@@ -358,6 +359,41 @@ export class EvaluadoresService {
     }
   }
 
+  // Devuelve resumen de inscripciones y qué fase se puede editar
+  async getEstadoAsignacionArea(id_area: number) {
+    if (!id_area || Number.isNaN(Number(id_area))) {
+      throw new BadRequestException('id_area inválido');
+    }
+
+    // Total de inscripciones de esa área (fase clasificatoria)
+    const totalClasif = await this.prisma.inscripciones.count({
+      where: { id_area },
+    });
+
+    // Total de FINALISTAS en esa área
+    // (ajusta el criterio si en tu sistema se marca de otra forma)
+    const totalFinal = await this.prisma.inscripciones.count({
+      where: {
+        id_area,
+        clasificacion: 'CLASIFICADO',
+      },
+    });
+
+    // Regla:
+    //  - Mientras NO haya finalistas → solo se edita clasif.
+    //  - Cuando YA hay finalistas → solo se edita final.
+    const puedeEditarFinal = totalFinal > 0;
+    const puedeEditarClasificatoria = !puedeEditarFinal;
+
+    return {
+      id_area,
+      totalClasif,
+      totalFinal,
+      puedeEditarClasificatoria,
+      puedeEditarFinal,
+    };
+  }
+
   /** GET /evaluadores/check-telefono/:telefono */
   async existsByTelefono(telefono: string) {
     const found = await this.prisma.usuarios.findFirst({
@@ -549,5 +585,241 @@ export class EvaluadoresService {
         formatPrismaError(err) || 'No se pudo eliminar el evaluador',
       );
     }
+  }
+
+  async asignarOlimpistas(dto: AsignarOlimpistasDto) {
+    const { id_area, asignaciones } = dto;
+
+    if (!id_area || Number.isNaN(Number(id_area))) {
+      throw new BadRequestException('id_area inválido');
+    }
+
+    if (!Array.isArray(asignaciones) || asignaciones.length === 0) {
+      throw new BadRequestException('Se requieren asignaciones.');
+    }
+
+    // 1) Obtener totales de inscripciones
+    const [totalClasif, totalFinal] = await Promise.all([
+      this.prisma.inscripciones.count({
+        where: { id_area },
+      }),
+      this.prisma.inscripciones.count({
+        where: {
+          id_area,
+          clasificacion: 'CLASIFICADO',
+        },
+      }),
+    ]);
+
+    // 2) Determinar modo: CLASIFICATORIA o FINAL
+    //    Regla: si hay finalistas -> estamos editando FINAL
+    const faseClasif = await this.prisma.fases.findFirst({
+      where: { nombre_fase: 'CLASIFICATORIA' },
+    });
+    const faseFinal = await this.prisma.fases.findFirst({
+      where: { nombre_fase: 'FINAL' },
+    });
+
+    if (!faseClasif || !faseFinal) {
+      throw new BadRequestException(
+        'No se encontraron las fases CLASIFICATORIA y FINAL en la base de datos.',
+      );
+    }
+
+    type Modo = 'CLASIF' | 'FINAL';
+    const modo: Modo = totalFinal > 0 ? 'FINAL' : 'CLASIF';
+
+    const idFase = modo === 'CLASIF' ? faseClasif.id_fase : faseFinal.id_fase;
+    const totalDisponibles = modo === 'CLASIF' ? totalClasif : totalFinal;
+
+    if (totalDisponibles === 0) {
+      throw new BadRequestException(
+        modo === 'CLASIF'
+          ? 'No hay inscripciones en esta área para asignar en fase clasificatoria.'
+          : 'No hay finalistas en esta área para asignar en fase final.',
+      );
+    }
+
+    // 3) Obtener evaluadores del área
+    const evaluadoresArea = await this.prisma.evaluadores_area.findMany({
+      where: { id_area, activo: true },
+      select: {
+        id_evaluador_area: true,
+        id_usuario: true,
+      },
+      orderBy: { id_usuario: 'asc' },
+    });
+
+    if (!evaluadoresArea.length) {
+      throw new BadRequestException(
+        'No hay evaluadores activos registrados para esta área.',
+      );
+    }
+
+    // 4) Mapear asignaciones por evaluador_area
+    const lista = evaluadoresArea.map((ea) => {
+      const found = asignaciones.find((a) => a.id_usuario === ea.id_usuario);
+
+      return {
+        id_evaluador_area: ea.id_evaluador_area,
+        id_usuario: ea.id_usuario,
+        cupo_clasif:
+          found && typeof found.cupo_clasificacion === 'number'
+            ? found.cupo_clasificacion
+            : undefined,
+        cupo_final:
+          found && typeof found.cupo_final === 'number'
+            ? found.cupo_final
+            : undefined,
+      };
+    });
+
+    // 5) Tomar solo los cupos de la fase que toca
+    const campoCupo: 'cupo_clasif' | 'cupo_final' =
+      modo === 'CLASIF' ? 'cupo_clasif' : 'cupo_final';
+
+    // cupo > 0
+    const conCupo = lista.filter((item) => {
+      const v = item[campoCupo];
+      return typeof v === 'number' && v > 0;
+    });
+
+    // cupo indefinido (sin valor) → lo usaremos para el "resto"
+    const sinCupo = lista.filter((item) => item[campoCupo] === undefined);
+
+    if (sinCupo.length > 1) {
+      throw new BadRequestException(
+        'Debe quedar como máximo un evaluador sin cupo asignado para distribuir el resto automáticamente.',
+      );
+    }
+
+    const totalAsignado = conCupo.reduce(
+      (sum, item) => sum + (item[campoCupo] as number),
+      0,
+    );
+
+    if (totalAsignado > totalDisponibles) {
+      throw new BadRequestException(
+        `La suma de cupos (${totalAsignado}) supera el total disponible (${totalDisponibles}).`,
+      );
+    }
+
+    const restante = totalDisponibles - totalAsignado;
+
+    // Si sobra algo, lo asignamos al único evaluador sin cupo
+    if (restante > 0) {
+      if (sinCupo.length === 1) {
+        sinCupo[0][campoCupo] = restante;
+      } else {
+        // sinCupo.length === 0
+        throw new BadRequestException(
+          `Quedan ${restante} olimpistas sin asignar. Deja un evaluador sin cupo para que reciba el resto automáticamente.`,
+        );
+      }
+    }
+
+    // 6) Guardar en asignacion_evaluador_fase para la fase correspondiente
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        for (const item of lista) {
+          const cupo = item[campoCupo] ?? 0;
+
+          // Si no hay cupo en esta fase, igual guardamos 0
+          await tx.asignacion_evaluador_fase.upsert({
+            where: {
+              uq_eval_area_fase: {
+                id_evaluador_area: item.id_evaluador_area,
+                id_fase: idFase,
+              },
+            },
+            create: {
+              id_evaluador_area: item.id_evaluador_area,
+              id_fase: idFase,
+              cupo,
+            },
+            update: {
+              cupo,
+            },
+          });
+        }
+      });
+
+      return {
+        ok: true,
+        modo,
+        totalDisponibles,
+      };
+    } catch (err) {
+      this.logger.error('Error al asignar olimpistas', err);
+      throw new BadRequestException(
+        'No se pudo guardar la asignación de olimpistas.',
+      );
+    }
+  }
+
+  private distribuirCupos(
+    total: number,
+    asignaciones: {
+      id_usuario: number;
+      cupo_clasificacion?: number;
+      cupo_final?: number;
+    }[],
+    key: 'cupo_clasificacion' | 'cupo_final',
+  ): Record<number, number> {
+    if (total <= 0) {
+      const allZero: Record<number, number> = {};
+      for (const a of asignaciones) {
+        allZero[a.id_usuario] = 0;
+      }
+      return allZero;
+    }
+
+    let sumaFija = 0;
+    const fijos: Record<number, number> = {};
+    const autos: number[] = [];
+
+    for (const a of asignaciones) {
+      const raw = a[key];
+      if (raw === undefined || raw === null || raw === 0) {
+        autos.push(a.id_usuario);
+        continue;
+      }
+
+      const val = Math.floor(raw);
+      if (val < 0) {
+        throw new BadRequestException('Los cupos no pueden ser negativos.');
+      }
+
+      sumaFija += val;
+      fijos[a.id_usuario] = val;
+    }
+
+    if (autos.length === 0) {
+      if (sumaFija !== total) {
+        throw new BadRequestException(
+          `La suma de cupos (${sumaFija}) no coincide con el total de olimpistas (${total}).`,
+        );
+      }
+      return fijos;
+    }
+
+    if (autos.length > 1) {
+      throw new BadRequestException(
+        'Debe quedar como máximo un evaluador sin cupo asignado para distribuir el resto automáticamente.',
+      );
+    }
+
+    const sobrante = total - sumaFija;
+    if (sobrante < 0) {
+      throw new BadRequestException(
+        `La suma de cupos (${sumaFija}) es mayor que el total de olimpistas (${total}).`,
+      );
+    }
+
+    const [idAuto] = autos;
+    return {
+      ...fijos,
+      [idAuto]: sobrante,
+    };
   }
 }

@@ -1,12 +1,6 @@
 // prisma/seed.ts
 import 'dotenv/config';
-import {
-  PrismaClient,
-  ciclo_nivel,
-  tipo_premio,
-  fuente_lista,
-  Prisma,
-} from '@prisma/client';
+import { PrismaClient, ciclo_nivel } from '@prisma/client';
 //import { tipo_premio} from '@prisma/client';
 import bcrypt from 'bcrypt';
 

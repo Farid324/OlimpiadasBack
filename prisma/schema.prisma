@@ -171,7 +171,7 @@ model areas {
   // 2. Agrega estos campos nuevos
   nota_aprobacion Int?              @default(51) // Del 51 al 100
   tipo            tipo_area_config? @default(INDIVIDUAL)
-  niveles_target  String?           // Guardaremos "Primaria, Secundaria" o uno solo como texto simple por simplicidad
+  niveles_target  String? // Guardaremos "Primaria, Secundaria" o uno solo como texto simple por simplicidad
 
   inscripciones     inscripciones[]
   medallero_config  medallero_config[]
@@ -195,9 +195,9 @@ model niveles {
   listas_generadas listas_generadas[]
   grupos           grupos[]           @relation("nivel_grupos")
 
-  cierres_fase cierres_fase[]
+  cierres_fase      cierres_fase[]
   premios_otorgados premios_otorgados[]
-  medallero_config medallero_config[]
+  medallero_config  medallero_config[]
 
   @@index([nombre_nivel])
 }
@@ -322,18 +322,20 @@ model fases {
 
   evaluaciones evaluaciones[]
   cierres_fase cierres_fase[]
+
+  asignaciones asignacion_evaluador_fase[]
 }
 
 model evaluaciones {
-  id_evaluacion   Int             @id @default(autoincrement()) @db.Integer
-  id_inscripcion  Int
-  id_fase         Int
-  id_evaluador    Int
-  nota            Decimal         @db.Decimal(5, 2)
-  fecha_registro  DateTime        @default(now())
-  estado_registro estado_registro @default(BORRADOR)
+  id_evaluacion     Int             @id @default(autoincrement()) @db.Integer
+  id_inscripcion    Int
+  id_fase           Int
+  id_evaluador      Int
+  nota              Decimal         @db.Decimal(5, 2)
+  fecha_registro    DateTime        @default(now())
+  estado_registro   estado_registro @default(BORRADOR)
   descripConceptual String?
-  comentario      String?
+  comentario        String?
 
   inscripcion inscripciones @relation(fields: [id_inscripcion], references: [id_inscripcion], onDelete: Cascade)
   fase        fases         @relation(fields: [id_fase], references: [id_fase])
@@ -345,6 +347,18 @@ model evaluaciones {
   @@index([id_inscripcion])
   @@index([id_fase])
   @@index([id_evaluador])
+}
+
+model asignacion_evaluador_fase {
+  id_asignacion     Int @id @default(autoincrement()) @db.Integer
+  id_evaluador_area Int
+  id_fase           Int
+  cupo              Int @default(0)
+
+  evaluador_area evaluadores_area @relation(fields: [id_evaluador_area], references: [id_evaluador_area], onDelete: Cascade)
+  fase           fases            @relation(fields: [id_fase], references: [id_fase])
+
+  @@unique([id_evaluador_area, id_fase], name: "uq_eval_area_fase")
 }
 
 model log_cambios_nota {
@@ -393,6 +407,8 @@ model evaluadores_area {
   gestion gestiones @relation(fields: [id_gestion], references: [id_gestion])
 
   @@unique([id_usuario, id_area, id_gestion], name: "uq_eval_area_gestion")
+  asignaciones asignacion_evaluador_fase[]
+  
   @@index([id_usuario])
   @@index([id_area])
   @@index([id_gestion])

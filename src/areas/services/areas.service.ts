@@ -38,14 +38,60 @@ export class AreasService {
   }
 
   async update(id: number, data: CreateAreaDto) {
-    return this.prisma.areas.update({
-      where: { id_area: id },
-      data: {
-        nombre_area: data.nombre_area,
-        nota_aprobacion: data.nota_aprobacion,
-        tipo: data.tipo,
-        niveles_target: data.niveles_target,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Actualizar el área
+      const areaActualizada = await tx.areas.update({
+        where: { id_area: id },
+        data: {
+          nombre_area: data.nombre_area,
+          nota_aprobacion: data.nota_aprobacion,
+          tipo: data.tipo,
+          niveles_target: data.niveles_target,
+        },
+      });
+
+      const notaAprobacion = areaActualizada.nota_aprobacion;
+
+      // 2. Actualizar clasificaciones
+      await tx.inscripciones.updateMany({
+        where: {
+          id_area: id,
+          puntaje_clasificacion: { not: null },
+        },
+        data: {
+          clasificacion: null,
+        },
+      });
+
+      if (notaAprobacion !== null) {
+        // 3. Clasificados
+        await tx.inscripciones.updateMany({
+          where: {
+            id_area: id,
+            puntaje_clasificacion: {
+              gte: notaAprobacion,
+            },
+          },
+          data: {
+            clasificacion: 'CLASIFICADO',
+          },
+        });
+
+        // 4. No clasificados
+        await tx.inscripciones.updateMany({
+          where: {
+            id_area: id,
+            puntaje_clasificacion: {
+              lt: notaAprobacion,
+            },
+          },
+          data: {
+            clasificacion: 'NO_CLASIFICADO',
+          },
+        });
+      }
+
+      return areaActualizada;
     });
   }
 

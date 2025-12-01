@@ -10,6 +10,9 @@ import {
   Get,
   Query,
   Param,
+  Patch,
+  Delete,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { Request } from 'express'; // 1️⃣ Importamos Request de express
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -20,6 +23,7 @@ import { RegistroOlimpistaDto } from './dto/registro-olimpista.dto';
 import { OlimpistasService } from './olimpistas.service';
 import { BigIntSerializerInterceptor } from 'src/common/interceptors/bigint-serializer.interceptor';
 import { GetOlimpistasQueryDto } from './dto/get-olimpistas.query';
+import { UpdateOlimpistaDto } from './dto/update-olimpista.dto';
 
 // 2️⃣ Definimos la interfaz para extender Request con el usuario
 interface RequestWithUser extends Request {
@@ -120,5 +124,35 @@ export class OlimpistasController {
   async checkCi(@Param('ci') ci: string) {
     const exists = await this.service.existsByCi(ci?.trim() ?? '');
     return { exists };
+  }
+
+  // NUEVO: obtener un olimpista por id_inscripcion (para edición)
+  @Get(':id')
+  @Roles('ADMINISTRADOR', 'RESPONSABLE_DE_AREA')
+  async getOlimpistaById(@Param('id', ParseIntPipe) id: number) {
+    return this.service.getOlimpistaById(id);
+  }
+
+  // NUEVO: actualización de olimpista por id_inscripcion
+  @Patch(':id')
+  @Roles('ADMINISTRADOR', 'RESPONSABLE_DE_AREA')
+  async updateOlimpista(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: UpdateOlimpistaDto,
+    @Req() req: RequestWithUser,
+  ) {
+    const userId = req.user?.sub ? Number(req.user.sub) : undefined;
+    return this.service.updateOlimpista(id, body, userId);
+  }
+
+  // NUEVO: eliminación de olimpista por id_inscripcion
+  @Delete(':id')
+  @Roles('ADMINISTRADOR', 'RESPONSABLE_DE_AREA')
+  async deleteOlimpista(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: RequestWithUser,
+  ) {
+    const userId = req.user?.sub ? Number(req.user.sub) : undefined;
+    return this.service.removeOlimpista(id, userId);
   }
 }

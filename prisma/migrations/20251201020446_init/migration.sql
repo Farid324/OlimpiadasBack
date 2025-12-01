@@ -1,4 +1,7 @@
 -- CreateEnum
+CREATE TYPE "public"."estado_gestion" AS ENUM ('ABIERTA', 'CERRADA');
+
+-- CreateEnum
 CREATE TYPE "public"."tipo_premio" AS ENUM ('ORO', 'PLATA', 'BRONCE', 'MENCION');
 
 -- CreateEnum
@@ -37,13 +40,25 @@ CREATE TABLE "public"."premios_otorgados" (
     "id_inscripcion" INTEGER NOT NULL,
     "id_area" INTEGER NOT NULL,
     "id_nivel" INTEGER NOT NULL,
-    "anio" INTEGER NOT NULL,
+    "id_gestion" INTEGER NOT NULL,
     "tipo" "public"."tipo_premio" NOT NULL,
     "fuente" "public"."fuente_lista",
     "generado_desde" INTEGER,
     "creado_en" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "anio" INTEGER,
 
     CONSTRAINT "premios_otorgados_pkey" PRIMARY KEY ("id_premio")
+);
+
+-- CreateTable
+CREATE TABLE "public"."gestiones" (
+    "id_gestion" SERIAL NOT NULL,
+    "anio" INTEGER NOT NULL,
+    "nombre" TEXT,
+    "estado" "public"."estado_gestion" NOT NULL DEFAULT 'ABIERTA',
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "gestiones_pkey" PRIMARY KEY ("id_gestion")
 );
 
 -- CreateTable
@@ -159,6 +174,7 @@ CREATE TABLE "public"."inscripciones" (
     "id_competidor" INTEGER NOT NULL,
     "id_area" INTEGER NOT NULL,
     "id_nivel" INTEGER NOT NULL,
+    "id_gestion" INTEGER NOT NULL,
     "estado_inscripcion" "public"."estado_inscripcion" NOT NULL DEFAULT 'INSCRITO',
     "observaciones" TEXT,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -195,6 +211,16 @@ CREATE TABLE "public"."evaluaciones" (
 );
 
 -- CreateTable
+CREATE TABLE "public"."asignacion_evaluador_fase" (
+    "id_asignacion" SERIAL NOT NULL,
+    "id_evaluador_area" INTEGER NOT NULL,
+    "id_fase" INTEGER NOT NULL,
+    "cupo" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "asignacion_evaluador_fase_pkey" PRIMARY KEY ("id_asignacion")
+);
+
+-- CreateTable
 CREATE TABLE "public"."log_cambios_nota" (
     "id_log" SERIAL NOT NULL,
     "id_evaluacion" INTEGER NOT NULL,
@@ -212,6 +238,7 @@ CREATE TABLE "public"."responsables_area" (
     "id_responsable_area" SERIAL NOT NULL,
     "id_usuario" INTEGER NOT NULL,
     "id_area" INTEGER NOT NULL,
+    "id_gestion" INTEGER NOT NULL,
     "activo" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "responsables_area_pkey" PRIMARY KEY ("id_responsable_area")
@@ -222,6 +249,7 @@ CREATE TABLE "public"."evaluadores_area" (
     "id_evaluador_area" SERIAL NOT NULL,
     "id_usuario" INTEGER NOT NULL,
     "id_area" INTEGER NOT NULL,
+    "id_gestion" INTEGER NOT NULL,
     "activo" BOOLEAN NOT NULL DEFAULT true,
 
     CONSTRAINT "evaluadores_area_pkey" PRIMARY KEY ("id_evaluador_area")
@@ -232,6 +260,7 @@ CREATE TABLE "public"."medallero_config" (
     "id_medallero" SERIAL NOT NULL,
     "id_area" INTEGER NOT NULL,
     "id_nivel" INTEGER NOT NULL,
+    "id_gestion" INTEGER NOT NULL,
     "oros" INTEGER NOT NULL DEFAULT 0,
     "platas" INTEGER NOT NULL DEFAULT 0,
     "bronces" INTEGER NOT NULL DEFAULT 0,
@@ -248,6 +277,7 @@ CREATE TABLE "public"."cierres_fase" (
     "id_fase" INTEGER NOT NULL,
     "id_area" INTEGER NOT NULL,
     "id_nivel" INTEGER NOT NULL,
+    "id_gestion" INTEGER NOT NULL,
     "cerrado_por" INTEGER NOT NULL,
     "fecha_cierre" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "estado_validacion" "public"."estado_validacion" NOT NULL DEFAULT 'PENDIENTE',
@@ -263,6 +293,7 @@ CREATE TABLE "public"."listas_generadas" (
     "tipo_lista" "public"."tipo_lista" NOT NULL,
     "id_area" INTEGER NOT NULL,
     "id_nivel" INTEGER,
+    "id_gestion" INTEGER NOT NULL,
     "fuente" "public"."fuente_lista",
     "criterios_orden" JSONB,
     "contenido_snapshot" JSONB,
@@ -299,10 +330,19 @@ CREATE TABLE "public"."import_csv" (
 );
 
 -- CreateIndex
-CREATE INDEX "premios_otorgados_id_area_id_nivel_anio_idx" ON "public"."premios_otorgados"("id_area", "id_nivel", "anio");
+CREATE INDEX "premios_otorgados_id_area_id_nivel_id_gestion_idx" ON "public"."premios_otorgados"("id_area", "id_nivel", "id_gestion");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "premios_otorgados_id_inscripcion_id_area_id_nivel_anio_key" ON "public"."premios_otorgados"("id_inscripcion", "id_area", "id_nivel", "anio");
+CREATE UNIQUE INDEX "premios_otorgados_id_inscripcion_id_area_id_nivel_id_gestio_key" ON "public"."premios_otorgados"("id_inscripcion", "id_area", "id_nivel", "id_gestion");
+
+-- CreateIndex
+CREATE INDEX "gestiones_anio_idx" ON "public"."gestiones"("anio");
+
+-- CreateIndex
+CREATE INDEX "gestiones_estado_idx" ON "public"."gestiones"("estado");
+
+-- CreateIndex
+CREATE INDEX "gestiones_anio_estado_idx" ON "public"."gestiones"("anio", "estado");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "roles_nombre_key" ON "public"."roles"("nombre");
@@ -368,13 +408,19 @@ CREATE INDEX "inscripciones_id_area_idx" ON "public"."inscripciones"("id_area");
 CREATE INDEX "inscripciones_id_nivel_idx" ON "public"."inscripciones"("id_nivel");
 
 -- CreateIndex
+CREATE INDEX "inscripciones_id_gestion_id_area_id_nivel_idx" ON "public"."inscripciones"("id_gestion", "id_area", "id_nivel");
+
+-- CreateIndex
 CREATE INDEX "inscripciones_id_area_id_nivel_clasificacion_idx" ON "public"."inscripciones"("id_area", "id_nivel", "clasificacion");
 
 -- CreateIndex
 CREATE INDEX "inscripciones_id_area_id_nivel_puntaje_clasificacion_idx" ON "public"."inscripciones"("id_area", "id_nivel", "puntaje_clasificacion");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "inscripciones_id_competidor_id_area_id_nivel_key" ON "public"."inscripciones"("id_competidor", "id_area", "id_nivel");
+CREATE INDEX "inscripciones_id_gestion_estado_inscripcion_idx" ON "public"."inscripciones"("id_gestion", "estado_inscripcion");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "inscripciones_id_competidor_id_area_id_nivel_id_gestion_key" ON "public"."inscripciones"("id_competidor", "id_area", "id_nivel", "id_gestion");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "fases_nombre_fase_key" ON "public"."fases"("nombre_fase");
@@ -392,6 +438,9 @@ CREATE INDEX "evaluaciones_id_evaluador_idx" ON "public"."evaluaciones"("id_eval
 CREATE UNIQUE INDEX "evaluaciones_id_inscripcion_id_fase_id_evaluador_key" ON "public"."evaluaciones"("id_inscripcion", "id_fase", "id_evaluador");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "asignacion_evaluador_fase_id_evaluador_area_id_fase_key" ON "public"."asignacion_evaluador_fase"("id_evaluador_area", "id_fase");
+
+-- CreateIndex
 CREATE INDEX "log_cambios_nota_id_evaluacion_idx" ON "public"."log_cambios_nota"("id_evaluacion");
 
 -- CreateIndex
@@ -407,7 +456,10 @@ CREATE INDEX "responsables_area_id_usuario_idx" ON "public"."responsables_area"(
 CREATE INDEX "responsables_area_id_area_idx" ON "public"."responsables_area"("id_area");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "responsables_area_id_usuario_id_area_key" ON "public"."responsables_area"("id_usuario", "id_area");
+CREATE INDEX "responsables_area_id_gestion_idx" ON "public"."responsables_area"("id_gestion");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "responsables_area_id_usuario_id_area_id_gestion_key" ON "public"."responsables_area"("id_usuario", "id_area", "id_gestion");
 
 -- CreateIndex
 CREATE INDEX "evaluadores_area_id_usuario_idx" ON "public"."evaluadores_area"("id_usuario");
@@ -416,7 +468,10 @@ CREATE INDEX "evaluadores_area_id_usuario_idx" ON "public"."evaluadores_area"("i
 CREATE INDEX "evaluadores_area_id_area_idx" ON "public"."evaluadores_area"("id_area");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "evaluadores_area_id_usuario_id_area_key" ON "public"."evaluadores_area"("id_usuario", "id_area");
+CREATE INDEX "evaluadores_area_id_gestion_idx" ON "public"."evaluadores_area"("id_gestion");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "evaluadores_area_id_usuario_id_area_id_gestion_key" ON "public"."evaluadores_area"("id_usuario", "id_area", "id_gestion");
 
 -- CreateIndex
 CREATE INDEX "medallero_config_id_area_idx" ON "public"."medallero_config"("id_area");
@@ -425,7 +480,10 @@ CREATE INDEX "medallero_config_id_area_idx" ON "public"."medallero_config"("id_a
 CREATE INDEX "medallero_config_id_nivel_idx" ON "public"."medallero_config"("id_nivel");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "medallero_config_id_area_id_nivel_key" ON "public"."medallero_config"("id_area", "id_nivel");
+CREATE INDEX "medallero_config_id_gestion_idx" ON "public"."medallero_config"("id_gestion");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "medallero_config_id_area_id_nivel_id_gestion_key" ON "public"."medallero_config"("id_area", "id_nivel", "id_gestion");
 
 -- CreateIndex
 CREATE INDEX "cierres_fase_id_area_idx" ON "public"."cierres_fase"("id_area");
@@ -437,13 +495,19 @@ CREATE INDEX "cierres_fase_id_nivel_idx" ON "public"."cierres_fase"("id_nivel");
 CREATE INDEX "cierres_fase_id_fase_idx" ON "public"."cierres_fase"("id_fase");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "cierres_fase_id_fase_id_area_id_nivel_key" ON "public"."cierres_fase"("id_fase", "id_area", "id_nivel");
+CREATE INDEX "cierres_fase_id_gestion_idx" ON "public"."cierres_fase"("id_gestion");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "cierres_fase_id_fase_id_area_id_nivel_id_gestion_key" ON "public"."cierres_fase"("id_fase", "id_area", "id_nivel", "id_gestion");
 
 -- CreateIndex
 CREATE INDEX "listas_generadas_id_area_idx" ON "public"."listas_generadas"("id_area");
 
 -- CreateIndex
 CREATE INDEX "listas_generadas_id_nivel_idx" ON "public"."listas_generadas"("id_nivel");
+
+-- CreateIndex
+CREATE INDEX "listas_generadas_id_gestion_idx" ON "public"."listas_generadas"("id_gestion");
 
 -- CreateIndex
 CREATE INDEX "listas_generadas_tipo_lista_idx" ON "public"."listas_generadas"("tipo_lista");
@@ -462,6 +526,9 @@ ALTER TABLE "public"."premios_otorgados" ADD CONSTRAINT "premios_otorgados_id_ar
 
 -- AddForeignKey
 ALTER TABLE "public"."premios_otorgados" ADD CONSTRAINT "premios_otorgados_id_nivel_fkey" FOREIGN KEY ("id_nivel") REFERENCES "public"."niveles"("id_nivel") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."premios_otorgados" ADD CONSTRAINT "premios_otorgados_id_gestion_fkey" FOREIGN KEY ("id_gestion") REFERENCES "public"."gestiones"("id_gestion") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."premios_otorgados" ADD CONSTRAINT "premios_otorgados_generado_desde_fkey" FOREIGN KEY ("generado_desde") REFERENCES "public"."listas_generadas"("id_lista") ON DELETE SET NULL ON UPDATE CASCADE;
@@ -497,6 +564,9 @@ ALTER TABLE "public"."inscripciones" ADD CONSTRAINT "inscripciones_id_area_fkey"
 ALTER TABLE "public"."inscripciones" ADD CONSTRAINT "inscripciones_id_nivel_fkey" FOREIGN KEY ("id_nivel") REFERENCES "public"."niveles"("id_nivel") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "public"."inscripciones" ADD CONSTRAINT "inscripciones_id_gestion_fkey" FOREIGN KEY ("id_gestion") REFERENCES "public"."gestiones"("id_gestion") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "public"."evaluaciones" ADD CONSTRAINT "evaluaciones_id_inscripcion_fkey" FOREIGN KEY ("id_inscripcion") REFERENCES "public"."inscripciones"("id_inscripcion") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -504,6 +574,12 @@ ALTER TABLE "public"."evaluaciones" ADD CONSTRAINT "evaluaciones_id_fase_fkey" F
 
 -- AddForeignKey
 ALTER TABLE "public"."evaluaciones" ADD CONSTRAINT "evaluaciones_id_evaluador_fkey" FOREIGN KEY ("id_evaluador") REFERENCES "public"."usuarios"("id_usuario") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."asignacion_evaluador_fase" ADD CONSTRAINT "asignacion_evaluador_fase_id_evaluador_area_fkey" FOREIGN KEY ("id_evaluador_area") REFERENCES "public"."evaluadores_area"("id_evaluador_area") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."asignacion_evaluador_fase" ADD CONSTRAINT "asignacion_evaluador_fase_id_fase_fkey" FOREIGN KEY ("id_fase") REFERENCES "public"."fases"("id_fase") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."log_cambios_nota" ADD CONSTRAINT "log_cambios_nota_id_evaluacion_fkey" FOREIGN KEY ("id_evaluacion") REFERENCES "public"."evaluaciones"("id_evaluacion") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -518,16 +594,25 @@ ALTER TABLE "public"."responsables_area" ADD CONSTRAINT "responsables_area_id_us
 ALTER TABLE "public"."responsables_area" ADD CONSTRAINT "responsables_area_id_area_fkey" FOREIGN KEY ("id_area") REFERENCES "public"."areas"("id_area") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "public"."responsables_area" ADD CONSTRAINT "responsables_area_id_gestion_fkey" FOREIGN KEY ("id_gestion") REFERENCES "public"."gestiones"("id_gestion") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "public"."evaluadores_area" ADD CONSTRAINT "evaluadores_area_id_usuario_fkey" FOREIGN KEY ("id_usuario") REFERENCES "public"."usuarios"("id_usuario") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."evaluadores_area" ADD CONSTRAINT "evaluadores_area_id_area_fkey" FOREIGN KEY ("id_area") REFERENCES "public"."areas"("id_area") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "public"."evaluadores_area" ADD CONSTRAINT "evaluadores_area_id_gestion_fkey" FOREIGN KEY ("id_gestion") REFERENCES "public"."gestiones"("id_gestion") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "public"."medallero_config" ADD CONSTRAINT "medallero_config_id_area_fkey" FOREIGN KEY ("id_area") REFERENCES "public"."areas"("id_area") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."medallero_config" ADD CONSTRAINT "medallero_config_id_nivel_fkey" FOREIGN KEY ("id_nivel") REFERENCES "public"."niveles"("id_nivel") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."medallero_config" ADD CONSTRAINT "medallero_config_id_gestion_fkey" FOREIGN KEY ("id_gestion") REFERENCES "public"."gestiones"("id_gestion") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."cierres_fase" ADD CONSTRAINT "cierres_fase_id_fase_fkey" FOREIGN KEY ("id_fase") REFERENCES "public"."fases"("id_fase") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -537,6 +622,9 @@ ALTER TABLE "public"."cierres_fase" ADD CONSTRAINT "cierres_fase_id_area_fkey" F
 
 -- AddForeignKey
 ALTER TABLE "public"."cierres_fase" ADD CONSTRAINT "cierres_fase_id_nivel_fkey" FOREIGN KEY ("id_nivel") REFERENCES "public"."niveles"("id_nivel") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."cierres_fase" ADD CONSTRAINT "cierres_fase_id_gestion_fkey" FOREIGN KEY ("id_gestion") REFERENCES "public"."gestiones"("id_gestion") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."cierres_fase" ADD CONSTRAINT "cierres_fase_cerrado_por_fkey" FOREIGN KEY ("cerrado_por") REFERENCES "public"."usuarios"("id_usuario") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -549,6 +637,9 @@ ALTER TABLE "public"."listas_generadas" ADD CONSTRAINT "listas_generadas_id_area
 
 -- AddForeignKey
 ALTER TABLE "public"."listas_generadas" ADD CONSTRAINT "listas_generadas_id_nivel_fkey" FOREIGN KEY ("id_nivel") REFERENCES "public"."niveles"("id_nivel") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."listas_generadas" ADD CONSTRAINT "listas_generadas_id_gestion_fkey" FOREIGN KEY ("id_gestion") REFERENCES "public"."gestiones"("id_gestion") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."listas_generadas" ADD CONSTRAINT "listas_generadas_generado_por_fkey" FOREIGN KEY ("generado_por") REFERENCES "public"."usuarios"("id_usuario") ON DELETE RESTRICT ON UPDATE CASCADE;
