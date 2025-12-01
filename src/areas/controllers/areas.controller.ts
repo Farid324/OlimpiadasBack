@@ -1,5 +1,4 @@
 // src/areas/controllers/areas.controller.ts
-
 import {
   Controller,
   Get,

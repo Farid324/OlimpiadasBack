@@ -11,7 +11,7 @@ export class QueryLogsDto {
 
   @IsOptional()
   @IsString()
-  usuario?: string; 
+  usuario?: string;
 
   @IsOptional()
   @IsString()
@@ -25,4 +25,3 @@ export class QueryLogsDto {
   @IsString()
   fecha_fin?: string; // ISO
 }
-

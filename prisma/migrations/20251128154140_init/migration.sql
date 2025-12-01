@@ -188,6 +188,7 @@ CREATE TABLE "public"."evaluaciones" (
     "nota" DECIMAL(5,2) NOT NULL,
     "fecha_registro" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "estado_registro" "public"."estado_registro" NOT NULL DEFAULT 'BORRADOR',
+    "descripConceptual" TEXT,
     "comentario" TEXT,
 
     CONSTRAINT "evaluaciones_pkey" PRIMARY KEY ("id_evaluacion")

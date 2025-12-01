@@ -21,7 +21,7 @@ import { ADMIN } from '../auth/constants';
 
 @Controller('evaluadores')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(ADMIN,'RESPONSABLE_DE_AREA')
+@Roles(ADMIN, 'RESPONSABLE_DE_AREA')
 export class EvaluadoresController {
   constructor(private readonly service: EvaluadoresService) {}
 

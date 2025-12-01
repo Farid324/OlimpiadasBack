@@ -222,6 +222,14 @@ export class EvaluadoresService {
   /** POST /evaluadores */
   async create(dto: CreateEvaluadorInput) {
     try {
+      const gestion = await this.prisma.gestiones.findFirst({
+        where: { estado: 'ABIERTA' },
+      });
+      if (!gestion) {
+        throw new BadRequestException(
+          'No existe una gestión abierta para registrar evaluadores.',
+        );
+      }
       // ... (lógica para nombre, apellido, CI, validaciones, duplicados) ...
       let { nombre, apellido } = dto;
       if ((!nombre || !apellido) && dto.nombreCompleto) {
@@ -299,7 +307,9 @@ export class EvaluadoresService {
         ...(institucion !== undefined ? { institucion } : {}),
         ...(especialidad !== undefined ? { especialidad } : {}),
         // usamos experienciaFinal para garantizar mínimo 1 año
-        ...(experienciaFinal !== undefined ? { experiencia: experienciaFinal } : {}),
+        ...(experienciaFinal !== undefined
+          ? { experiencia: experienciaFinal }
+          : {}),
       };
 
       const created = await this.prisma.usuarios.create({
@@ -313,6 +323,8 @@ export class EvaluadoresService {
           data: id_areas.map((id_area) => ({
             id_usuario: created.id_usuario,
             id_area,
+            id_gestion: gestion.id_gestion, // <--- AGREGADO
+            activo: true, // Asegúrate de mandar activo si es necesario
           })),
           skipDuplicates: true,
         });
@@ -367,6 +379,14 @@ export class EvaluadoresService {
   /** PATCH /evaluadores/:id */
   async update(id: number, dto: UpdateEvaluadorInput) {
     try {
+      const gestion = await this.prisma.gestiones.findFirst({
+        where: { estado: 'ABIERTA' },
+      });
+      if (!gestion) {
+        throw new BadRequestException(
+          'No hay una gestión abierta para realizar cambios.',
+        );
+      }
       let nombre = dto.nombre;
       let apellido = dto.apellido;
 
@@ -478,6 +498,8 @@ export class EvaluadoresService {
               data: dto.id_areas.map((id_area) => ({
                 id_usuario: id,
                 id_area,
+                id_gestion: gestion.id_gestion, // <--- ⚠️ ESTO FALTABA
+                activo: true,
               })),
               skipDuplicates: true,
             });
