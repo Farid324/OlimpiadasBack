@@ -1,5 +1,13 @@
 //src/medallero-config/medallero-config.controller.ts
-import { Controller, Get, Put, Post, Body, Param, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Put,
+  Post,
+  Body,
+  Param,
+  Logger,
+} from '@nestjs/common';
 import { MedalleroConfigService } from './medallero-config.service';
 import { UpdateMedalleroConfigDto } from './dto/update-medallero-config.dto';
 import { CreateMedalleroConfigDto } from './dto/create-medallero-config.dto';
@@ -39,6 +47,3 @@ export class MedalleroConfigController {
     return this.service.update(+id, dto);
   }
 }
-
-
-

@@ -12,4 +12,3 @@ export class MedalleroConfigEntity {
   vigente_hasta?: Date | null;
   area?: areas;
 }
-

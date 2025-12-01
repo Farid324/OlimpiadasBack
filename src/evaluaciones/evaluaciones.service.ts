@@ -3,6 +3,30 @@ import { PrismaService } from '../prisma/prisma.service';
 //import { PhaseType } from '../fases/dto/close-phase.dto';
 //import { PhaseStatus } from '../fases/fases.service';
 
+export interface InscripcionRow {
+  id_inscripcion: number;
+  estado_inscripcion: string;
+  clasificacion?: string | null; // Puede ser null
+  area: { nombre_area: string };
+  nivel: { nombre_nivel: string };
+  competidor: {
+    id_competidor: number;
+    nombres: string;
+    apellidos: string;
+    ci: string;
+    escuela: string | null;
+    departamento: string | null;
+  };
+  evaluaciones: Array<{
+    id_evaluacion: number;
+    nota: any; // Prisma.Decimal, lo dejamos como any o unknown para no complicar imports
+    comentario: string | null;
+    id_fase: number;
+    id_evaluador: number;
+    estado_registro: string;
+  }>;
+}
+
 interface ListarCompetidoresParams {
   evaluadorId: number;
   search?: string;
@@ -11,12 +35,16 @@ interface ListarCompetidoresParams {
   id_area?: number;
   id_nivel?: number;
 }
-
 @Injectable()
 export class EvaluacionesAdminService {
-  constructor(public prisma: PrismaService) { }
+  constructor(public prisma: PrismaService) {}
 
   async listarCompetidores(params: ListarCompetidoresParams) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    // Si no hay gestión, devolvemos vacío para no mezclar datos históricos
+    if (!gestion) return [];
     const { evaluadorId, search, idAreas, filtro, id_area, id_nivel } = params;
 
     if (!idAreas || !Array.isArray(idAreas) || idAreas.length === 0) {
@@ -36,24 +64,24 @@ export class EvaluacionesAdminService {
     });
     const idFaseClasif = faseClasif?.id_fase;
 
-    const resultadoGlobal: any[] = [];
+    const resultadoGlobal: InscripcionRow[] = [];
 
     for (const areaId of areaIdsToUse) {
       // 1) Obtener TODAS las inscripciones base de esa área (clasificación)
       const inscripcionesArea = await this.prisma.inscripciones.findMany({
         where: {
           id_area: areaId,
-
+          id_gestion: gestion.id_gestion,
           ...(id_nivel ? { id_nivel } : {}),
 
           competidor: {
             OR: search
               ? [
-                { nombres: { contains: search, mode: 'insensitive' } },
-                { apellidos: { contains: search, mode: 'insensitive' } },
-                { ci: { contains: search, mode: 'insensitive' } },
-                { escuela: { contains: search, mode: 'insensitive' } },
-              ]
+                  { nombres: { contains: search, mode: 'insensitive' } },
+                  { apellidos: { contains: search, mode: 'insensitive' } },
+                  { ci: { contains: search, mode: 'insensitive' } },
+                  { escuela: { contains: search, mode: 'insensitive' } },
+                ]
               : undefined,
           },
 
@@ -118,19 +146,23 @@ export class EvaluacionesAdminService {
         continue;
       }
 
-      const idsEvaluadoresArea = evaluadoresArea.map((e) => e.id_evaluador_area);
+      const idsEvaluadoresArea = evaluadoresArea.map(
+        (e) => e.id_evaluador_area,
+      );
 
       // 3) Asignaciones para esta área y fase
-      const asignaciones = await this.prisma.asignacion_evaluador_fase.findMany({
-        where: {
-          id_fase: idFaseClasif,
-          id_evaluador_area: { in: idsEvaluadoresArea },
+      const asignaciones = await this.prisma.asignacion_evaluador_fase.findMany(
+        {
+          where: {
+            id_fase: idFaseClasif,
+            id_evaluador_area: { in: idsEvaluadoresArea },
+          },
+          select: {
+            id_evaluador_area: true,
+            cupo: true,
+          },
         },
-        select: {
-          id_evaluador_area: true,
-          cupo: true,
-        },
-      });
+      );
 
       // Si no hay asignaciones, dejamos comportamiento antiguo (todos ven todo)
       if (!asignaciones.length) {
@@ -200,27 +232,27 @@ export class EvaluacionesAdminService {
     return resultadoGlobal;
   }
 
-
   async getAreasAsignadasForSelect(evaluadorId: number) {
-    const areas = await this.prisma.evaluadores_area.findMany({
-      where: {
-        id_usuario: evaluadorId,
-        activo: true,
-        area: { activo: true },
-      },
-      select: {
-        id_area: true,
-        area: { select: { nombre_area: true } },
-      },
-      orderBy: { id_area: 'asc' },
-    });
-
-    return areas.map((a) => ({
-      value: a.id_area,
-      label: a.area.nombre_area,
-    }));
+    return this.prisma.evaluadores_area
+      .findMany({
+        where: {
+          id_usuario: evaluadorId,
+          activo: true,
+          area: { activo: true },
+        },
+        select: {
+          id_area: true,
+          area: { select: { nombre_area: true } },
+        },
+        orderBy: { id_area: 'asc' },
+      })
+      .then((rows) =>
+        rows.map((r) => ({
+          id_area: r.id_area,
+          nombre_area: r.area.nombre_area,
+        })),
+      );
   }
-
   async listarCompetidoresFirmados({
     evaluadorId,
     search,
@@ -234,6 +266,10 @@ export class EvaluacionesAdminService {
     id_area?: number;
     id_nivel?: number;
   }) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) return [];
     if (!Array.isArray(idAreas) || idAreas.length === 0) {
       console.warn('❗ Evaluador sin áreas asignadas. Lista vacía.');
       return [];
@@ -250,13 +286,14 @@ export class EvaluacionesAdminService {
     });
     const idFaseFinal = faseFinal?.id_fase;
 
-    const resultadoGlobal: any[] = [];
+    const resultadoGlobal: InscripcionRow[] = [];
 
     for (const areaId of areaIdsToUse) {
       // 1) Inscripciones de fase final (clasificados + firmados fase 1)
       const inscripcionesArea = await this.prisma.inscripciones.findMany({
         where: {
           id_area: areaId,
+          id_gestion: gestion.id_gestion,
           clasificacion: 'CLASIFICADO',
 
           ...(typeof id_nivel === 'number' && id_nivel > 0 ? { id_nivel } : {}),
@@ -270,13 +307,13 @@ export class EvaluacionesAdminService {
 
           competidor: search
             ? {
-              OR: [
-                { nombres: { contains: search, mode: 'insensitive' } },
-                { apellidos: { contains: search, mode: 'insensitive' } },
-                { ci: { contains: search, mode: 'insensitive' } },
-                { escuela: { contains: search, mode: 'insensitive' } },
-              ],
-            }
+                OR: [
+                  { nombres: { contains: search, mode: 'insensitive' } },
+                  { apellidos: { contains: search, mode: 'insensitive' } },
+                  { ci: { contains: search, mode: 'insensitive' } },
+                  { escuela: { contains: search, mode: 'insensitive' } },
+                ],
+              }
             : undefined,
         },
 
@@ -334,19 +371,23 @@ export class EvaluacionesAdminService {
         continue;
       }
 
-      const idsEvaluadoresArea = evaluadoresArea.map((e) => e.id_evaluador_area);
+      const idsEvaluadoresArea = evaluadoresArea.map(
+        (e) => e.id_evaluador_area,
+      );
 
       // 3) Asignaciones fase FINAL
-      const asignaciones = await this.prisma.asignacion_evaluador_fase.findMany({
-        where: {
-          id_fase: idFaseFinal,
-          id_evaluador_area: { in: idsEvaluadoresArea },
+      const asignaciones = await this.prisma.asignacion_evaluador_fase.findMany(
+        {
+          where: {
+            id_fase: idFaseFinal,
+            id_evaluador_area: { in: idsEvaluadoresArea },
+          },
+          select: {
+            id_evaluador_area: true,
+            cupo: true,
+          },
         },
-        select: {
-          id_evaluador_area: true,
-          cupo: true,
-        },
-      });
+      );
 
       if (!asignaciones.length) {
         resultadoGlobal.push(...inscripcionesArea);
@@ -410,11 +451,19 @@ export class EvaluacionesAdminService {
     return resultadoGlobal;
   }
 
-
   async getResumenEvaluador(idEvaluador: number, idFase: number) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion)
+      return { total: 0, pendientes: 0, evaluados: 0, clasificados: 0 };
     // Obtener las áreas asignadas al evaluador
     const areasAsignadas = await this.prisma.evaluadores_area.findMany({
-      where: { id_usuario: idEvaluador, activo: true },
+      where: {
+        id_usuario: idEvaluador,
+        id_gestion: gestion.id_gestion,
+        activo: true,
+      },
       select: { id_area: true },
     });
 
@@ -423,7 +472,10 @@ export class EvaluacionesAdminService {
     if (areaIds.length === 0) {
       return { total: 0, pendientes: 0, evaluados: 0, clasificados: 0 };
     }
-
+    const commonWhere = {
+      id_area: { in: areaIds },
+      id_gestion: gestion.id_gestion,
+    };
     //Cálculo de totales según la fase
     let total: number;
     let pendientes: number;
@@ -463,7 +515,7 @@ export class EvaluacionesAdminService {
     } else {
       total = await this.prisma.inscripciones.count({
         where: {
-          id_area: { in: areaIds },
+          ...commonWhere,
           clasificacion: 'CLASIFICADO',
           evaluaciones: {
             some: {

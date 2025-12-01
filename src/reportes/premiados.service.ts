@@ -1,9 +1,14 @@
 // src/reportes/premiados.service.ts
-import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { FasesService } from '../fases/fases.service';
 import { PhaseType } from '../fases/dto/close-phase.dto';
-import { tipo_lista, fuente_lista } from '@prisma/client';
+import { tipo_lista, fuente_lista, Prisma } from '@prisma/client';
 
 type EstadoMedalla = 'ORO' | 'PLATA' | 'BRONCE' | 'MENCION';
 
@@ -118,9 +123,13 @@ export class PremiadosService {
     // 4) ordenar por puntaje descendente y id_inscripcion ascendente
     const ordenados = [...inscripciones]
       .map((insc) => {
-        const raw =
-          (insc as any).puntaje_final ?? scoreMap.get(insc.id_inscripcion);
-        const score = raw === null || raw === undefined ? null : Number(raw);
+        // CORRECCIÓN: Acceso directo y tipado seguro (sin 'any')
+        // 1. Si existe puntaje_final en BD (Decimal), lo convertimos a Number.
+        const dbScore = insc.puntaje_final ? Number(insc.puntaje_final) : null;
+        // 2. Si no, buscamos el promedio calculado en el mapa.
+        const calcScore = scoreMap.get(insc.id_inscripcion) ?? null;
+        // 3. Prioridad: BD > Calculado
+        const score = dbScore ?? calcScore;
 
         return {
           inscripcion: insc,
@@ -149,16 +158,16 @@ export class PremiadosService {
       if (!med.tipo) continue;
       salida.push({
         id_inscripcion: inscripcion.id_inscripcion,
-      posicion: pos,
-      nombreCompleto:
-        `${inscripcion.competidor.nombres} ${inscripcion.competidor.apellidos}`.trim(),
-      premio: med.etiqueta ?? '',
-      estadoPremio: med.tipo,
-      area: inscripcion.area.nombre_area,
-      nivel: inscripcion.nivel.nombre_nivel,
-      puntuacion: Number(score),
-      unidadEducativa: inscripcion.competidor.escuela ?? '',
-      departamento: inscripcion.competidor.departamento ?? '',
+        posicion: pos,
+        nombreCompleto:
+          `${inscripcion.competidor.nombres} ${inscripcion.competidor.apellidos}`.trim(),
+        premio: med.etiqueta ?? '',
+        estadoPremio: med.tipo,
+        area: inscripcion.area.nombre_area,
+        nivel: inscripcion.nivel.nombre_nivel,
+        puntuacion: Number(score),
+        unidadEducativa: inscripcion.competidor.escuela ?? '',
+        departamento: inscripcion.competidor.departamento ?? '',
       });
     }
 
@@ -190,17 +199,25 @@ export class PremiadosService {
 
       // registrar que se generó una lista (log muy simple)
       if (f.actorId) {
-        await this.prisma.listas_generadas.create({
-          data: {
-            tipo_lista: tipo_lista.PREMIADOS,
-            id_area: f.id_area,
-            id_nivel: f.id_nivel,
-            fuente: fuente_lista.FINAL,
-            criterios_orden: {},
-            contenido_snapshot: filtrados,
-            generado_por: f.actorId,
-          },
+        // 1️⃣ NUEVO: Obtener gestión para el log
+        const gestion = await this.prisma.gestiones.findFirst({
+          where: { estado: 'ABIERTA' },
         });
+
+        if (gestion) {
+          await this.prisma.listas_generadas.create({
+            data: {
+              tipo_lista: tipo_lista.PREMIADOS,
+              id_area: f.id_area,
+              id_nivel: f.id_nivel,
+              id_gestion: gestion.id_gestion, // <--- ⚠️ AGREGADO
+              fuente: fuente_lista.FINAL,
+              criterios_orden: {},
+              contenido_snapshot: filtrados as unknown as Prisma.InputJsonValue,
+              generado_por: f.actorId,
+            },
+          });
+        }
       }
 
       return filtrados;
@@ -216,7 +233,7 @@ export class PremiadosService {
       select: { id_area: true, id_nivel: true },
     });
 
-    const all: any[] = [];
+    const all: PremiadoRow[] = [];
     for (const c of cierres) {
       const parcial = await this.buildListForPair(c.id_area, c.id_nivel);
       all.push(...parcial);
@@ -293,6 +310,12 @@ export class PremiadosService {
     actorId: number;
     nombreVista?: string;
   }) {
+    // 2️⃣ NUEVO: Obtener gestión al inicio
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) throw new BadRequestException('No hay gestión abierta.');
+
     // validamos que la fase final esta validada
     const st = await this.fases.getStatus(
       params.id_area,
@@ -323,6 +346,7 @@ export class PremiadosService {
           tipo_lista: tipo_lista.PREMIADOS,
           id_area: params.id_area,
           id_nivel: params.id_nivel,
+          id_gestion: gestion.id_gestion, // <--- ⚠️ AGREGADO
           fuente: fuente_lista.FINAL,
           criterios_orden: { source: 'manual' },
           contenido_snapshot: {},
@@ -339,7 +363,7 @@ export class PremiadosService {
       data: {
         id_lista,
         id_usuario: params.actorId,
-        nueva_posicion: params.orden,
+        nueva_posicion: params.orden as unknown as Prisma.InputJsonValue,
         fecha_reorden: new Date(),
       },
     });

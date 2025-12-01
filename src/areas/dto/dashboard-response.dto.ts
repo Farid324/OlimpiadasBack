@@ -20,11 +20,11 @@ export type DashboardMetrics = {
   areasEnEvaluacion: number;
   totalClasificados: number;
   totalPremiados: number;
-  areasActivas: number; 
+  areasActivas: number;
 };
 
 // Respuesta final completa (el objeto que espera el frontend)
 export type DashboardResponse = {
-    metrics: DashboardMetrics;
-    areasStats: AreaNivelStats[];
+  metrics: DashboardMetrics;
+  areasStats: AreaNivelStats[];
 };

@@ -22,7 +22,7 @@ export class LogsService {
 
   /** 🔹 Obtener logs con filtros y paginación */
   /** 🔹 Obtener logs con filtros y paginación */
-// LogsService.ts
+  // LogsService.ts
 async findAll(query: QueryLogsDto & { page?: number; perPage?: number }) {
   const {
     id_evaluacion,

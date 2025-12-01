@@ -1,3 +1,4 @@
+// src/evaluaciones/evaluaciones.controller.ts
 import {
   Controller,
   Get,
@@ -30,7 +31,7 @@ export class EvaluacionesAdminController {
     private service: EvaluacionesAdminService, // “mis-competidores”
     private registrarEditarService: EvaluacionesService,
     private adminEvaluaciones: AdminEvaluacionesService, // admin endpoints
-  ) { }
+  ) {}
 
   // ====================  VISTA EVALUADOR  ====================
   @Get('mis-competidores')
@@ -42,8 +43,18 @@ export class EvaluacionesAdminController {
     @Query('id_nivel') id_nivel?: string,
   ) {
     const idUsuario = Number(req.user.sub);
+    //agregar gestion
+    const gestion = await this.service.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) return [];
+
     const areas = await this.service['prisma'].evaluadores_area.findMany({
-      where: { id_usuario: idUsuario, activo: true },
+      where: {
+        id_usuario: idUsuario,
+        id_gestion: gestion.id_gestion,
+        activo: true,
+      },
       select: { id_area: true },
     });
     const idAreas = areas.map((a) => a.id_area);
@@ -56,7 +67,6 @@ export class EvaluacionesAdminController {
       id_area: id_area ? Number(id_area) : undefined,
       id_nivel: id_nivel ? Number(id_nivel) : undefined,
     });
-
   }
 
   @Get('listarCompetidoresFirmados')
@@ -67,8 +77,17 @@ export class EvaluacionesAdminController {
     @Query('id_nivel') id_nivel?: string,
   ) {
     const idUsuario = Number(req.user.sub);
+    // agregar gestion
+    const gestion = await this.service.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) return [];
     const areas = await this.service['prisma'].evaluadores_area.findMany({
-      where: { id_usuario: idUsuario, activo: true },
+      where: {
+        id_usuario: idUsuario,
+        id_gestion: gestion.id_gestion,
+        activo: true,
+      },
       select: { id_area: true },
     });
     const idAreas = areas.map((a) => a.id_area);
@@ -84,7 +103,6 @@ export class EvaluacionesAdminController {
       id_area: id_area ? Number(id_area) : undefined,
       id_nivel: id_nivel ? Number(id_nivel) : undefined,
     });
-
   }
 
   @Get('mis-areas')

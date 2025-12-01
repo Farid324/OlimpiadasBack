@@ -1,4 +1,3 @@
-// src/olimpistas/olimpistas.controller.ts
 import {
   BadRequestException,
   Body,
@@ -15,6 +14,7 @@ import {
   Delete,
   ParseIntPipe,
 } from '@nestjs/common';
+import { Request } from 'express'; // 1️⃣ Importamos Request de express
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -24,6 +24,21 @@ import { OlimpistasService } from './olimpistas.service';
 import { BigIntSerializerInterceptor } from 'src/common/interceptors/bigint-serializer.interceptor';
 import { GetOlimpistasQueryDto } from './dto/get-olimpistas.query';
 import { UpdateOlimpistaDto } from './dto/update-olimpista.dto';
+
+// 2️⃣ Definimos la interfaz para extender Request con el usuario
+interface RequestWithUser extends Request {
+  user?: {
+    sub: number;
+    email?: string;
+    role?: string;
+    rol?: string; // Por si acaso usas 'rol' en el payload del JWT
+  };
+}
+
+// 3️⃣ Interfaz auxiliar para el body cuando viene data envuelta
+interface BodyWithData {
+  data?: RegistroOlimpistaDto[];
+}
 
 @Controller('olimpistas')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -36,11 +51,12 @@ export class OlimpistasController {
   @UseInterceptors(FileInterceptor('file'))
   async register(
     @UploadedFile() file: Express.Multer.File,
-    @Body() body: unknown,
-    @Req() req: any,
+    @Body() body: unknown, // Mantenemos unknown para validar runtime
+    @Req() req: RequestWithUser, // 4️⃣ Usamos el tipo correcto
   ) {
     const contentType = (req.headers['content-type'] as string) || '';
 
+    // Lógica para CSV (Multipart)
     if (contentType.includes('multipart/form-data')) {
       if (!file)
         throw new BadRequestException('Archivo CSV requerido en campo "file".');
@@ -55,17 +71,28 @@ export class OlimpistasController {
       );
     }
 
+    // Lógica para JSON (Array directo)
     if (Array.isArray(body)) {
       return this.service.registerMany(
         body as RegistroOlimpistaDto[],
         req.user?.sub ? Number(req.user.sub) : undefined,
       );
-    } else if ((body as any)?.data && Array.isArray((body as any).data)) {
+    }
+    // Lógica para JSON ({ data: [...] })
+    // Validación de tipos segura para evitar 'unsafe member access'
+    if (
+      typeof body === 'object' &&
+      body !== null &&
+      'data' in body &&
+      Array.isArray((body as BodyWithData).data)
+    ) {
       return this.service.registerMany(
-        (body as any).data as RegistroOlimpistaDto[],
+        (body as BodyWithData).data as RegistroOlimpistaDto[],
         req.user?.sub ? Number(req.user.sub) : undefined,
       );
-    } else {
+    }
+    // Lógica para JSON (Objeto único)
+    else {
       return this.service.registerOne(
         body as RegistroOlimpistaDto,
         req.user?.sub ? Number(req.user.sub) : undefined,
@@ -73,29 +100,22 @@ export class OlimpistasController {
     }
   }
 
-  // PERMITIR también RESPONSABLE_DE_AREA y filtrar en el service
   @Get()
   @Roles('ADMINISTRADOR', 'RESPONSABLE_DE_AREA')
-  list(@Query() query: GetOlimpistasQueryDto, @Req() req: any) {
-    const userId = req.user?.sub ? Number(req.user.sub) : null;
-    const role = String(req.user?.role ?? req.user?.rol ?? '').toUpperCase();
-    const isAdmin = role === 'ADMINISTRADOR';
-
+  list(@Query() query: GetOlimpistasQueryDto) {
+    // 6️⃣ Eliminadas variables userId/isAdmin no usadas
     return this.service.listOlimpistas({
       area: query.area,
       q: query.q,
-      //limitToUserAreasOf: isAdmin ? null : userId,
     });
   }
 
   @Get('areas-counters')
   @Roles('ADMINISTRADOR', 'RESPONSABLE_DE_AREA')
-  areasCounters(@Req() req: any) {
-    const userId = req.user?.sub ? Number(req.user.sub) : null;
-    const role = String(req.user?.role ?? req.user?.rol ?? '').toUpperCase();
-    const isAdmin = role === 'ADMINISTRADOR';
-
-    return this.service.getAreasCounters(isAdmin ? null : userId);
+  areasCounters() {
+    // 7️⃣ Eliminadas variables userId/isAdmin no usadas
+    // Pasamos null explícitamente ya que quitamos la lógica de restricción
+    return this.service.getAreasCounters(null);
   }
 
   // Solo admin: verificación de CI duplicado
@@ -119,10 +139,10 @@ export class OlimpistasController {
   async updateOlimpista(
     @Param('id', ParseIntPipe) id: number,
     @Body() body: UpdateOlimpistaDto,
-    @Req() req: any,
+    @Req() req: RequestWithUser,
   ) {
-    const userId = req.user?.sub ? Number(req.user.sub) : null;
-    return this.service.updateOlimpista(id, body, userId ?? undefined);
+    const userId = req.user?.sub ? Number(req.user.sub) : undefined;
+    return this.service.updateOlimpista(id, body, userId);
   }
 
   // NUEVO: eliminación de olimpista por id_inscripcion
@@ -130,9 +150,9 @@ export class OlimpistasController {
   @Roles('ADMINISTRADOR', 'RESPONSABLE_DE_AREA')
   async deleteOlimpista(
     @Param('id', ParseIntPipe) id: number,
-    @Req() req: any,
+    @Req() req: RequestWithUser,
   ) {
-    const userId = req.user?.sub ? Number(req.user.sub) : null;
-    return this.service.removeOlimpista(id, userId ?? undefined);
+    const userId = req.user?.sub ? Number(req.user.sub) : undefined;
+    return this.service.removeOlimpista(id, userId);
   }
 }

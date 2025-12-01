@@ -1,4 +1,4 @@
-// src/olimpistas/olimpistas.service.ts
+//src/olimpistas/olimpistas.service.ts
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegistroOlimpistaDto } from './dto/registro-olimpista.dto';
@@ -161,9 +161,7 @@ export class OlimpistasService {
   }
 
   // Ahora acepta tanto RegistroOlimpistaDto como UpdateOlimpistaDto (misma lógica)
-  private deriveEscolaridad(
-    dto: RegistroOlimpistaDto | UpdateOlimpistaDto,
-  ): {
+  private deriveEscolaridad(dto: RegistroOlimpistaDto | UpdateOlimpistaDto): {
     nivel: 'Primaria' | 'Secundaria';
     grado?: number;
   } {
@@ -209,7 +207,11 @@ export class OlimpistasService {
     return !!found;
   }
 
-  async registerOne(dto: RegistroOlimpistaDto, userId?: number) {
+  async registerOne(dto: RegistroOlimpistaDto, _userId?: number) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) throw new BadRequestException('No hay gestión abierta.');
     const idArea = await this.getAreaIdByName(dto.area);
 
     // Unifica lógica para manual + CSV
@@ -259,10 +261,11 @@ export class OlimpistasService {
 
     const insc = await this.prisma.inscripciones.findUnique({
       where: {
-        uq_insc_unica: {
+        uq_insc_unica_por_gestion: {
           id_competidor: competidor.id_competidor,
           id_area: idArea,
           id_nivel: idNivel,
+          id_gestion: gestion.id_gestion, // <--- AGREGADO
         },
       },
       select: { id_inscripcion: true },
@@ -274,6 +277,7 @@ export class OlimpistasService {
           id_competidor: competidor.id_competidor,
           id_area: idArea,
           id_nivel: idNivel,
+          id_gestion: gestion.id_gestion,
           estado_inscripcion: 'INSCRITO',
           observaciones: null,
         },
@@ -309,7 +313,11 @@ export class OlimpistasService {
       try {
         const res = await this.registerOne(list[i], userId);
         summary.ok++;
-        res.skippedInsc ? summary.skippedInsc++ : summary.createdInsc++;
+        if (res.skippedInsc) {
+          summary.skippedInsc++;
+        } else {
+          summary.createdInsc++;
+        }
       } catch (e: unknown) {
         const ci = list[i]?.ci ?? 's/n';
         const msg = e instanceof Error ? e.message : 'Error';
@@ -354,7 +362,7 @@ export class OlimpistasService {
       };
       for (let i = 0; i < rows.length; i++) {
         try {
-          const dto = rows[i] as RegistroOlimpistaDto;
+          const dto = rows[i];
 
           await this.getAreaIdByName(dto.area);
 
@@ -402,6 +410,11 @@ export class OlimpistasService {
    */
   // Sin restricciones por área para ningún rol
   async listOlimpistas(params: ListParams) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    // Si no hay gestión abierta, devolvemos lista vacía
+    if (!gestion) return [];
     const { area, q } = params ?? {};
 
     const where: Record<string, unknown> = {
@@ -519,11 +532,23 @@ export class OlimpistasService {
    */
   // Contadores sin restricciones por área
   async getAreasCounters(_limitToUserAreasOf: number | null = null) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
     const data = await this.prisma.areas.findMany({
       where: { activo: true },
       select: {
         nombre_area: true,
-        _count: { select: { inscripciones: true } },
+        _count: {
+          select: {
+            inscripciones: {
+              // Si hay gestión, contamos solo las de este año. Si no, 0.
+              where: gestion
+                ? { id_gestion: gestion.id_gestion }
+                : { id_gestion: -1 },
+            },
+          },
+        },
       },
       orderBy: { nombre_area: 'asc' },
     });

@@ -20,5 +20,3 @@ export class LogsController {
     return items; // Devuelve solo el array de logs
   }
 }
-
-//

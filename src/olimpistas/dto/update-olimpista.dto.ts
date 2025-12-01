@@ -1,6 +1,5 @@
 // src/olimpistas/dto/update-olimpista.dto.ts
-
-import { RegistroOlimpistaDto } from "./registro-olimpista.dto";
+import { RegistroOlimpistaDto } from './registro-olimpista.dto';
 
 /**
  * DTO para actualización de olimpistas.

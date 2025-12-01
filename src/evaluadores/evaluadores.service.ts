@@ -16,7 +16,6 @@ import * as bcrypt from 'bcrypt';
 import { EmailService } from '../email/email.service';
 import { AsignarOlimpistasDto } from './dto/asignar-olimpistas.dto';
 
-
 function isKnownPrismaError(e: unknown): e is PrismaClientKnownRequestError {
   return e instanceof PrismaClientKnownRequestError;
 }
@@ -126,7 +125,7 @@ export class EvaluadoresService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService,
-  ) { }
+  ) {}
 
   /** GET /evaluadores */
   async findAll(query: QueryEvaluadorDto) {
@@ -172,13 +171,13 @@ export class EvaluadoresService {
         ...baseWhere,
         ...(q
           ? {
-            OR: [
-              { nombre: { contains: q, mode: 'insensitive' } },
-              { apellido: { contains: q, mode: 'insensitive' } },
-              { correo: { contains: q, mode: 'insensitive' } },
-              { institucion: { contains: q, mode: 'insensitive' } },
-            ],
-          }
+              OR: [
+                { nombre: { contains: q, mode: 'insensitive' } },
+                { apellido: { contains: q, mode: 'insensitive' } },
+                { correo: { contains: q, mode: 'insensitive' } },
+                { institucion: { contains: q, mode: 'insensitive' } },
+              ],
+            }
           : {}),
       },
       select,
@@ -224,6 +223,14 @@ export class EvaluadoresService {
   /** POST /evaluadores */
   async create(dto: CreateEvaluadorInput) {
     try {
+      const gestion = await this.prisma.gestiones.findFirst({
+        where: { estado: 'ABIERTA' },
+      });
+      if (!gestion) {
+        throw new BadRequestException(
+          'No existe una gestión abierta para registrar evaluadores.',
+        );
+      }
       // ... (lógica para nombre, apellido, CI, validaciones, duplicados) ...
       let { nombre, apellido } = dto;
       if ((!nombre || !apellido) && dto.nombreCompleto) {
@@ -301,7 +308,9 @@ export class EvaluadoresService {
         ...(institucion !== undefined ? { institucion } : {}),
         ...(especialidad !== undefined ? { especialidad } : {}),
         // usamos experienciaFinal para garantizar mínimo 1 año
-        ...(experienciaFinal !== undefined ? { experiencia: experienciaFinal } : {}),
+        ...(experienciaFinal !== undefined
+          ? { experiencia: experienciaFinal }
+          : {}),
       };
 
       const created = await this.prisma.usuarios.create({
@@ -315,6 +324,8 @@ export class EvaluadoresService {
           data: id_areas.map((id_area) => ({
             id_usuario: created.id_usuario,
             id_area,
+            id_gestion: gestion.id_gestion, // <--- AGREGADO
+            activo: true, // Asegúrate de mandar activo si es necesario
           })),
           skipDuplicates: true,
         });
@@ -347,7 +358,6 @@ export class EvaluadoresService {
       );
     }
   }
-
 
   // Devuelve resumen de inscripciones y qué fase se puede editar
   async getEstadoAsignacionArea(id_area: number) {
@@ -384,8 +394,6 @@ export class EvaluadoresService {
     };
   }
 
-
-
   /** GET /evaluadores/check-telefono/:telefono */
   async existsByTelefono(telefono: string) {
     const found = await this.prisma.usuarios.findFirst({
@@ -407,6 +415,14 @@ export class EvaluadoresService {
   /** PATCH /evaluadores/:id */
   async update(id: number, dto: UpdateEvaluadorInput) {
     try {
+      const gestion = await this.prisma.gestiones.findFirst({
+        where: { estado: 'ABIERTA' },
+      });
+      if (!gestion) {
+        throw new BadRequestException(
+          'No hay una gestión abierta para realizar cambios.',
+        );
+      }
       let nombre = dto.nombre;
       let apellido = dto.apellido;
 
@@ -518,6 +534,8 @@ export class EvaluadoresService {
               data: dto.id_areas.map((id_area) => ({
                 id_usuario: id,
                 id_area,
+                id_gestion: gestion.id_gestion, // <--- ⚠️ ESTO FALTABA
+                activo: true,
               })),
               skipDuplicates: true,
             });
@@ -640,9 +658,7 @@ export class EvaluadoresService {
 
     // 4) Mapear asignaciones por evaluador_area
     const lista = evaluadoresArea.map((ea) => {
-      const found = asignaciones.find(
-        (a) => a.id_usuario === ea.id_usuario,
-      );
+      const found = asignaciones.find((a) => a.id_usuario === ea.id_usuario);
 
       return {
         id_evaluador_area: ea.id_evaluador_area,
@@ -669,9 +685,7 @@ export class EvaluadoresService {
     });
 
     // cupo indefinido (sin valor) → lo usaremos para el "resto"
-    const sinCupo = lista.filter(
-      (item) => item[campoCupo] === undefined,
-    );
+    const sinCupo = lista.filter((item) => item[campoCupo] === undefined);
 
     if (sinCupo.length > 1) {
       throw new BadRequestException(
@@ -695,7 +709,7 @@ export class EvaluadoresService {
     // Si sobra algo, lo asignamos al único evaluador sin cupo
     if (restante > 0) {
       if (sinCupo.length === 1) {
-        (sinCupo[0] as any)[campoCupo] = restante;
+        sinCupo[0][campoCupo] = restante;
       } else {
         // sinCupo.length === 0
         throw new BadRequestException(
@@ -708,7 +722,7 @@ export class EvaluadoresService {
     try {
       await this.prisma.$transaction(async (tx) => {
         for (const item of lista) {
-          const cupo = (item as any)[campoCupo] ?? 0;
+          const cupo = item[campoCupo] ?? 0;
 
           // Si no hay cupo en esta fase, igual guardamos 0
           await tx.asignacion_evaluador_fase.upsert({
@@ -808,6 +822,4 @@ export class EvaluadoresService {
       [idAuto]: sobrante,
     };
   }
-
-
 }
