@@ -1,10 +1,11 @@
-// src/areas/services/areas.service.ts
-
-import { Injectable } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAreaDto } from '../dto/create-area.dto';
-// ⚠️ Importar los nuevos DTOs
-import { DashboardResponse, DashboardMetrics } from '../dto/dashboard-response.dto'; 
+import {
+  DashboardResponse,
+  DashboardMetrics,
+  AreaNivelStats, // Asegúrate de que este tipo esté exportado en tu DTO
+} from '../dto/dashboard-response.dto';
 
 // Define el tipo de estado para que sea reconocido en este archivo
 type estado_area = 'EVALUANDO' | 'CLASIFICANDO' | 'COMPLETADO';
@@ -13,7 +14,6 @@ type estado_area = 'EVALUANDO' | 'CLASIFICANDO' | 'COMPLETADO';
 export class AreasService {
   constructor(private prisma: PrismaService) {}
 
-  // jaumpi y vivi
   findAll() {
     return this.prisma.areas.findMany({
       where: { activo: true },
@@ -21,8 +21,31 @@ export class AreasService {
     });
   }
 
-  // far
   async create(data: CreateAreaDto) {
+    // 1. Buscar si el nombre ya existe (activo o inactivo)
+    const existing = await this.prisma.areas.findUnique({
+      where: { nombre_area: data.nombre_area },
+    });
+
+    if (existing) {
+      if (existing.activo) {
+        // Si existe y está activo -> Error real de duplicado
+        throw new ConflictException('El nombre del área ya existe.');
+      } else {
+        // Si existe pero estaba "eliminado" (activo: false) -> Lo reactivamos y actualizamos
+        return this.prisma.areas.update({
+          where: { id_area: existing.id_area },
+          data: {
+            nota_aprobacion: data.nota_aprobacion,
+            tipo: data.tipo,
+            niveles_target: data.niveles_target,
+            activo: true, // ✨ Reactivamos el área
+          },
+        });
+      }
+    }
+
+    // Si no existe, creamos uno nuevo
     return this.prisma.areas.create({
       data: {
         nombre_area: data.nombre_area,
@@ -35,19 +58,76 @@ export class AreasService {
   }
 
   async update(id: number, data: CreateAreaDto) {
-    return this.prisma.areas.update({
-      where: { id_area: id },
-      data: {
+    // Validar que si cambian el nombre, no choque con otro existente
+    const existingName = await this.prisma.areas.findFirst({
+      where: {
         nombre_area: data.nombre_area,
-        nota_aprobacion: data.nota_aprobacion,
-        tipo: data.tipo,
-        niveles_target: data.niveles_target,
+        id_area: { not: id }, // Excluir el actual
       },
+    });
+
+    if (existingName) {
+      throw new ConflictException(
+        'El nombre del área ya está en uso por otro registro.',
+      );
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const areaActualizada = await tx.areas.update({
+        where: { id_area: id },
+        data: {
+          nombre_area: data.nombre_area,
+          nota_aprobacion: data.nota_aprobacion,
+          tipo: data.tipo,
+          niveles_target: data.niveles_target,
+        },
+      });
+
+      const notaAprobacion = areaActualizada.nota_aprobacion;
+
+      // Actualizar clasificaciones (Lógica existente)
+      await tx.inscripciones.updateMany({
+        where: {
+          id_area: id,
+          puntaje_clasificacion: { not: null },
+        },
+        data: { clasificacion: null },
+      });
+
+      if (notaAprobacion !== null) {
+        await tx.inscripciones.updateMany({
+          where: {
+            id_area: id,
+            puntaje_clasificacion: { gte: notaAprobacion },
+          },
+          data: { clasificacion: 'CLASIFICADO' },
+        });
+
+        await tx.inscripciones.updateMany({
+          where: {
+            id_area: id,
+            puntaje_clasificacion: { lt: notaAprobacion },
+          },
+          data: { clasificacion: 'NO_CLASIFICADO' },
+        });
+      }
+
+      return areaActualizada;
     });
   }
 
   async remove(id: number) {
-    // Soft delete (solo desactivar)
+    // Validación previa: Verificar si tiene inscripciones
+    const inscripciones = await this.prisma.inscripciones.count({
+      where: { id_area: id },
+    });
+
+    if (inscripciones > 0) {
+      throw new ConflictException(
+        'No se puede eliminar el área porque tiene olimpistas inscritos.',
+      );
+    }
+
     return this.prisma.areas.update({
       where: { id_area: id },
       data: { activo: false },
@@ -56,7 +136,6 @@ export class AreasService {
 
   /* ============================================================
    * 1) Estadísticas GENERALES (formato agrupado por área)
-   * -> Usar en las demás pestañas
    * ============================================================ */
   async getAreasConEstadisticas() {
     console.log('💡 Iniciando consulta a Prisma (general)...');
@@ -73,6 +152,7 @@ export class AreasService {
     console.log('💡 Consulta realizada, areas:', areas.length);
 
     const mapped = areas.map((area) => {
+      // 1️⃣ CORRECCIÓN: Tipado explícito en lugar de 'any'
       const nivelesMap: Record<
         string,
         { id_nivel: number; nombre_nivel: string; inscritos: number }
@@ -83,7 +163,7 @@ export class AreasService {
         const nivelIdStr = insc.nivel.id_nivel.toString();
         if (!nivelesMap[nivelIdStr]) {
           nivelesMap[nivelIdStr] = {
-            id_nivel: Number(insc.nivel.id_nivel), // BigInt -> number
+            id_nivel: Number(insc.nivel.id_nivel),
             nombre_nivel: insc.nivel.nombre_nivel,
             inscritos: 0,
           };
@@ -95,30 +175,26 @@ export class AreasService {
         id_area: Number(area.id_area),
         nombre_area: area.nombre_area,
         estado: area.estado,
-        // ✅ AGREGA ESTOS CAMPOS QUE FALTABAN:
         nota_aprobacion: area.nota_aprobacion,
         tipo: area.tipo,
         niveles_target: area.niveles_target,
         activo: area.activo,
-
         niveles: Object.values(nivelesMap),
       };
     });
 
-    console.log('💡 Datos devueltos por el servicio (general):', mapped.length);
     return mapped;
   }
 
   /* =================================================================
-   * 2) Estadísticas para PANEL PRINCIPAL (CORREGIDO)
-   * - Devuelve combinaciones Área + Nivel (mantenida intacta)
+   * 2) Estadísticas para PANEL PRINCIPAL
    * ================================================================= */
-  async getAreasConEstadisticasPanelPrincipal() {
+  async getAreasConEstadisticasPanelPrincipal(): Promise<AreaNivelStats[]> {
     console.log('💡 Iniciando consulta a Prisma (panel principal)...');
 
     const NIVELES_PERMITIDOS = ['PRIMARIA', 'SECUNDARIA'];
 
-    // 1. Consulta inicial para obtener áreas e inscripciones (IDs y nombres)
+    // 1. Consulta inicial
     const areas = await this.prisma.areas.findMany({
       where: { activo: true },
       select: {
@@ -138,10 +214,9 @@ export class AreasService {
       orderBy: { nombre_area: 'asc' },
     });
 
-    // --- Preparación para obtener el estado específico por A/N ---
-
-    const areaNivelKeys = new Set<string>(); // Para almacenar "id_area-id_nivel"
-    const nivelDetailsMap = new Map<number, { id: number; nombre: string }>(); 
+    // --- Preparación ---
+    const areaNivelKeys = new Set<string>();
+    const nivelDetailsMap = new Map<number, { id: number; nombre: string }>();
 
     areas.forEach((area) => {
       area.inscripciones.forEach((inscripcion) => {
@@ -157,31 +232,33 @@ export class AreasService {
 
         areaNivelKeys.add(`${area.id_area}-${idNivel}`);
         if (!nivelDetailsMap.has(idNivel)) {
-            nivelDetailsMap.set(idNivel, {
-                id: idNivel,
-                nombre: inscripcion.nivel.nombre_nivel,
-            });
+          nivelDetailsMap.set(idNivel, {
+            id: idNivel,
+            nombre: inscripcion.nivel.nombre_nivel,
+          });
         }
       });
     });
-    
-    // Obtenemos listas de IDs únicos para la consulta batch
-    const areaIds = Array.from(new Set(Array.from(areaNivelKeys).map(k => Number(k.split('-')[0]))));
-    const nivelIds = Array.from(new Set(Array.from(areaNivelKeys).map(k => Number(k.split('-')[1]))));
-    
-    // 2. Consultar todas las FASES para entender el orden de avance
+
+    const areaIds = Array.from(
+      new Set(Array.from(areaNivelKeys).map((k) => Number(k.split('-')[0]))),
+    );
+    const nivelIds = Array.from(
+      new Set(Array.from(areaNivelKeys).map((k) => Number(k.split('-')[1]))),
+    );
+
+    // 2. Consultar FASES
     const fases = await this.prisma.fases.findMany({
-        orderBy: { orden_fase: 'asc' },
-        select: { id_fase: true, orden_fase: true },
+      orderBy: { orden_fase: 'asc' },
+      select: { id_fase: true, orden_fase: true },
     });
 
-    // 3. Consultar TODOS los cierres relevantes en UNA sola query (EFICIENTE)
-    // ✅ INCLUYE ESTADOS 'VALIDADO' y 'PENDIENTE' para reflejar el avance inmediato
+    // 3. Consultar CIERRES
     const cierresValidados = await this.prisma.cierres_fase.findMany({
       where: {
         id_area: { in: areaIds },
         id_nivel: { in: nivelIds },
-        estado_validacion: { in: ['VALIDADO', 'PENDIENTE'] }, 
+        estado_validacion: { in: ['VALIDADO', 'PENDIENTE'] },
       },
       select: {
         id_area: true,
@@ -190,55 +267,47 @@ export class AreasService {
       },
     });
 
-    // 4. Mapear cierres a un estado por combinación (Area-Nivel)
+    // 4. Mapear estados
     const estadoPorAreaNivel = new Map<string, estado_area>();
-    
+
     for (const key of areaNivelKeys) {
-        const [id_area, id_nivel] = key.split('-').map(Number);
-        const cierresAreaNivel = cierresValidados.filter(c => 
-            c.id_area === id_area && c.id_nivel === id_nivel
+      const [id_area, id_nivel] = key.split('-').map(Number);
+      const cierresAreaNivel = cierresValidados.filter(
+        (c) => c.id_area === id_area && c.id_nivel === id_nivel,
+      );
+
+      let estado: estado_area = 'EVALUANDO';
+
+      if (cierresAreaNivel.length > 0) {
+        const maxOrdenFaseCerrada = cierresAreaNivel.reduce(
+          (maxOrden, currentCierre) => {
+            const currentFase = fases.find(
+              (f) => f.id_fase === currentCierre.id_fase,
+            );
+            return Math.max(maxOrden, currentFase?.orden_fase ?? 0);
+          },
+          0,
         );
 
-        let estado: estado_area = 'EVALUANDO'; // Estado por defecto
-        
-        if (cierresAreaNivel.length > 0) {
-            // Encontrar el ORDEN de la fase más avanzada (mayor orden_fase) que ha sido CERRADA
-            const maxOrdenFaseCerrada = cierresAreaNivel.reduce((maxOrden, currentCierre) => {
-                const currentFase = fases.find(f => f.id_fase === currentCierre.id_fase);
-                return Math.max(maxOrden, currentFase?.orden_fase ?? 0); 
-            }, 0);
-
-            // ⚠️ LÓGICA DE NEGOCIO: ASIGNAR ESTADO BASADO EN LA FASE CERRADA
-            if (maxOrdenFaseCerrada >= 2) {
-                // Si la Fase 2 (o superior) está cerrada/validada/pendiente
-                estado = 'COMPLETADO';
-            } else if (maxOrdenFaseCerrada >= 1) {
-                // Si la Fase 1 está cerrada/validada/pendiente
-                estado = 'CLASIFICANDO';
-            }
+        if (maxOrdenFaseCerrada >= 2) {
+          estado = 'COMPLETADO';
+        } else if (maxOrdenFaseCerrada >= 1) {
+          estado = 'CLASIFICANDO';
         }
-        
-        estadoPorAreaNivel.set(key, estado);
+      }
+
+      estadoPorAreaNivel.set(key, estado);
     }
 
     // --- Generación de la Respuesta Final ---
+    // 2️⃣ CORRECCIÓN: Usamos el tipo AreaNivelStats explícito
+    const combinaciones: AreaNivelStats[] = [];
 
-    const combinaciones: {
-      id_area: number;
-      nombre_area: string;
-      estado: estado_area; 
-      id_nivel: number;
-      nombre_nivel: string;
-      total_inscritos: number;
-    }[] = [];
-    
-    // Re-procesar áreas para calcular el total de inscritos y asignar el estado calculado
     areas.forEach((area) => {
-      const nivelesMap = new Map<number, number>(); // Map<id_nivel, count>
+      const nivelesMap = new Map<number, number>();
 
       area.inscripciones.forEach((inscripcion) => {
         if (!inscripcion.nivel) return;
-
         const idNivel = Number(inscripcion.nivel.id_nivel);
         const nombreNivel = inscripcion.nivel.nombre_nivel?.toUpperCase() ?? '';
 
@@ -247,22 +316,20 @@ export class AreasService {
         );
         if (!esNivelPermitido) return;
 
-        // Contar inscritos por nivel
         nivelesMap.set(idNivel, (nivelesMap.get(idNivel) || 0) + 1);
       });
 
-      // Generar la entrada de combinación con el estado específico
       nivelesMap.forEach((count, id_nivel) => {
         const details = nivelDetailsMap.get(id_nivel);
         if (!details) return;
 
         const key = `${area.id_area}-${id_nivel}`;
-        const estadoEspecifico = estadoPorAreaNivel.get(key) || 'EVALUANDO'; 
+        const estadoEspecifico = estadoPorAreaNivel.get(key) || 'EVALUANDO';
 
         combinaciones.push({
           id_area: Number(area.id_area),
           nombre_area: area.nombre_area,
-          estado: estadoEspecifico, 
+          estado: estadoEspecifico,
           id_nivel: details.id,
           nombre_nivel: details.nombre,
           total_inscritos: count,
@@ -270,88 +337,67 @@ export class AreasService {
       });
     });
 
-    // Ordenar por área y luego por nivel
     combinaciones.sort((a, b) => {
       if (a.nombre_area < b.nombre_area) return -1;
       if (a.nombre_area > b.nombre_area) return 1;
       return a.nombre_nivel.localeCompare(b.nombre_nivel);
     });
 
-    console.log(
-      '💡 Datos devueltos por el servicio (panel principal, combinaciones A/N):',
-      combinaciones.length,
-    );
+    console.log('💡 Datos devueltos:', combinaciones.length);
+    // 3️⃣ CORRECCIÓN: Retornamos 'combinaciones' en lugar de []
     return combinaciones;
   }
-  
+
   /* =================================================================
-   * 3) FUNCIÓN PRINCIPAL DEL DASHBOARD: Métricas Globales + Stats A/N
+   * 3) FUNCIÓN PRINCIPAL DEL DASHBOARD
    * ================================================================= */
-
   async getDashboardData(): Promise<DashboardResponse> {
-
-    // --- 1. Obtener los detalles de Área/Nivel (Tu lógica existente) ---
+    // 1. Obtener Stats Detalladas
     const areasStats = await this.getAreasConEstadisticasPanelPrincipal();
 
-    // --- 2. Obtener todos los contadores globales en paralelo (6 queries) ---
+    // 2. Obtener contadores globales
     const [
-        totalRegistrosCount,
-        totalEvaluadoresCount,
-        totalResponsablesCount, // ✅ NUEVO CONTADOR
-        areasActivasCount,
-        totalClasificadosCount,
-        totalPremiadosCount,
+      totalRegistrosCount,
+      totalEvaluadoresCount,
+      totalResponsablesCount,
+      areasActivasCount,
+      totalClasificadosCount,
+      totalPremiadosCount,
     ] = await Promise.all([
-        // 1. Total Olimpistas (Inscripciones)
-        this.prisma.inscripciones.count({}), 
-        
-        // 2. Total Evaluadores (Asignados activos)
-        this.prisma.evaluadores_area.count({ 
-            where: { activo: true } 
-        }),
-        
-        // 3. Total Responsables (Asignados activos)
-        this.prisma.responsables_area.count({ 
-            where: { activo: true } 
-        }),
-
-        // 4. Áreas Activas (Disciplinas únicas)
-        this.prisma.areas.count({ where: { activo: true } }),
-
-        // 5. Total Clasificados
-        this.prisma.inscripciones.count({ 
-            where: { clasificacion: 'CLASIFICADO' } 
-        }),
-        
-        // 6. Total Premiados
-        this.prisma.premios_otorgados.count({}), 
+      this.prisma.inscripciones.count({}),
+      this.prisma.evaluadores_area.count({ where: { activo: true } }),
+      this.prisma.responsables_area.count({ where: { activo: true } }),
+      this.prisma.areas.count({ where: { activo: true } }),
+      this.prisma.inscripciones.count({
+        where: { clasificacion: 'CLASIFICADO' },
+      }),
+      this.prisma.premios_otorgados.count({}),
     ]);
 
-    // 7. Áreas en Evaluación (basado en las combinaciones A/N)
+    // 7. Áreas en Evaluación
     const areasEnEvaluacion = areasStats.filter(
-        a => a.estado === 'EVALUANDO' || a.estado === 'CLASIFICANDO'
+      (a) => a.estado === 'EVALUANDO' || a.estado === 'CLASIFICANDO',
     ).length;
 
-    // --- 3. Construir el objeto de métricas final ---
     const metrics: DashboardMetrics = {
-        totalOlimpiadas: 1, 
-        totalRegistros: totalRegistrosCount, 
-        totalAreas: areasActivasCount, 
-        areasActivas: areasActivasCount, 
-        totalEvaluadores: totalEvaluadoresCount,
-        totalResponsables: totalResponsablesCount, // ✅ NUEVA MÉTRICA ASIGNADA
-        totalClasificados: totalClasificadosCount,
-        totalPremiados: totalPremiadosCount,
-        areasEnEvaluacion: areasEnEvaluacion, 
+      totalOlimpiadas: 1,
+      totalRegistros: totalRegistrosCount,
+      totalAreas: areasActivasCount,
+      areasActivas: areasActivasCount,
+      totalEvaluadores: totalEvaluadoresCount,
+      totalResponsables: totalResponsablesCount,
+      totalClasificados: totalClasificadosCount,
+      totalPremiados: totalPremiadosCount,
+      areasEnEvaluacion: areasEnEvaluacion,
     };
 
+    // 4️⃣ CORRECCIÓN: Retornamos el objeto real, no 'any'
     return {
-        metrics,
-        areasStats,
+      metrics,
+      areasStats,
     };
   }
 
-  // Fabia y max
   findAllActive() {
     return this.prisma.areas.findMany({
       where: { activo: true },

@@ -1,4 +1,7 @@
-export enum AccionLog { REGISTRO = 'REGISTRO', MODIFICACION = 'MODIFICACION' }
+export enum AccionLog {
+  REGISTRO = 'REGISTRO',
+  MODIFICACION = 'MODIFICACION',
+}
 
 export class CreateLogDto {
   id_evaluacion!: number;

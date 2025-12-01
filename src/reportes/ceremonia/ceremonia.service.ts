@@ -1,4 +1,3 @@
-// src/reportes/ceremonia/ceremonia.service.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QueryCeremoniaDto } from './dto/query-ceremonia.dto';
@@ -49,17 +48,16 @@ export class CeremoniaService {
       },
     });
 
+    // ✅ CORRECCIÓN AQUÍ: 'anio' tipado seguro
     let rows: CeremoniaRow[] = premios.map((p) => ({
       area: p.area?.nombre_area ?? p.inscripcion?.area?.nombre_area ?? '',
-      nivel:
-        p.nivel?.nombre_nivel ?? p.inscripcion?.nivel?.nombre_nivel ?? '',
-      anio: p.anio,
-      premio: String(p.tipo), // lo dejamos como string para el Excel y el resumen
+      nivel: p.nivel?.nombre_nivel ?? p.inscripcion?.nivel?.nombre_nivel ?? '',
+      anio: p.anio ?? year, // Si es null, usa el año de la query
+      premio: String(p.tipo),
       ci: p.inscripcion?.competidor?.ci ?? null,
       competidor: `${p.inscripcion?.competidor?.nombres ?? ''} ${
         p.inscripcion?.competidor?.apellidos ?? ''
       }`.trim(),
-      // NUEVO: los campos que quieres ver en el Excel
       departamento: p.inscripcion?.competidor?.departamento ?? '',
       unidadEducativa: p.inscripcion?.competidor?.escuela ?? '',
     }));
@@ -95,8 +93,6 @@ export class CeremoniaService {
 
   /**
    * Resumen para cards y modal.
-   * Devuelve las claves nuevas y también las antiguas
-   * para que el front no se rompa en ningún lado.
    */
   async resumen(query: QueryCeremoniaDto) {
     const rows = await this.findRows(query);
@@ -119,14 +115,14 @@ export class CeremoniaService {
     const mencion = byPremio.MENCION || 0;
 
     return {
-      // formato nuevo (lo que usan las cards ahora)
+      // formato nuevo
       total,
       oro,
       plata,
       bronce,
       mencion,
 
-      // formato viejo (por si algo del front aún lo usa)
+      // formato viejo
       totales: total,
       oros: oro,
       platas: plata,

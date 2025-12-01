@@ -1,3 +1,4 @@
+// src/evaluaciones/evaluaciones.controller.ts
 import {
   Controller,
   Get,
@@ -42,13 +43,24 @@ export class EvaluacionesAdminController {
     @Query('id_nivel') id_nivel?: string,
   ) {
     const idUsuario = Number(req.user.sub);
+    //agregar gestion
+    const gestion = await this.service.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) return [];
+
     const areas = await this.service['prisma'].evaluadores_area.findMany({
-      where: { id_usuario: idUsuario, activo: true },
+      where: {
+        id_usuario: idUsuario,
+        id_gestion: gestion.id_gestion,
+        activo: true,
+      },
       select: { id_area: true },
     });
     const idAreas = areas.map((a) => a.id_area);
 
     return this.service.listarCompetidores({
+      evaluadorId: idUsuario,
       search,
       idAreas,
       filtro,
@@ -65,8 +77,17 @@ export class EvaluacionesAdminController {
     @Query('id_nivel') id_nivel?: string,
   ) {
     const idUsuario = Number(req.user.sub);
+    // agregar gestion
+    const gestion = await this.service.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) return [];
     const areas = await this.service['prisma'].evaluadores_area.findMany({
-      where: { id_usuario: idUsuario, activo: true },
+      where: {
+        id_usuario: idUsuario,
+        id_gestion: gestion.id_gestion,
+        activo: true,
+      },
       select: { id_area: true },
     });
     const idAreas = areas.map((a) => a.id_area);
@@ -76,6 +97,7 @@ export class EvaluacionesAdminController {
     }
 
     return this.service.listarCompetidoresFirmados({
+      evaluadorId: idUsuario,
       search,
       idAreas,
       id_area: id_area ? Number(id_area) : undefined,
