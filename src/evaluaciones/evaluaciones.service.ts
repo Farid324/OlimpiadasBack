@@ -233,28 +233,25 @@ export class EvaluacionesAdminService {
   }
 
   async getAreasAsignadasForSelect(evaluadorId: number) {
-    const gestion = await this.prisma.gestiones.findFirst({
-      where: { estado: 'ABIERTA' },
-    });
-    if (!gestion) return [];
-    const areas = await this.prisma.evaluadores_area.findMany({
-      where: {
-        id_usuario: evaluadorId,
-        id_gestion: gestion.id_gestion,
-        activo: true,
-        area: { activo: true },
-      },
-      select: {
-        id_area: true,
-        area: { select: { nombre_area: true } },
-      },
-      orderBy: { id_area: 'asc' },
-    });
-
-    return areas.map((a) => ({
-      value: a.id_area,
-      label: a.area.nombre_area,
-    }));
+    return this.prisma.evaluadores_area
+      .findMany({
+        where: {
+          id_usuario: evaluadorId,
+          activo: true,
+          area: { activo: true },
+        },
+        select: {
+          id_area: true,
+          area: { select: { nombre_area: true } },
+        },
+        orderBy: { id_area: 'asc' },
+      })
+      .then((rows) =>
+        rows.map((r) => ({
+          id_area: r.id_area,
+          nombre_area: r.area.nombre_area,
+        })),
+      );
   }
   async listarCompetidoresFirmados({
     evaluadorId,
