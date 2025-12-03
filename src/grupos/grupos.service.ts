@@ -1,12 +1,16 @@
 // src/grupos/grupos.service.ts
-
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateGrupoDto, MiembroGrupoDto } from './dto/create-grupo.dto';
 import { splitNombreCompleto } from '../common/utils/name.util';
 import { resolveNivelYGrado } from '../common/utils/grade.util';
-import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+// Importamos el tipo de error específico de Prisma
+import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class GruposService {
@@ -47,7 +51,7 @@ export class GruposService {
       group: miembro
         ? {
             id_grupo: miembro.grupo.id_grupo,
-            nombre: miembro.grupo.nombre_equipo, // ← mapeo aquí
+            nombre: miembro.grupo.nombre_equipo,
             escuela: miembro.grupo.escuela,
             departamento: miembro.grupo.departamento,
             id_area: miembro.grupo.id_area,
@@ -175,9 +179,10 @@ export class GruposService {
   ) {
     const depto = m.departamento ?? deptoFallback;
     const { nombres, apellidos } = splitNombreCompleto(m.nombreCompleto);
+    // 1️⃣ Corrección: Quitamos 'as any'. Si resolveNivelYGrado acepta los tipos del DTO, esto funcionará.
     const escolar = resolveNivelYGrado({
-      nivelCompetidor: m.nivelCompetidor as any,
-      grado: m.grado as any,
+      nivelCompetidor: m.nivelCompetidor,
+      grado: m.grado,
       gradoEscolar: m.gradoEscolar,
       grupoNivelString,
     });
@@ -225,6 +230,13 @@ export class GruposService {
   }
 
   async registerGrupo(dto: CreateGrupoDto, userId?: number) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion)
+      throw new BadRequestException(
+        'No hay gestión abierta para inscribir grupos.',
+      );
     if (!dto.miembros || dto.miembros.length < 2) {
       throw new BadRequestException('El grupo debe tener al menos 2 miembros.');
     }
@@ -296,10 +308,11 @@ export class GruposService {
 
         const insc = await this.prisma.inscripciones.findUnique({
           where: {
-            uq_insc_unica: {
+            uq_insc_unica_por_gestion: {
               id_competidor: c.id_competidor,
               id_area: idArea,
               id_nivel: idNivel,
+              id_gestion: gestion.id_gestion,
             },
           },
           select: { id_inscripcion: true },
@@ -311,6 +324,7 @@ export class GruposService {
               id_competidor: c.id_competidor,
               id_area: idArea,
               id_nivel: idNivel,
+              id_gestion: gestion.id_gestion,
               estado_inscripcion: 'INSCRITO',
             },
           });
@@ -348,17 +362,18 @@ export class GruposService {
               },
             });
             summary.linked++;
-          } catch (e: any) {
-            // Si otra petición ganó la carrera y violó la unique:
+          } catch (e: unknown) {
             if (
-              e.code === 'P2002' &&
-              String(e.meta?.target || '').includes(
-                'uq_competidor_en_un_solo_grupo',
-              )
+              e instanceof PrismaClientKnownRequestError &&
+              e.code === 'P2002'
             ) {
-              throw new BadRequestException(
-                'El olimpista ya pertenece a un grupo existente.',
-              );
+              // ✅ CORRECCIÓN AQUÍ: Usamos JSON.stringify para evitar el error de ESLint
+              const targetStr = JSON.stringify(e.meta?.target || '');
+              if (targetStr.includes('uq_competidor_en_un_solo_grupo')) {
+                throw new BadRequestException(
+                  'El olimpista ya pertenece a un grupo existente.',
+                );
+              }
             }
             throw e;
           }
@@ -367,10 +382,10 @@ export class GruposService {
         }
 
         summary.ok++;
-      } catch (e: any) {
-        summary.errors.push(
-          `Miembro ${i + 1} (ci=${m?.ci}): ${e?.message ?? 'Error'}`,
-        );
+      } catch (e: unknown) {
+        const errorMessage =
+          e instanceof Error ? e.message : 'Error desconocido';
+        summary.errors.push(`Miembro ${i + 1} (ci=${m?.ci}): ${errorMessage}`);
       }
     }
 

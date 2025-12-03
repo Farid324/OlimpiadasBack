@@ -89,7 +89,6 @@ export class CertificadosService {
         };
       })
       .filter((x): x is NonNullable<typeof x> => x !== null)
-      // orden: tipo de premio → área → nivel → nombre
       .sort((a, b) => {
         const t1 = TIPO_ORDER[a.tipoPremio];
         const t2 = TIPO_ORDER[b.tipoPremio];
@@ -103,7 +102,7 @@ export class CertificadosService {
       throw new BadRequestException('No hay premiados para exportar.');
     }
 
-    // 4) Generar el Excel (misma estructura que ya tenías)
+    // 4) Generar el Excel
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Premiados');
 
@@ -125,19 +124,17 @@ export class CertificadosService {
       'Año',
     ];
 
-    // título
     ws.addRow([titulo]);
     ws.mergeCells('A1:I1');
     ws.getCell('A1').font = { bold: true, size: 14 };
     ws.getCell('A1').alignment = { horizontal: 'center' };
 
-    // subtítulo
     ws.addRow([subtitulo]);
     ws.mergeCells('A2:I2');
     ws.getCell('A2').font = { bold: true, size: 12 };
     ws.getCell('A2').alignment = { horizontal: 'center' };
 
-    ws.addRow([]); // fila en blanco
+    ws.addRow([]);
 
     const startRow = ws.lastRow!.number + 1;
 
@@ -163,7 +160,6 @@ export class CertificadosService {
       ]),
     });
 
-    // ajustar anchos
     ws.getColumn(1).width = 6;
     ws.getColumn(2).width = 16;
     ws.getColumn(3).width = 32;
@@ -221,7 +217,7 @@ export class CertificadosService {
       });
       premiadosIds = premios.map((p) => p.id_inscripcion);
     } else {
-      //usa lo que ya esté en premios_otorgados
+      // usa lo que ya esté en premios_otorgados
       const premios = await this.prisma.premios_otorgados.findMany({
         where: { anio },
         select: { id_inscripcion: true },
@@ -335,8 +331,13 @@ export class CertificadosService {
     });
     if (existentes.length) return existentes;
 
-    // para generar necesitamos área y nivel
     if (!id_area || !id_nivel) return [];
+
+    // 1️⃣ NUEVO: Obtener gestión abierta
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) return []; // Si no hay gestión, no podemos generar
 
     // Medallero por area+nivel
     const medallero = await this.prisma.medallero_config.findFirst({
@@ -350,9 +351,6 @@ export class CertificadosService {
       bronces: medallero?.bronces ?? 1,
       menciones: medallero?.menciones ?? 0,
     };
-
-    // inscripciones CLASIFICADO ordenadas por puntaje
-    //
 
     // === FINAL: obtener promedios de evaluaciones FINALES FIRMADAS ===
     const faseFinal = await this.prisma.fases.findFirst({
@@ -387,12 +385,13 @@ export class CertificadosService {
       }))
       .sort((a, b) => b.score - a.score || a.id_inscripcion - b.id_inscripcion);
 
-    // armar premios según posiciones
+    // 2️⃣ CORRECCIÓN: Agregar id_gestion al tipo del array
     const toCreate: Array<{
       id_inscripcion: number;
       id_area: number;
       id_nivel: number;
       anio: number;
+      id_gestion: number; // <--- CAMPO OBLIGATORIO
       tipo: TipoPremio;
     }> = [];
 
@@ -405,6 +404,7 @@ export class CertificadosService {
         id_area,
         id_nivel,
         anio,
+        id_gestion: gestion.id_gestion, // <--- INYECTAMOS LA GESTIÓN
         tipo,
       });
       pos++;

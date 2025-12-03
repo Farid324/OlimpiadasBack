@@ -28,4 +28,3 @@ export class UpdateMedalleroConfigDto {
   @IsOptional()
   menciones?: number;
 }
-

@@ -55,10 +55,19 @@ export class FasesService {
     id_nivel: number,
     type: PhaseType,
   ): Promise<PhaseStatus> {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) return 'EN_PROCESO'; // O lanzar error, depende de tu lógica
     const id_fase = await this.getFaseId(type);
     const cierre = await this.prisma.cierres_fase.findUnique({
       where: {
-        uq_cierre_unico: { id_fase, id_area, id_nivel },
+        uq_cierre_unico_por_gestion: {
+          id_fase,
+          id_area,
+          id_nivel,
+          id_gestion: gestion.id_gestion, // <--- AGREGADO
+        },
       },
       select: { estado_validacion: true },
     });
@@ -101,6 +110,10 @@ export class FasesService {
     actor_id: number;
     comment?: string;
   }) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) throw new BadRequestException('No hay gestión abierta.');
     const { id_area, id_nivel, type, actor_id } = params;
 
     const autorizado = await this.esResponsableDelAreaYNivel(
@@ -136,7 +149,14 @@ export class FasesService {
     const id_fase = await this.getFaseId(type);
 
     await this.prisma.cierres_fase.upsert({
-      where: { uq_cierre_unico: { id_fase, id_area, id_nivel } },
+      where: {
+        uq_cierre_unico_por_gestion: {
+          id_fase,
+          id_area,
+          id_nivel,
+          id_gestion: gestion.id_gestion,
+        },
+      },
       update: {
         estado_validacion: 'PENDIENTE',
         cerrado_por: actor_id,
@@ -146,6 +166,7 @@ export class FasesService {
         id_fase,
         id_area,
         id_nivel,
+        id_gestion: gestion.id_gestion,
         cerrado_por: actor_id,
         fecha_cierre: new Date(),
         estado_validacion: 'PENDIENTE',
@@ -238,10 +259,21 @@ export class FasesService {
     comment?: string;
   }) {
     const { id_area, id_nivel, type, actor_id } = params;
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) throw new BadRequestException('No hay gestión abierta.');
     const id_fase = await this.getFaseId(type);
 
     const cierre = await this.prisma.cierres_fase.findUnique({
-      where: { uq_cierre_unico: { id_fase, id_area, id_nivel } },
+      where: {
+        uq_cierre_unico_por_gestion: {
+          id_fase,
+          id_area,
+          id_nivel,
+          id_gestion: gestion.id_gestion,
+        },
+      },
       select: { id_cierre: true },
     });
 

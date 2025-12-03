@@ -5,6 +5,8 @@ import { RegistroOlimpistaDto } from './dto/registro-olimpista.dto';
 import { splitNombreCompleto } from '../common/utils/name.util';
 import { parseCsvToDtos } from '../common/utils/csv.util';
 import { resolveNivelYGrado } from '../common/utils/grade.util';
+import { Prisma } from '@prisma/client';
+import { UpdateOlimpistaDto } from './dto/update-olimpista.dto';
 
 type ImportOptions = { userId?: number; dryRun?: boolean };
 
@@ -158,11 +160,12 @@ export class OlimpistasService {
     );
   }
 
-  private deriveEscolaridad(dto: RegistroOlimpistaDto): {
+  // Ahora acepta tanto RegistroOlimpistaDto como UpdateOlimpistaDto (misma lógica)
+  private deriveEscolaridad(dto: RegistroOlimpistaDto | UpdateOlimpistaDto): {
     nivel: 'Primaria' | 'Secundaria';
     grado?: number;
   } {
-    // 1) Caso registro manual: ya vienen grado/gradoEscolar
+    // 1) Caso registro manual / actualización: ya vienen grado/gradoEscolar
     if (
       (dto.gradoEscolar && dto.gradoEscolar.trim().length > 0) ||
       typeof dto.grado === 'number'
@@ -204,7 +207,11 @@ export class OlimpistasService {
     return !!found;
   }
 
-  async registerOne(dto: RegistroOlimpistaDto, userId?: number) {
+  async registerOne(dto: RegistroOlimpistaDto, _userId?: number) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) throw new BadRequestException('No hay gestión abierta.');
     const idArea = await this.getAreaIdByName(dto.area);
 
     // Unifica lógica para manual + CSV
@@ -254,10 +261,11 @@ export class OlimpistasService {
 
     const insc = await this.prisma.inscripciones.findUnique({
       where: {
-        uq_insc_unica: {
+        uq_insc_unica_por_gestion: {
           id_competidor: competidor.id_competidor,
           id_area: idArea,
           id_nivel: idNivel,
+          id_gestion: gestion.id_gestion, // <--- AGREGADO
         },
       },
       select: { id_inscripcion: true },
@@ -269,6 +277,7 @@ export class OlimpistasService {
           id_competidor: competidor.id_competidor,
           id_area: idArea,
           id_nivel: idNivel,
+          id_gestion: gestion.id_gestion,
           estado_inscripcion: 'INSCRITO',
           observaciones: null,
         },
@@ -304,7 +313,11 @@ export class OlimpistasService {
       try {
         const res = await this.registerOne(list[i], userId);
         summary.ok++;
-        res.skippedInsc ? summary.skippedInsc++ : summary.createdInsc++;
+        if (res.skippedInsc) {
+          summary.skippedInsc++;
+        } else {
+          summary.createdInsc++;
+        }
       } catch (e: unknown) {
         const ci = list[i]?.ci ?? 's/n';
         const msg = e instanceof Error ? e.message : 'Error';
@@ -349,7 +362,7 @@ export class OlimpistasService {
       };
       for (let i = 0; i < rows.length; i++) {
         try {
-          const dto = rows[i] as RegistroOlimpistaDto;
+          const dto = rows[i];
 
           await this.getAreaIdByName(dto.area);
 
@@ -395,8 +408,13 @@ export class OlimpistasService {
    * - puntuacion: puntaje_clasificacion o promedio de evaluaciones.nota
    * - si limitToUserAreasOf llega con userId => restringe a sus áreas
    */
-  // ✅ Sin restricciones por área para ningún rol
+  // Sin restricciones por área para ningún rol
   async listOlimpistas(params: ListParams) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    // Si no hay gestión abierta, devolvemos lista vacía
+    if (!gestion) return [];
     const { area, q } = params ?? {};
 
     const where: Record<string, unknown> = {
@@ -406,11 +424,21 @@ export class OlimpistasService {
       ...(q
         ? {
             OR: [
-              { competidor: { nombres: { contains: q, mode: 'insensitive' } } },
               {
-                competidor: { apellidos: { contains: q, mode: 'insensitive' } },
+                competidor: {
+                  nombres: { contains: q, mode: 'insensitive' },
+                },
               },
-              { competidor: { escuela: { contains: q, mode: 'insensitive' } } },
+              {
+                competidor: {
+                  apellidos: { contains: q, mode: 'insensitive' },
+                },
+              },
+              {
+                competidor: {
+                  escuela: { contains: q, mode: 'insensitive' },
+                },
+              },
               {
                 competidor: {
                   departamento: { contains: q, mode: 'insensitive' },
@@ -463,16 +491,64 @@ export class OlimpistasService {
   }
 
   /**
+   * GET /olimpistas/:id
+   * Datos completos para edición
+   */
+  async getOlimpistaById(inscripcionId: number) {
+    const insc = await this.prisma.inscripciones.findUnique({
+      where: { id_inscripcion: inscripcionId },
+      include: {
+        competidor: true,
+        area: true,
+        nivel: true,
+      },
+    });
+
+    if (!insc) {
+      throw new BadRequestException('Olimpista no encontrado.');
+    }
+
+    const nivelRaw = (insc.competidor.nivel ?? '').toString().toUpperCase();
+    const nivelCompetencia: 'Primaria' | 'Secundaria' =
+      nivelRaw === 'PRIMARIA' ? 'Primaria' : 'Secundaria';
+
+    return {
+      id: insc.id_inscripcion,
+      nombreCompleto:
+        `${insc.competidor.nombres} ${insc.competidor.apellidos}`.trim(),
+      ci: insc.competidor.ci,
+      tutorContacto: insc.competidor.tutorContacto,
+      unidadEducativa: insc.competidor.escuela ?? '',
+      departamento: insc.competidor.departamento ?? 'La Paz',
+      area: insc.area.nombre_area,
+      nivelCompetencia,
+      grado: insc.competidor.grado ?? 1,
+    };
+  }
+
+  /**
    * GET /olimpistas/areas-counters
    * - si llega userId => restringe a sus áreas
    */
-  // ✅ Contadores sin restricciones por área
+  // Contadores sin restricciones por área
   async getAreasCounters(_limitToUserAreasOf: number | null = null) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
     const data = await this.prisma.areas.findMany({
       where: { activo: true },
       select: {
         nombre_area: true,
-        _count: { select: { inscripciones: true } },
+        _count: {
+          select: {
+            inscripciones: {
+              // Si hay gestión, contamos solo las de este año. Si no, 0.
+              where: gestion
+                ? { id_gestion: gestion.id_gestion }
+                : { id_gestion: -1 },
+            },
+          },
+        },
       },
       orderBy: { nombre_area: 'asc' },
     });
@@ -481,5 +557,111 @@ export class OlimpistasService {
       nombre_area: a.nombre_area,
       total: a._count.inscripciones,
     }));
+  }
+
+  // Actualización de olimpista (por id_inscripcion)
+  async updateOlimpista(
+    inscripcionId: number,
+    dto: UpdateOlimpistaDto,
+    _userId?: number,
+  ) {
+    // Buscar la inscripción y su competidor asociado
+    const inscripcion = await this.prisma.inscripciones.findUnique({
+      where: { id_inscripcion: inscripcionId },
+      include: { competidor: true },
+    });
+
+    if (!inscripcion) {
+      throw new BadRequestException('Olimpista no encontrado.');
+    }
+
+    // Resolver área
+    const idArea = await this.getAreaIdByName(dto.area);
+
+    // Resolver nivel / grado usando la misma lógica que en el registro
+    const escolar = this.deriveEscolaridad(dto);
+    const nivelCanon = escolar.nivel;
+    const gradoCanon = escolar.grado;
+    const idNivel = await this.getNivelIdByName(nivelCanon);
+
+    // Separar nombre y apellidos
+    const { nombres, apellidos } = splitNombreCompleto(dto.nombreCompleto);
+
+    // Validar CI único (excluyendo al propio competidor)
+    const duplicated = await this.prisma.competidores.findFirst({
+      where: {
+        ci: dto.ci,
+        NOT: { id_competidor: inscripcion.id_competidor },
+      },
+      select: { id_competidor: true },
+    });
+
+    if (duplicated) {
+      throw new BadRequestException('El CI ya está registrado');
+    }
+
+    // Validar tutor
+    const tutor = await this.prisma.tutores.findUnique({
+      where: { telefono: dto.tutorContacto },
+      select: { id_tutor: true },
+    });
+
+    if (!tutor) {
+      throw new BadRequestException(
+        'Debe registrar un tutor antes de asociar un olimpista.',
+      );
+    }
+
+    const ueNorm = dto.unidadEducativa.trim().replace(/\s+/g, ' ');
+
+    await this.prisma.$transaction(async (tx) => {
+      // Actualizar competidor
+      await tx.competidores.update({
+        where: { id_competidor: inscripcion.id_competidor },
+        data: {
+          ci: dto.ci,
+          nombres,
+          apellidos,
+          escuela: ueNorm,
+          departamento: dto.departamento,
+          tutorContacto: dto.tutorContacto,
+          id_tutor: tutor.id_tutor,
+          nivel:
+            nivelCanon === 'Primaria'
+              ? ('PRIMARIA' as const)
+              : ('SECUNDARIA' as const),
+          grado: gradoCanon ?? undefined,
+        },
+      });
+
+      // Actualizar inscripción (área / nivel)
+      await tx.inscripciones.update({
+        where: { id_inscripcion: inscripcionId },
+        data: {
+          id_area: idArea,
+          id_nivel: idNivel,
+        },
+      });
+    });
+
+    return { ok: true };
+  }
+
+  // Eliminación de olimpista (por id_inscripcion)
+  async removeOlimpista(inscripcionId: number, _userId?: number) {
+    try {
+      await this.prisma.inscripciones.delete({
+        where: { id_inscripcion: inscripcionId },
+      });
+      return { ok: true, deleted: true };
+    } catch (e: unknown) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2025'
+      ) {
+        throw new BadRequestException('Olimpista no encontrado.');
+      }
+      throw e;
+    }
   }
 }

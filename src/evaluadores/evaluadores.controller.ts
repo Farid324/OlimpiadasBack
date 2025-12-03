@@ -18,10 +18,11 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ADMIN } from '../auth/constants';
+import { AsignarOlimpistasDto } from './dto/asignar-olimpistas.dto';
 
 @Controller('evaluadores')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(ADMIN,'RESPONSABLE_DE_AREA')
+@Roles(ADMIN, 'RESPONSABLE_DE_AREA')
 export class EvaluadoresController {
   constructor(private readonly service: EvaluadoresService) {}
 
@@ -34,6 +35,16 @@ export class EvaluadoresController {
   @Get()
   findAll(@Query() query: { q?: string; telefono?: string; ci?: string }) {
     return this.service.findAll(query);
+  }
+
+  @Post('asignar-olimpistas')
+  async asignarOlimpistas(@Body() dto: AsignarOlimpistasDto) {
+    return this.service.asignarOlimpistas(dto);
+  }
+  @Get('asignar-olimpistas/estado')
+  async getEstadoAsignacion(@Query('id_area') id_area: string) {
+    const idAreaNum = Number(id_area);
+    return this.service.getEstadoAsignacionArea(idAreaNum);
   }
 
   // 🔹 Necesario para "Editar"

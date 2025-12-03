@@ -42,7 +42,9 @@ export class CreateEvaluadorDto {
   correo!: string;
 
   // Teléfono: exactamente 8 dígitos, pero OPCIONAL
-  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
   @IsOptional()
   @IsString()
   @Matches(/^\d{8}$/, { message: 'el teléfono debe tener 8 dígitos' })
@@ -55,7 +57,9 @@ export class CreateEvaluadorDto {
   ci?: string;
 
   // Institución OPCIONAL
-  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
   @IsOptional()
   @IsString()
   @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, {
@@ -64,7 +68,9 @@ export class CreateEvaluadorDto {
   institucion?: string;
 
   // Especialidad OPCIONAL
-  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
   @IsOptional()
   @IsString()
   @IsNotEmpty({ message: 'la especialidad es obligatoria' })

@@ -13,7 +13,7 @@ import { FilterResponsableDto } from './dto/filter-responsable.dto';
 import * as bcrypt from 'bcrypt';
 import { EmailService } from '../email/email.service';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
-
+import { Prisma } from '@prisma/client';
 // --- HELPERS DE TUS AMIGOS (Manejo de errores) ---
 function isKnownPrismaError(e: unknown): e is PrismaClientKnownRequestError {
   return e instanceof PrismaClientKnownRequestError;
@@ -123,6 +123,10 @@ export class ResponsablesService {
 
   async create(dto: CreateResponsableDto) {
     try {
+      const gestion = await this.prisma.gestiones.findFirst({
+        where: { estado: 'ABIERTA' },
+      });
+      if (!gestion) throw new BadRequestException('No hay gestión abierta.');
       // 1. Validar duplicados (TU LOGICA + LOGGING AMIGOS)
       const exists = await this.prisma.usuarios.findFirst({
         where: {
@@ -178,7 +182,7 @@ export class ResponsablesService {
           hash_password: hashedPassword,
           telefono: dto.telefono,
           institucion: dto.institucion,
-          experiencia: experienciaFinal,              // ⬅️ USAMOS experienciaFinal
+          experiencia: experienciaFinal, // ⬅️ USAMOS experienciaFinal
           especialidad: dto.especialidad,
           ci: dto.ci,
           rol: { connect: { id_rol: idRolResponsable } },
@@ -190,6 +194,7 @@ export class ResponsablesService {
         data: {
           id_usuario: usuario.id_usuario,
           id_area: dto.id_area,
+          id_gestion: gestion.id_gestion,
           // activo: true (default por prisma schema usualmente)
         },
       });
@@ -232,6 +237,10 @@ export class ResponsablesService {
   }
 
   async update(id: number, dto: UpdateResponsableDto) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+    if (!gestion) throw new BadRequestException('No hay gestión abierta.');
     // TU LÓGICA DE UPDATE RESTAURADA
     const usuario = await this.prisma.usuarios.findUnique({
       where: { id_usuario: id },
@@ -240,31 +249,28 @@ export class ResponsablesService {
 
     // Validar duplicados en campos que cambian
     if (dto.correo || dto.ci || dto.telefono) {
-      const dup = await this.prisma.usuarios.findFirst({
-        where: {
-          AND: [
-            { id_usuario: { not: id } },
-            {
-              OR: [
-                dto.correo ? { correo: dto.correo } : undefined,
-                dto.ci ? { ci: dto.ci } : undefined,
-                dto.telefono ? { telefono: dto.telefono } : undefined,
-              ].filter(Boolean) as any,
-            },
-          ],
-        },
-      });
+      const orConditions: Prisma.usuariosWhereInput[] = [];
+      if (dto.correo) orConditions.push({ correo: dto.correo });
+      if (dto.ci) orConditions.push({ ci: dto.ci });
+      if (dto.telefono) orConditions.push({ telefono: dto.telefono });
 
-      if (dup) {
-        if (dto.correo && dup.correo === dto.correo)
-          throw new BadRequestException('El correo ya está registrado');
-        if (dto.ci && dup.ci === dto.ci)
-          throw new BadRequestException('El CI ya está registrado');
-        if (dto.telefono && dup.telefono === dto.telefono)
-          throw new BadRequestException('El teléfono ya está registrado');
+      if (orConditions.length > 0) {
+        const dup = await this.prisma.usuarios.findFirst({
+          where: {
+            AND: [{ id_usuario: { not: id } }, { OR: orConditions }],
+          },
+        });
+
+        if (dup) {
+          if (dto.correo && dup.correo === dto.correo)
+            throw new BadRequestException('El correo ya está registrado');
+          if (dto.ci && dup.ci === dto.ci)
+            throw new BadRequestException('El CI ya está registrado');
+          if (dto.telefono && dup.telefono === dto.telefono)
+            throw new BadRequestException('El teléfono ya está registrado');
+        }
       }
     }
-
     // Validar lógica de área única (TU CÓDIGO IMPORTANTE)
     if (typeof dto.id_area === 'number') {
       const relacionActual = await this.prisma.responsables_area.findFirst({
@@ -288,7 +294,11 @@ export class ResponsablesService {
           });
         } else {
           await this.prisma.responsables_area.create({
-            data: { id_usuario: id, id_area: dto.id_area },
+            data: {
+              id_usuario: id,
+              id_area: dto.id_area,
+              id_gestion: gestion.id_gestion,
+            },
           });
         }
       }
