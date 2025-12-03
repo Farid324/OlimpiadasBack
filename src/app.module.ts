@@ -26,8 +26,8 @@ import { FasesModule } from './fases/fases.module';
 import { NivelesModule } from './niveles/niveles.module';
 import { ReportesModule } from './reportes/reportes.module';
 import { EvaluacionesAdminModule } from './evaluaciones/evaluaciones-admin.module';
+import { NewPasswordModule } from './NewPassword/new-password.module';
 
-// ⬇️ IMPORTA TU MÓDULO AQUÍ
 import { ControlFasesModule } from './controlFases/controlFases.module';
 
 import { LogsModule } from './registroActividad/logs.module';
@@ -50,9 +50,10 @@ import { MedalleroConfigModule } from './medallero-config/medallero-config.modul
     LogsModule,
     MedalleroConfigModule,
 
-    ControlFasesModule, // ⬅️ AÑADIDO
+    ControlFasesModule, 
     FasesModule,
     EvaluacionesAdminModule,
+    NewPasswordModule,
 
     JwtModule.register({
       secret: process.env.JWT_SECRET,
