@@ -1,6 +1,6 @@
 import { Controller, Get, Query, Param, ParseIntPipe } from '@nestjs/common';
 import { PrincipalService } from './principal.service';
-import { CompetidorListadoDto, MedalleroResumenDto } from './dto';
+import { CompetidorListadoDto, MedalleroResumenDto } from './dto/index';
 import { tipo_premio } from '@prisma/client';
 
 @Controller('principal')

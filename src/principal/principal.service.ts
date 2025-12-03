@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CompetidorListadoDto, MedalleroResumenDto } from './dto';
+import { CompetidorListadoDto, MedalleroResumenDto } from './dto/index';
 import { tipo_premio, estado_inscripcion } from '@prisma/client';
 
 // Tipos de inclusión para Prisma (para no repetir código)
@@ -179,7 +179,7 @@ export class PrincipalService {
     const whereCondition = {
       id_gestion: idGestion,
       estado_inscripcion: {
-        in: ['CLASIFICADO', 'FINALISTA', 'PREMIADO'],
+        in: ['CLASIFICADO', 'FINALISTA', 'PREMIADO'] as estado_inscripcion[],
       },
       ...(idArea && { id_area: idArea }),
     };
