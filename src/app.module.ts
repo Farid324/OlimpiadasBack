@@ -20,6 +20,7 @@ import { OlimpistasModule } from './olimpistas/olimpistas.module';
 import { GruposModule } from './grupos/grupos.module';
 import { TutoresModule } from './tutores/tutores.module';
 import { FasesModule } from './fases/fases.module';
+import { PasswordRecoveryModule } from './ContraseñaRecuperada/password-recovery.module';
 //import { FasesController } from './fases/fases.controller';
 
 // NUEVOS
@@ -54,6 +55,7 @@ import { MedalleroConfigModule } from './medallero-config/medallero-config.modul
     FasesModule,
     EvaluacionesAdminModule,
     NewPasswordModule,
+    PasswordRecoveryModule,
 
     JwtModule.register({
       secret: process.env.JWT_SECRET,
