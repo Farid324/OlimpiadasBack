@@ -32,6 +32,10 @@ import { ControlFasesModule } from './controlFases/controlFases.module';
 
 import { LogsModule } from './registroActividad/logs.module';
 import { MedalleroConfigModule } from './medallero-config/medallero-config.module';
+
+//gestiones
+import { GestionesModule } from './gestiones/gestiones.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -53,6 +57,8 @@ import { MedalleroConfigModule } from './medallero-config/medallero-config.modul
     ControlFasesModule, // ⬅️ AÑADIDO
     FasesModule,
     EvaluacionesAdminModule,
+
+    GestionesModule,
 
     JwtModule.register({
       secret: process.env.JWT_SECRET,
