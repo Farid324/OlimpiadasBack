@@ -53,7 +53,7 @@ export class CreateEvaluadorDto {
   // 🔹 CI: 6–8 dígitos (ahora permitido)
   @IsOptional()
   @IsString()
-  @Matches(/^\d{6,8}$/, { message: 'el CI debe tener entre 6 y 8 dígitos' })
+  @Matches(/^\d{6,12}$/, { message: 'el CI debe tener entre 6 y 12 dígitos' })
   ci?: string;
 
   // Institución OPCIONAL
