@@ -1,11 +1,13 @@
+// src/principal/principal.module.ts
+
 import { Module } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service'; // Asume que tienes un PrismaService
 import { PrincipalController } from './principal.controller';
 import { PrincipalService } from './principal.service';
+import { PrismaModule } from '../prisma/prisma.module'; // Importante para usar PrismaService
 
 @Module({
-  imports: [],
+  imports: [PrismaModule],
   controllers: [PrincipalController],
-  providers: [PrincipalService, PrismaService],
+  providers: [PrincipalService],
 })
 export class PrincipalModule {}

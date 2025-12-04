@@ -32,6 +32,7 @@ import { ControlFasesModule } from './controlFases/controlFases.module';
 
 import { LogsModule } from './registroActividad/logs.module';
 import { MedalleroConfigModule } from './medallero-config/medallero-config.module';
+import { PrincipalModule } from './principal/principal.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -49,6 +50,7 @@ import { MedalleroConfigModule } from './medallero-config/medallero-config.modul
     ReportesModule,
     LogsModule,
     MedalleroConfigModule,
+    PrincipalModule,
 
     ControlFasesModule, // ⬅️ AÑADIDO
     FasesModule,

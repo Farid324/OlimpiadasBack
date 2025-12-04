@@ -1,20 +1,16 @@
+// src/principal/dto/competidor-listado.dto.ts
+import { estado_inscripcion, tipo_premio } from '@prisma/client';
+
 export class CompetidorListadoDto {
-  // Atributos de la tabla/front
-  idInscripcion: number; // id_inscripcion
-  nombre: string; // Nombre Completo del competidor
-  ci: string; // CI del competidor
-  area: string; // Nombre del Área
-  colegio: string | null; // Escuela del competidor (competidores.escuela)
-  ciudad: string | null; // Departamento del competidor (competidores.departamento)
-  anio: number; // anio de la gestión (gestiones.anio)
-  
-  // Atributos de estado y puntaje
-  puntaje: number | null; // puntaje_clasificacion o puntaje_final
-  medalla: 'ORO' | 'PLATA' | 'BRONCE' | 'MENCION' | null;
-  
-  // Estado general de la inscripción (INSCRITO, CLASIFICADO, FINALISTA, PREMIADO, DESCALIFICADO)
-  estadoInscripcion: 'INSCRITO' | 'CLASIFICADO' | 'FINALISTA' | 'PREMIADO' | 'DESCALIFICADO';
-  
-  // Opcional para Histórico
-  faseLlegada?: 'CLASIFICATORIA' | 'FINAL'; 
+  idInscripcion: number;
+  name: string;
+  ci: string;
+  area: string;
+  school: string | null;
+  city: string | null;
+  year: number;
+  score: number | null; // puntaje_clasificacion o puntaje_final
+  medal: tipo_premio | null; // ORO, PLATA, BRONCE, MENCION
+  status: estado_inscripcion; // INSCRITO, CLASIFICADO, PREMIADO, etc.
+  faseLlegada?: 'CLASIFICATORIA' | 'FINAL'; // Sólo para histórico (opcional)
 }

@@ -1,274 +1,228 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+// src/principal/principal.service.ts
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CompetidorListadoDto, MedalleroResumenDto } from './dto/index';
-import { tipo_premio, estado_inscripcion } from '@prisma/client';
+import { CompetidorListadoDto, MedalleroResumenDto } from './dto';
+import {
+  tipo_premio,
+  estado_inscripcion,
+  fuente_lista,
+  gestiones,
+  estado_validacion,
+  Prisma
+} from '@prisma/client';
 
-// Tipos de inclusión para Prisma (para no repetir código)
-const inscripcionInclude = {
-  competidor: {
-    select: { nombres: true, apellidos: true, ci: true, escuela: true, departamento: true },
-  },
-  area: { select: { nombre_area: true } },
-  gestion: { select: { anio: true, id_gestion: true } },
-  premios: { 
-    select: { tipo: true, fuente: true },
-  }
-};
+// Tipo corregido para que coincida EXACTAMENTE con el include usado
+type InscripcionIncluida = Prisma.inscripcionesGetPayload<{
+  include: {
+    competidor: true;
+    area: true;
+    gestion: true;
+    premios: true;
+  };
+}>;
 
 @Injectable()
 export class PrincipalService {
   constructor(private prisma: PrismaService) {}
 
-  /**
-   * Obtiene la gestión ABIERTA (actual) por su ID.
-   * @returns El id_gestion activo.
-   */
-  async obtenerGestionActiva(): Promise<{ id_gestion: number, anio: number }> {
+  // --- Obtener gestión activa (ABIERTA)
+  async obtenerGestionActiva(): Promise<{ id_gestion: number; anio: number }> {
     const gestion = await this.prisma.gestiones.findFirst({
-      where: { estado: 'ABIERTA' },
+      where: { estado: 'ABIERTA' as gestiones['estado'] },
       select: { id_gestion: true, anio: true },
+      orderBy: { id_gestion: 'desc' },
     });
-    if (!gestion) {
-        // Podrías manejar esto con una excepción o devolver null/default según tu flujo
-        throw new NotFoundException('No hay ninguna gestión ABIERTA actualmente.');
-    }
-    return gestion;
+    return gestion ?? { id_gestion: 0, anio: new Date().getFullYear() };
   }
 
-  /**
-   * Transforma un objeto inscripcion en el DTO de listado de competidor.
-   * Se requiere que la consulta use 'include: inscripcionInclude'.
-   */
-  private mapInscripcionToDto(
-    inscripcion: any, // Usar 'any' para manejar las relaciones cargadas
-    faseActual: 'CLASIFICATORIA' | 'FINAL',
-    isHistorico: boolean = false,
-  ): CompetidorListadoDto {
-    const puntajeClasificacion = inscripcion.puntaje_clasificacion?.toNumber() ?? null;
-    const puntajeFinal = inscripcion.puntaje_final?.toNumber() ?? null;
-    
-    let puntaje: number | null = null;
-    let medalla: CompetidorListadoDto['medalla'] = null;
-    let faseLlegada: CompetidorListadoDto['faseLlegada'] = 'CLASIFICATORIA';
-
-    if (faseActual === 'CLASIFICATORIA') {
-        puntaje = puntajeClasificacion;
-    } else { // Fase Final o Histórico
-        puntaje = puntajeFinal ?? puntajeClasificacion; // Usar final, si no existe usar clasificatorio
-        
-        // Determinar fase de llegada para Histórico
-        if (isHistorico) {
-            if (inscripcion.estado_inscripcion === 'FINALISTA' || inscripcion.estado_inscripcion === 'PREMIADO' || puntajeFinal !== null) {
-                faseLlegada = 'FINAL';
-            }
-        }
-        
-        // Buscar medalla (siempre de la fase FINAL para el resumen/histórico)
-        const premio = inscripcion.premios.find(p => p.tipo && p.fuente === 'FINAL');
-        medalla = premio?.tipo ?? null;
-    }
-
-    // Si es histórico, busca cualquier premio si no encontró uno 'FINAL'
-    if (isHistorico && !medalla) {
-        const anyPremio = inscripcion.premios.find(p => p.tipo);
-        medalla = anyPremio?.tipo ?? null;
-    }
-    
-    const dto: CompetidorListadoDto = {
-      idInscripcion: inscripcion.id_inscripcion,
-      nombre: `${inscripcion.competidor.nombres} ${inscripcion.competidor.apellidos}`,
-      ci: inscripcion.competidor.ci,
-      area: inscripcion.area.nombre_area,
-      colegio: inscripcion.competidor.escuela ?? null,
-      ciudad: inscripcion.competidor.departamento ?? null,
-      anio: inscripcion.gestion.anio,
-      puntaje: puntaje,
-      medalla: medalla,
-      estadoInscripcion: inscripcion.estado_inscripcion as CompetidorListadoDto['estadoInscripcion'],
-    };
-
-    if (isHistorico) {
-        dto.faseLlegada = faseLlegada;
-    }
-
-    return dto;
-  }
-
-
-  // --- Lógica para Pestaña "Clasificados 2025" ---
-
-  /**
-   * Obtiene los datos para las tarjetas de resumen (Cards).
-   */
-  async getResumenMedallero(): Promise<MedalleroResumenDto> {
-    const gestionActiva = await this.obtenerGestionActiva();
-    const idGestion = gestionActiva.id_gestion;
-
-    const [clasificandoCount, medallas] = await Promise.all([
-      // 1. Conteo de 'Clasificando' (Clasificados a Fase Final, que son los que están en estado 'CLASIFICADO', 'FINALISTA', o 'PREMIADO')
-      this.prisma.inscripciones.count({
-        where: {
-          id_gestion: idGestion,
-          estado_inscripcion: {
-            in: ['CLASIFICADO', 'FINALISTA', 'PREMIADO'],
-          },
-        },
-      }),
-
-      // 2. Conteo de Medallas (Solo de la fase final para el resumen actual)
-      this.prisma.premios_otorgados.groupBy({
-        by: ['tipo'],
-        where: {
-          id_gestion: idGestion,
-          fuente: 'FINAL',
-        },
-        _count: {
-          tipo: true,
-        },
-      }),
-    ]);
-
-    const resumen: MedalleroResumenDto = {
-      clasificando: clasificandoCount,
-      medallasOro: medallas.find(m => m.tipo === 'ORO')?._count.tipo ?? 0,
-      medallasPlata: medallas.find(m => m.tipo === 'PLATA')?._count.tipo ?? 0,
-      medallasBronce: medallas.find(m => m.tipo === 'BRONCE')?._count.tipo ?? 0,
-    };
-
-    return resumen;
-  }
-
-
-  /**
-   * Obtiene la lista de competidores para la FASE CLASIFICATORIA de la gestión actual.
-   */
-  async getCompetidoresClasificatoria(
-    idArea?: number,
-    medallaTipo?: tipo_premio | null,
-  ): Promise<CompetidorListadoDto[]> {
-    const gestionActiva = await this.obtenerGestionActiva();
-    const idGestion = gestionActiva.id_gestion;
-
-    const inscripciones = await this.prisma.inscripciones.findMany({
+  // --- Obtener ids áreas cerradas
+  private async getIdsAreasCerradas(idGestion: number, idFase: number): Promise<number[]> {
+    if (!idGestion) return [];
+    const cierresValidados = await this.prisma.cierres_fase.findMany({
       where: {
         id_gestion: idGestion,
-        ...(idArea && { id_area: idArea }),
-        // NOTA: El filtro de medalla se ignora aquí, ya que el puntaje es preliminar.
+        id_fase: idFase,
+        estado_validacion: 'VALIDADO' as estado_validacion,
       },
-      orderBy: {
-        puntaje_clasificacion: 'desc',
-      },
-      include: inscripcionInclude,
+      select: { id_area: true },
+      distinct: ['id_area'],
+    });
+    return cierresValidados.map(c => c.id_area);
+  }
+
+  // --- Mapper simplificado: ya no se usa faseLlegada ---
+  private mapInscripcionToDto(
+    inscripcion: InscripcionIncluida,
+    faseActual: 'CLASIFICATORIA' | 'FINAL'
+  ): CompetidorListadoDto {
+    const puntajeClasificacion = inscripcion.puntaje_clasificacion ? Number(inscripcion.puntaje_clasificacion) : null;
+    const puntajeFinal = inscripcion.puntaje_final ? Number(inscripcion.puntaje_final) : null;
+
+    let puntaje: number | null = faseActual === 'CLASIFICATORIA' ? puntajeClasificacion : (puntajeFinal ?? puntajeClasificacion);
+
+    // Selección de medalla solo en fase FINAL
+    let medalla: tipo_premio | null = null;
+    if (faseActual === 'FINAL') {
+      const premiosFinal = inscripcion.premios.filter(p => p.fuente === 'FINAL');
+      const premio = premiosFinal.length > 0 ? premiosFinal[0] : inscripcion.premios[0] ?? null;
+      medalla = premio?.tipo ?? null;
+    }
+
+    return {
+      idInscripcion: inscripcion.id_inscripcion,
+      name: `${inscripcion.competidor?.nombres ?? 'N/A'} ${inscripcion.competidor?.apellidos ?? ''}`.trim(),
+      ci: inscripcion.competidor?.ci ?? 'N/A',
+      area: inscripcion.area?.nombre_area ?? 'N/A',
+      school: inscripcion.competidor?.escuela ?? null,
+      city: inscripcion.competidor?.departamento ?? null,
+      year: inscripcion.gestion?.anio ?? 0,
+      score: puntaje,
+      medal: medalla,
+      status: inscripcion.estado_inscripcion,
+    };
+  }
+
+  // --------------------- ENDPOINTS ----------------------
+
+  async getCompetidoresClasificatoria(idArea?: number): Promise<CompetidorListadoDto[]> {
+    const { id_gestion: idGestion } = await this.obtenerGestionActiva();
+
+    const faseClasificatoria = await this.prisma.fases.findFirst({ where: { nombre_fase: 'Clasificatoria' } });
+    const idFaseClasif = faseClasificatoria?.id_fase ?? 1;
+
+    const idAreasCerradas = await this.getIdsAreasCerradas(idGestion, idFaseClasif);
+    if (idAreasCerradas.length === 0 && !idArea) return [];
+
+    const where: Prisma.inscripcionesWhereInput = {
+      id_gestion: idGestion,
+      puntaje_clasificacion: { not: null },
+    };
+
+    if (idArea) where.id_area = idArea;
+    else where.id_area = { in: idAreasCerradas };
+
+    const include = { competidor: true, area: true, gestion: true, premios: true };
+
+    const inscripciones = await this.prisma.inscripciones.findMany({
+      where,
+      orderBy: { puntaje_clasificacion: 'desc' },
+      include,
     });
 
     return inscripciones.map(i => this.mapInscripcionToDto(i, 'CLASIFICATORIA'));
   }
 
-
-  /**
-   * Obtiene la lista de competidores para la FASE FINAL de la gestión actual.
-   * Solo incluye competidores que pasaron la clasificatoria.
-   */
   async getCompetidoresFaseFinal(
     idArea?: number,
-    medallaTipo?: tipo_premio | null,
+    medallaTipo?: tipo_premio | null
   ): Promise<CompetidorListadoDto[]> {
-    const gestionActiva = await this.obtenerGestionActiva();
-    const idGestion = gestionActiva.id_gestion;
+    const { id_gestion: idGestion } = await this.obtenerGestionActiva();
 
-    const whereCondition = {
+    const faseFinal = await this.prisma.fases.findFirst({ where: { nombre_fase: 'Final' } });
+    const idFaseFinal = faseFinal?.id_fase ?? 2;
+
+    const idAreasCerradas = await this.getIdsAreasCerradas(idGestion, idFaseFinal);
+    if (idAreasCerradas.length === 0 && !idArea) return [];
+
+    const where: Prisma.inscripcionesWhereInput = {
       id_gestion: idGestion,
-      estado_inscripcion: {
-        in: ['CLASIFICADO', 'FINALISTA', 'PREMIADO'] as estado_inscripcion[],
-      },
-      ...(idArea && { id_area: idArea }),
+      estado_inscripcion: { in: [estado_inscripcion.CLASIFICADO, estado_inscripcion.FINALISTA, estado_inscripcion.PREMIADO] },
+      puntaje_final: { not: null },
     };
 
+    if (idArea) where.id_area = idArea;
+    else where.id_area = { in: idAreasCerradas };
+
+    if (medallaTipo) {
+      where.premios = {
+        some: { tipo: medallaTipo, fuente: 'FINAL', id_gestion: idGestion },
+      };
+    }
+
+    const include = { competidor: true, area: true, gestion: true, premios: true };
+
     const inscripciones = await this.prisma.inscripciones.findMany({
-      where: {
-        ...whereCondition,
-        // Filtro de medalla: busca un premio en la tabla premios_otorgados de la fase final
-        ...(medallaTipo && {
-          premios: {
-            some: {
-              tipo: medallaTipo,
-              fuente: 'FINAL',
-              id_gestion: idGestion,
-            },
-          },
-        }),
-      },
-      orderBy: {
-        puntaje_final: 'desc',
-      },
-      include: inscripcionInclude,
+      where,
+      orderBy: { puntaje_final: 'desc' },
+      include,
     });
 
     return inscripciones.map(i => this.mapInscripcionToDto(i, 'FINAL'));
   }
 
-
-  // --- Lógica para Pestaña "Histórico" ---
-
-  /**
-   * Obtiene los años de las gestiones CERRADAS para el filtro de Histórico.
-   */
-  async getAniosHistorico(): Promise<{ anio: number }[]> {
-    // Usamos distinct para solo obtener un año, incluso si hay múltiples gestiones con el mismo 'anio'
-    return this.prisma.gestiones.findMany({
-      where: { estado: 'CERRADA' },
-      distinct: ['anio'],
-      select: { anio: true },
-      orderBy: { anio: 'desc' },
-    });
-  }
-
-  /**
-   * Obtiene la lista de competidores para la pestaña de Histórico.
-   */
   async getCompetidoresHistorico(
     anio: number,
     idArea?: number,
-    medallaTipo?: tipo_premio | null,
+    medallaTipo?: tipo_premio | null
   ): Promise<CompetidorListadoDto[]> {
-    
-    // Obtener todas las gestiones CERRADAS para el año.
-    const gestiones = await this.prisma.gestiones.findMany({
-        where: { anio: anio, estado: 'CERRADA' },
-        select: { id_gestion: true }
+    const gests = await this.prisma.gestiones.findMany({
+      where: { anio, estado: 'CERRADA' },
+      select: { id_gestion: true },
     });
 
-    if (gestiones.length === 0) return [];
-    
-    const idGestiones = gestiones.map(g => g.id_gestion);
-    
-    // Condición de filtro
-    const whereCondition = {
-        id_gestion: { in: idGestiones },
-        ...(idArea && { id_area: idArea }),
+    if (gests.length === 0) return [];
+
+    const idGestiones = gests.map(g => g.id_gestion);
+
+    const where: Prisma.inscripcionesWhereInput = {
+      id_gestion: { in: idGestiones },
+      estado_inscripcion: { in: [estado_inscripcion.FINALISTA, estado_inscripcion.PREMIADO] },
     };
 
-    // Consulta con el filtro de medalla aplicado
+    if (idArea) where.id_area = idArea;
+    if (medallaTipo) {
+      where.premios = { some: { tipo: medallaTipo, id_gestion: { in: idGestiones } } };
+    }
+
+    const include = { competidor: true, area: true, gestion: true, premios: true };
+
     const inscripciones = await this.prisma.inscripciones.findMany({
-        where: {
-            ...whereCondition,
-            ...(medallaTipo && {
-                premios: {
-                    some: {
-                        tipo: medallaTipo,
-                        id_gestion: { in: idGestiones },
-                    },
-                },
-            }),
-        },
-        orderBy: [
-            { puntaje_final: 'desc' }, // Preferencia de orden por puntaje final
-            { puntaje_clasificacion: 'desc' }, // Sino por clasificatorio
-        ],
-        include: inscripcionInclude,
+      where,
+      orderBy: [
+        { puntaje_final: 'desc' },
+        { puntaje_clasificacion: 'desc' },
+      ],
+      include,
     });
 
-    // Mapeo para histórico
-    return inscripciones.map(i => this.mapInscripcionToDto(i, 'FINAL', true));
+    return inscripciones.map(i => this.mapInscripcionToDto(i, 'FINAL'));
+  }
+
+  async getResumenMedallero(): Promise<MedalleroResumenDto> {
+    const gestionActiva = await this.obtenerGestionActiva();
+    const idGestion = gestionActiva.id_gestion;
+
+    if (!idGestion) {
+      return { anio: gestionActiva.anio, clasificando: 0, medallasOro: 0, medallasPlata: 0, medallasBronce: 0, mencion: 0 };
+    }
+
+    const resumenPremios = await this.prisma.premios_otorgados.groupBy({
+      by: ['tipo'],
+      where: { id_gestion: idGestion, fuente: 'FINAL' },
+      _count: { tipo: true },
+    });
+
+    const countClasificando = await this.prisma.inscripciones.count({
+      where: { id_gestion: idGestion, estado_inscripcion: estado_inscripcion.FINALISTA, puntaje_clasificacion: { not: null } },
+    });
+
+    return {
+      anio: gestionActiva.anio,
+      clasificando: countClasificando,
+      medallasOro: resumenPremios.find(r => r.tipo === 'ORO')?._count.tipo ?? 0,
+      medallasPlata: resumenPremios.find(r => r.tipo === 'PLATA')?._count.tipo ?? 0,
+      medallasBronce: resumenPremios.find(r => r.tipo === 'BRONCE')?._count.tipo ?? 0,
+      mencion: resumenPremios.find(r => r.tipo === 'MENCION')?._count.tipo ?? 0,
+    };
+  }
+
+  async getAniosHistorico(): Promise<number[]> {
+    const anios = await this.prisma.gestiones.findMany({
+      where: { estado: 'CERRADA' },
+      select: { anio: true },
+      distinct: ['anio'],
+      orderBy: { anio: 'desc' },
+    });
+    return anios.map(a => a.anio);
   }
 }
