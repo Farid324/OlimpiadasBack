@@ -152,7 +152,7 @@ export class AreasService {
     console.log('💡 Consulta realizada, areas:', areas.length);
 
     const mapped = areas.map((area) => {
-      // 1️⃣ CORRECCIÓN: Tipado explícito en lugar de 'any'
+      //1️⃣ CORRECCIÓN: Tipado explícito en lugar de 'any'
       const nivelesMap: Record<
         string,
         { id_nivel: number; nombre_nivel: string; inscritos: number }
@@ -300,7 +300,6 @@ export class AreasService {
     }
 
     // --- Generación de la Respuesta Final ---
-    // 2️⃣ CORRECCIÓN: Usamos el tipo AreaNivelStats explícito
     const combinaciones: AreaNivelStats[] = [];
 
     areas.forEach((area) => {
@@ -344,7 +343,6 @@ export class AreasService {
     });
 
     console.log('💡 Datos devueltos:', combinaciones.length);
-    // 3️⃣ CORRECCIÓN: Retornamos 'combinaciones' en lugar de []
     return combinaciones;
   }
 
@@ -391,18 +389,37 @@ export class AreasService {
       areasEnEvaluacion: areasEnEvaluacion,
     };
 
-    // 4️⃣ CORRECCIÓN: Retornamos el objeto real, no 'any'
     return {
       metrics,
       areasStats,
     };
   }
 
+  // Ahora además de id_area y nombre_area, devolvemos niveles_target
+  // y un array calculado nivelesTarget, que usa el front para filtrar
+  // por Primaria / Secundaria.
   findAllActive() {
-    return this.prisma.areas.findMany({
-      where: { activo: true },
-      select: { id_area: true, nombre_area: true },
-      orderBy: { nombre_area: 'asc' },
-    });
+    return this.prisma.areas
+      .findMany({
+        where: { activo: true },
+        select: {
+          id_area: true,
+          nombre_area: true,
+          niveles_target: true, // <— campo existente en BD
+        },
+        orderBy: { nombre_area: 'asc' },
+      })
+      .then((areas) =>
+        areas.map((a) => ({
+          ...a,
+          // Ejemplos válidos en niveles_target:
+          nivelesTarget: a.niveles_target
+            ? a.niveles_target
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+            : [],
+        })),
+      );
   }
 }
