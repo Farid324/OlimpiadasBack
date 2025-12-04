@@ -38,6 +38,15 @@ export class ControlFasesRespService {
       filas: [],
     };
 
+    // Gestión abierta
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+    if (!gestion) {
+      return emptyResponse;
+    }
+
     let userId = input.userId;
 
     // Fallback: si no vino id en el token, intenta buscar por correo
@@ -55,7 +64,11 @@ export class ControlFasesRespService {
 
     // Áreas a cargo del responsable
     const misAreas = await this.prisma.responsables_area.findMany({
-      where: { id_usuario: userId, activo: true },
+      where: {
+        id_usuario: userId,
+        activo: true,
+        id_gestion: gestion.id_gestion,
+      },
       select: { id_area: true },
     });
 
@@ -94,6 +107,7 @@ export class ControlFasesRespService {
         where: {
           id_fase: faseClasif.id_fase,
           id_area: { in: areaIds },
+          id_gestion: gestion.id_gestion,
           estado_validacion: 'VALIDADO',
         },
         select: { id_area: true, id_nivel: true },
@@ -116,10 +130,12 @@ export class ControlFasesRespService {
       where: isFinal
         ? {
             id_area: { in: areaIds },
+            id_gestion: gestion.id_gestion,
             clasificacion: 'CLASIFICADO',
           }
         : {
             id_area: { in: areaIds },
+            id_gestion: gestion.id_gestion,
           },
       _count: { _all: true },
     });
@@ -136,6 +152,7 @@ export class ControlFasesRespService {
         by: ['id_area', 'id_nivel'],
         where: {
           id_area: { in: areaIds },
+          id_gestion: gestion.id_gestion,
           clasificacion: 'CLASIFICADO',
           puntaje_final: { not: null },
         },
@@ -214,7 +231,10 @@ export class ControlFasesRespService {
         .count({
           where: {
             id_fase: idFase,
-            inscripcion: { id_area: { in: areaIds } },
+            inscripcion: {
+              id_area: { in: areaIds },
+              id_gestion: gestion.id_gestion,
+            },
           },
         })
         .catch(() => 0),
@@ -223,7 +243,10 @@ export class ControlFasesRespService {
           where: {
             id_fase: idFase,
             estado_registro: 'FIRMADA' as any,
-            inscripcion: { id_area: { in: areaIds } },
+            inscripcion: {
+              id_area: { in: areaIds },
+              id_gestion: gestion.id_gestion,
+            },
           },
         })
         .catch(() => 0),
@@ -241,6 +264,7 @@ export class ControlFasesRespService {
         by: ['id_area', 'id_nivel'],
         where: {
           id_area: { in: areaIds },
+          id_gestion: gestion.id_gestion,
           puntaje_clasificacion: null,
         },
         _count: { _all: true },
@@ -253,7 +277,11 @@ export class ControlFasesRespService {
 
     // 5.2) Estado de cierre desde cierres_fase para ESTA fase y mis áreas
     const cierres = await this.prisma.cierres_fase.findMany({
-      where: { id_fase: idFase, id_area: { in: areaIds } },
+      where: {
+        id_fase: idFase,
+        id_area: { in: areaIds },
+        id_gestion: gestion.id_gestion,
+      },
       select: { id_area: true, id_nivel: true, estado_validacion: true },
     });
 

@@ -79,27 +79,32 @@ export class FasesService {
     id_area: number,
     id_nivel: number,
     type: PhaseType,
+    id_gestion: number,
   ): Promise<boolean> {
     if (type === PhaseType.CLASIFICACION) {
       const sinPuntaje = await this.prisma.inscripciones.count({
-        where: { id_area, id_nivel, puntaje_clasificacion: null },
+        where: {
+          id_area,
+          id_nivel,
+          id_gestion,
+          puntaje_clasificacion: null,
+        },
       });
-      // Mientras exista al menos una inscripcion sin puntaje_clasificacion, consideramos que hay pendientes.
       return sinPuntaje > 0;
     }
 
-    // FASE FINAL:
-    // Queremos asegurar que exista al menos 1 olimpista clasificado con puntaje_final registrado en este área/nivel.
+    // FASE FINAL: queremos asegurar que, en la gestión actual,
+    // exista al menos 1 clasificado con puntaje_final registrado.
     const withFinalScore = await this.prisma.inscripciones.count({
       where: {
         id_area,
         id_nivel,
+        id_gestion, // <- NUEVO
         clasificacion: 'CLASIFICADO',
         puntaje_final: { not: null },
       },
     });
 
-    // Si no hay ni un solo puntaje_final registrado, consideramos que aun hay pendientes.
     return withFinalScore === 0;
   }
 
@@ -139,7 +144,12 @@ export class FasesService {
       );
     }
 
-    const pendientes = await this.hasPendingsToClose(id_area, id_nivel, type);
+    const pendientes = await this.hasPendingsToClose(
+      id_area,
+      id_nivel,
+      type,
+      gestion.id_gestion,
+    );
     if (pendientes) {
       throw new BadRequestException(
         'No es posible cerrar la fase: aún existen evaluaciones pendientes.',
@@ -230,12 +240,18 @@ export class FasesService {
   }
 
   async isPhaseEnabledGlobally(type: PhaseType): Promise<boolean> {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+    if (!gestion) return false;
+
     const id_fase = await this.getFaseId(type);
 
-    // Solo consideramos cierres VALIDADOS.
     const count = await this.prisma.cierres_fase.count({
       where: {
         id_fase,
+        id_gestion: gestion.id_gestion, // solo cierres de esta gestión
         estado_validacion: {
           in: [estado_validacion.PENDIENTE, estado_validacion.VALIDADO],
         },

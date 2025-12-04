@@ -60,24 +60,28 @@ export class GestionesService {
         this.prisma.cierres_fase.count({
           where: {
             id_fase: faseClasif.id_fase,
+            id_gestion: current.id_gestion, // <- NUEVO: filtrar por gestión
             estado_validacion: { not: estado_validacion.VALIDADO },
           },
         }),
         this.prisma.cierres_fase.count({
           where: {
             id_fase: faseFinal.id_fase,
+            id_gestion: current.id_gestion, // <- NUEVO
             estado_validacion: { not: estado_validacion.VALIDADO },
           },
         }),
         this.prisma.cierres_fase.count({
           where: {
             id_fase: faseClasif.id_fase,
+            id_gestion: current.id_gestion, // <- NUEVO
             estado_validacion: estado_validacion.VALIDADO,
           },
         }),
         this.prisma.cierres_fase.count({
           where: {
             id_fase: faseFinal.id_fase,
+            id_gestion: current.id_gestion, // <- NUEVO
             estado_validacion: estado_validacion.VALIDADO,
           },
         }),
