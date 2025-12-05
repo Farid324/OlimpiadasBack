@@ -6,7 +6,7 @@ export class CreateAreaDto {
   nombre_area: string;
 
   @IsInt()
-  @Min(51)
+  @Min(0)
   @Max(100)
   nota_aprobacion: number;
 
