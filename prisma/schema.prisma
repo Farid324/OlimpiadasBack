@@ -103,7 +103,7 @@ model gestiones {
   nombre     String?        // ej: "Olimpiadas Nacionales 2025 - 1ra edición"
   estado     estado_gestion @default(ABIERTA)
   created_at DateTime       @default(now())
-
+  closed_at  DateTime?
   // Relaciones
   inscripciones        inscripciones[]
   medallero_config     medallero_config[]
@@ -113,9 +113,26 @@ model gestiones {
   responsables_area    responsables_area[]
   premios_otorgados    premios_otorgados[]
 
+  areas_gestion        areas_gestion[]
+
   @@index([anio])
   @@index([estado])
   @@index([anio, estado])
+}
+
+model areas_gestion {
+  id_area_gestion Int              @id @default(autoincrement())
+  id_gestion      Int
+  nombre_area     String
+  nota_aprobacion Int?
+  tipo            tipo_area_config @default(INDIVIDUAL)
+  niveles_target  String?
+  archived_at     DateTime         @default(now())
+
+  gestion gestiones @relation(fields: [id_gestion], references: [id_gestion], onDelete: Cascade)
+
+  @@index([id_gestion])
+  @@index([archived_at])
 }
 
 model roles {

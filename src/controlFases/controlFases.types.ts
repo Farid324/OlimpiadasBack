@@ -17,6 +17,7 @@ export type FilaFase = {
     clasificados: number;
     noClasificados: number;
     descalificados: number;
+    noEvaluados: number;
   };
   responsable: string;
   fechaHora: string;
