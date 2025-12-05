@@ -110,25 +110,43 @@ export class ControlFasesRespService {
       }
     }
 
-    // 2) Agrupación base de inscripciones por área/nivel + clasificación
+    // 2) PARES BASE área/nivel (todas las "materias" con inscripciones del responsable)
+    // CLASIFICACION: todas las inscripciones de mis áreas
+    // FINAL: solo los que llegaron a final (clasificados) en mis áreas
+    const basePairs = await this.prisma.inscripciones.groupBy({
+      by: ['id_area', 'id_nivel'],
+      where: {
+        id_area: { in: areaIds },
+        ...(isFinal ? { clasificacion: 'CLASIFICADO' } : {}),
+      },
+      _count: { _all: true },
+    });
+
+    // Si ni siquiera hay inscripciones en mis áreas, no hay nada que mostrar
+    if (basePairs.length === 0) {
+      return emptyResponse;
+    }
+
+    // 3) Agrupación SOLO de evaluados:
+    // CLASIFICACION: puntaje_clasificacion NOT NULL
+    // FINAL: clasificacion=CLASIFICADO y puntaje_final NOT NULL
     const grouped = await this.prisma.inscripciones.groupBy({
       by: ['id_area', 'id_nivel', 'clasificacion'],
       where: isFinal
         ? {
             id_area: { in: areaIds },
             clasificacion: 'CLASIFICADO',
+            puntaje_final: { not: null },
           }
         : {
             id_area: { in: areaIds },
+            puntaje_clasificacion: { not: null },
           },
       _count: { _all: true },
     });
 
-    if (grouped.length === 0) {
-      return emptyResponse;
-    }
-
-    // Para fase FINAL, queremos saber si existe al menos un puntaje_final por cada área nivel donde haya clasificados.
+    // 4) Para fase FINAL, saber si existe al menos un puntaje_final
+    // por cada área/nivel donde haya clasificados.
     let finalScoresByKey = new Map<string, number>();
 
     if (isFinal) {
@@ -147,8 +165,8 @@ export class ControlFasesRespService {
       );
     }
 
-    // 3) Catálogos
-    const nivelIds = Array.from(new Set(grouped.map((g) => g.id_nivel)));
+    // 5) Catálogos (niveles a partir de basePairs, NO de grouped)
+    const nivelIds = Array.from(new Set(basePairs.map((g) => g.id_nivel)));
 
     const [areas, niveles, yo] = await Promise.all([
       this.prisma.areas.findMany({
@@ -170,7 +188,7 @@ export class ControlFasesRespService {
     const miNombre =
       [yo?.nombre, yo?.apellido].filter(Boolean).join(' ').trim() || '—';
 
-    // 4) Mapa (areaId:nivelId) -> conteos por clasificación
+    // 6) Mapa (areaId:nivelId) -> conteos por clasificación
     type Key = string;
     const zeroCounts: Record<Clasificacion, number> = {
       CLASIFICADO: 0,
@@ -187,28 +205,38 @@ export class ControlFasesRespService {
       }
     >();
 
-    for (const g of grouped) {
-      const key = `${g.id_area}:${g.id_nivel}`;
+    // 6.1 Seed: crear entrada para CADA materia (par área/nivel)
+    for (const p of basePairs) {
+      const key = `${p.id_area}:${p.id_nivel}`;
+
+      // En FINAL solo mostramos pares permitidos por cierres de CLASIFICACIÓN
       if (isFinal && !allowedPairsForFinal.has(key)) {
         continue;
       }
-      if (!acc.has(key)) {
-        acc.set(key, {
-          id_area: g.id_area,
-          id_nivel: g.id_nivel,
-          counts: { ...zeroCounts },
-        });
-      }
-      const bucket = acc.get(key)!;
-      const clasif = (g.clasificacion ?? 'NO_CLASIFICADO') as Clasificacion;
-      bucket.counts[clasif] = (bucket.counts[clasif] ?? 0) + g._count._all;
+
+      acc.set(key, {
+        id_area: p.id_area,
+        id_nivel: p.id_nivel,
+        counts: { ...zeroCounts },
+      });
     }
 
+    // Si después de filtrar no queda ninguna materia, no mostramos nada
     if (acc.size === 0) {
       return emptyResponse;
     }
 
-    // 5) KPIs globales: evaluaciones de ESTA fase (id_fase) y SOLO mis áreas
+    // 6.2 Rellenar counts SOLO con evaluados
+    for (const g of grouped) {
+      const key = `${g.id_area}:${g.id_nivel}`;
+      const bucket = acc.get(key);
+      if (!bucket) continue; // puede ser un par fuera de allowedPairs en FINAL
+
+      const clasif = (g.clasificacion ?? 'NO_CLASIFICADO') as Clasificacion;
+      bucket.counts[clasif] = (bucket.counts[clasif] ?? 0) + g._count._all;
+    }
+
+    // 7) KPIs globales: evaluaciones de ESTA fase (id_fase) y SOLO mis áreas
     const [totalEvaluaciones, completadas] = await Promise.all([
       this.prisma.evaluaciones
         .count({
@@ -234,24 +262,30 @@ export class ControlFasesRespService {
         ? Math.round((completadas / totalEvaluaciones) * 100)
         : 0;
 
-    // 5.1) Pendientes de CLASIFICACIÓN (solo aplica a fase CLASIFICATORIA)
+    // 8) Pendientes:
+    // CLASIFICACION: puntaje_clasificacion = NULL
+    // FINAL: clasificacion=CLASIFICADO y puntaje_final = NULL
     const pendMap = new Map<string, number>();
-    if (!isFinal) {
-      const pendientesGroup = await this.prisma.inscripciones.groupBy({
-        by: ['id_area', 'id_nivel'],
-        where: {
-          id_area: { in: areaIds },
-          puntaje_clasificacion: null,
-        },
-        _count: { _all: true },
-      });
+    const pendientesGroup = await this.prisma.inscripciones.groupBy({
+      by: ['id_area', 'id_nivel'],
+      where: isFinal
+        ? {
+            id_area: { in: areaIds },
+            clasificacion: 'CLASIFICADO',
+            puntaje_final: null,
+          }
+        : {
+            id_area: { in: areaIds },
+            puntaje_clasificacion: null,
+          },
+      _count: { _all: true },
+    });
 
-      for (const p of pendientesGroup) {
-        pendMap.set(`${p.id_area}:${p.id_nivel}`, p._count._all);
-      }
+    for (const p of pendientesGroup) {
+      pendMap.set(`${p.id_area}:${p.id_nivel}`, p._count._all);
     }
 
-    // 5.2) Estado de cierre desde cierres_fase para ESTA fase y mis áreas
+    // 9) Estado de cierre desde cierres_fase para ESTA fase y mis áreas
     const cierres = await this.prisma.cierres_fase.findMany({
       where: { id_fase: idFase, id_area: { in: areaIds } },
       select: { id_area: true, id_nivel: true, estado_validacion: true },
@@ -264,26 +298,33 @@ export class ControlFasesRespService {
       stateMap.set(`${c.id_area}:${c.id_nivel}`, st as 'CERRADA' | 'VALIDADA');
     }
 
-    // 6) Construcción de filas
+    // 10) Construcción de filas
     const filas = Array.from(acc.values()).map(
       ({ id_area, id_nivel, counts }) => {
         const area = areaById.get(id_area);
         const nivel = nivelById.get(id_nivel);
 
-        const clasificados = counts.CLASIFICADO;
-        const noClasificados = counts.NO_CLASIFICADO;
-        const descalificados = counts.DESCALIFICADO;
+        const key = `${id_area}:${id_nivel}`;
 
-        const progresoHecho = clasificados + noClasificados + descalificados;
+        const clasificados = counts.CLASIFICADO;
+        const noClasificados = isFinal ? 0 : counts.NO_CLASIFICADO;
+        const descalificados = isFinal ? 0 : counts.DESCALIFICADO;
+
+        // "No evaluados":
+        // - CLASIFICACION: sin puntaje_clasificacion
+        // - FINAL: clasificados sin puntaje_final
+        const pend = pendMap.get(key) ?? 0;
+        const noEvaluados = pend;
+
+        const progresoHecho =
+          clasificados + noClasificados + descalificados + noEvaluados;
         const progresoTotal = Math.max(progresoHecho, 1);
 
-        const key = `${id_area}:${id_nivel}`;
         const statusFase = (stateMap.get(key) ?? 'EN_PROCESO') as
           | 'EN_PROCESO'
           | 'CERRADA'
           | 'VALIDADA';
 
-        const pend = pendMap.get(key) ?? 0;
         const sinPendientes = pend === 0;
 
         const tienePuntajeFinal =
@@ -302,8 +343,8 @@ export class ControlFasesRespService {
             progresoHecho === 0
               ? 'Clasificación'
               : clasificados > 0 && noClasificados === 0 && descalificados === 0
-                ? 'Completado'
-                : 'Evaluación Final';
+              ? 'Completado'
+              : 'Evaluación Final';
         }
 
         // Estado UI
@@ -357,7 +398,7 @@ export class ControlFasesRespService {
           faseActual,
           progresoHecho,
           progresoTotal,
-          resumen: { clasificados, noClasificados, descalificados },
+          resumen: { clasificados, noClasificados, descalificados, noEvaluados },
           responsable: miNombre,
           fechaHora: new Date().toISOString().slice(0, 16).replace('T', ' '),
           estado: estadoUI,
@@ -368,7 +409,7 @@ export class ControlFasesRespService {
       },
     );
 
-    // 7) KPIs finales
+    // 11) KPIs finales
     const fasesCompletadas = filas.filter(
       (f) =>
         f.accionLabel === 'Fase validada' ||
