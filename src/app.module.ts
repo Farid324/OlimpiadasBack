@@ -20,14 +20,15 @@ import { OlimpistasModule } from './olimpistas/olimpistas.module';
 import { GruposModule } from './grupos/grupos.module';
 import { TutoresModule } from './tutores/tutores.module';
 import { FasesModule } from './fases/fases.module';
+import { PasswordRecoveryModule } from './ContraseñaRecuperada/password-recovery.module';
 //import { FasesController } from './fases/fases.controller';
 
 // NUEVOS
 import { NivelesModule } from './niveles/niveles.module';
 import { ReportesModule } from './reportes/reportes.module';
 import { EvaluacionesAdminModule } from './evaluaciones/evaluaciones-admin.module';
+import { NewPasswordModule } from './NewPassword/new-password.module';
 
-// ⬇️ IMPORTA TU MÓDULO AQUÍ
 import { ControlFasesModule } from './controlFases/controlFases.module';
 
 import { LogsModule } from './registroActividad/logs.module';
@@ -54,9 +55,11 @@ import { GestionesModule } from './gestiones/gestiones.module';
     LogsModule,
     MedalleroConfigModule,
 
-    ControlFasesModule, // ⬅️ AÑADIDO
+    ControlFasesModule, 
     FasesModule,
     EvaluacionesAdminModule,
+    NewPasswordModule,
+    PasswordRecoveryModule,
 
     GestionesModule,
 
