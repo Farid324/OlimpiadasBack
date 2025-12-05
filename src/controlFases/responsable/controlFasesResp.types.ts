@@ -8,6 +8,7 @@ export type ResumenClasificacion = {
   clasificados: number;
   noClasificados: number;
   descalificados: number;
+  noEvaluados: number;
 };
 
 export type FilaFase = {

@@ -98,6 +98,7 @@ CREATE TABLE "public"."areas" (
     "nota_aprobacion" INTEGER DEFAULT 51,
     "tipo" "public"."tipo_area_config" DEFAULT 'INDIVIDUAL',
     "niveles_target" TEXT,
+    "id_gestion" INTEGER NOT NULL,
 
     CONSTRAINT "areas_pkey" PRIMARY KEY ("id_area")
 );
@@ -351,10 +352,13 @@ CREATE UNIQUE INDEX "roles_nombre_key" ON "public"."roles"("nombre");
 CREATE UNIQUE INDEX "usuarios_correo_key" ON "public"."usuarios"("correo");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "areas_nombre_area_key" ON "public"."areas"("nombre_area");
+CREATE INDEX "areas_nombre_area_idx" ON "public"."areas"("nombre_area");
 
 -- CreateIndex
-CREATE INDEX "areas_nombre_area_idx" ON "public"."areas"("nombre_area");
+CREATE INDEX "areas_id_gestion_idx" ON "public"."areas"("id_gestion");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "areas_nombre_area_id_gestion_key" ON "public"."areas"("nombre_area", "id_gestion");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "niveles_nombre_nivel_key" ON "public"."niveles"("nombre_nivel");
@@ -535,6 +539,9 @@ ALTER TABLE "public"."premios_otorgados" ADD CONSTRAINT "premios_otorgados_gener
 
 -- AddForeignKey
 ALTER TABLE "public"."usuarios" ADD CONSTRAINT "usuarios_id_rol_fkey" FOREIGN KEY ("id_rol") REFERENCES "public"."roles"("id_rol") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "public"."areas" ADD CONSTRAINT "areas_id_gestion_fkey" FOREIGN KEY ("id_gestion") REFERENCES "public"."gestiones"("id_gestion") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."competidores" ADD CONSTRAINT "competidores_id_tutor_fkey" FOREIGN KEY ("id_tutor") REFERENCES "public"."tutores"("id_tutor") ON DELETE SET NULL ON UPDATE CASCADE;
