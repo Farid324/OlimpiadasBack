@@ -20,6 +20,33 @@ export class ControlFasesService {
   ): Promise<ControlFasesResponse> {
     const isFinal = type === 'FINAL';
 
+    const empty: ControlFasesResponse = {
+      kpis: {
+        evaluacionesCompletadas: { valor: 0, total: 0 },
+        fasesCompletadas: { valor: 0, total: 0 },
+        aprobacionesPendientes: {
+          valor: 0,
+          nota: isFinal
+            ? 'Fases finales pendientes de revisión'
+            : 'Fases clasificatorias pendientes de revisión',
+        },
+        progresoGeneral: {
+          porcentaje: 0,
+          nota: 'del total de evaluaciones completadas',
+        },
+      },
+      filas: [],
+    };
+
+    // Gestión abierta
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+    if (!gestion) {
+      return empty;
+    }
+
     // 1) Fase que se va a analizar
     const fase = await this.prisma.fases.findFirst({
       where: { nombre_fase: isFinal ? 'FINAL' : 'CLASIFICATORIA' },
@@ -27,23 +54,7 @@ export class ControlFasesService {
     });
 
     if (!fase) {
-      return {
-        kpis: {
-          evaluacionesCompletadas: { valor: 0, total: 0 },
-          fasesCompletadas: { valor: 0, total: 0 },
-          aprobacionesPendientes: {
-            valor: 0,
-            nota: isFinal
-              ? 'Fases finales pendientes de revisión'
-              : 'Fases clasificatorias pendientes de revisión',
-          },
-          progresoGeneral: {
-            porcentaje: 0,
-            nota: 'del total de evaluaciones completadas',
-          },
-        },
-        filas: [],
-      };
+      return empty;
     }
 
     const idFase = fase.id_fase;
@@ -84,11 +95,13 @@ export class ControlFasesService {
       by: ['id_area', 'id_nivel', 'clasificacion'],
       where: isFinal
         ? {
+            id_gestion: gestion.id_gestion,
             clasificacion: 'CLASIFICADO',
             puntaje_final: { not: null },
           }
         : {
             puntaje_clasificacion: { not: null },
+            id_gestion: gestion.id_gestion,
           },
       _count: { _all: true },
     });
@@ -152,12 +165,19 @@ export class ControlFasesService {
     const [totalEvaluaciones, completadas] = await Promise.all([
       this.prisma.evaluaciones
         .count({
-          where: { id_fase: idFase },
+          where: {
+            id_fase: idFase,
+            inscripcion: { id_gestion: gestion.id_gestion },
+          },
         })
         .catch(() => 0),
       this.prisma.evaluaciones
         .count({
-          where: { id_fase: idFase, estado_registro: 'FIRMADA' as any },
+          where: {
+            id_fase: idFase,
+            estado_registro: 'FIRMADA' as any,
+            inscripcion: { id_gestion: gestion.id_gestion },
+          },
         })
         .catch(() => 0),
     ]);
@@ -175,10 +195,12 @@ export class ControlFasesService {
       by: ['id_area', 'id_nivel'],
       where: isFinal
         ? {
+            id_gestion: gestion.id_gestion,
             clasificacion: 'CLASIFICADO',
             puntaje_final: null,
           }
         : {
+            id_gestion: gestion.id_gestion,
             puntaje_clasificacion: null,
           },
       _count: { _all: true },
@@ -190,7 +212,10 @@ export class ControlFasesService {
 
     // 6.2) Estado de cierre desde cierres_fase para ESTA fase
     const cierres = await this.prisma.cierres_fase.findMany({
-      where: { id_fase: idFase },
+      where: {
+        id_fase: idFase,
+        id_gestion: gestion.id_gestion, // <- NUEVO
+      },
       select: { id_area: true, id_nivel: true, estado_validacion: true },
     });
 
@@ -241,8 +266,8 @@ export class ControlFasesService {
             progresoHecho === 0
               ? 'Clasificación'
               : clasificados > 0 && noClasificados === 0 && descalificados === 0
-              ? 'Completado'
-              : 'Evaluación Final';
+                ? 'Completado'
+                : 'Evaluación Final';
         }
 
         // Estado UI
@@ -288,7 +313,12 @@ export class ControlFasesService {
           faseActual,
           progresoHecho,
           progresoTotal,
-          resumen: { clasificados, noClasificados, descalificados, noEvaluados },
+          resumen: {
+            clasificados,
+            noClasificados,
+            descalificados,
+            noEvaluados,
+          },
           responsable: '—', // luego se rellena en el servicio de FE con responsablesApi
           fechaHora: new Date().toISOString().slice(0, 16).replace('T', ' '),
           estado: estadoUI,

@@ -149,13 +149,12 @@ export class ResponsablesService {
 
       // 2. Validar Área Ocupada (TU LOGICA RESTAURADA)
       const ocupada = await this.prisma.responsables_area.findFirst({
-        where: { id_area: dto.id_area, activo: true },
+        where: {
+          id_area: dto.id_area,
+          id_gestion: gestion.id_gestion,
+          activo: true,
+        },
       });
-      if (ocupada) {
-        throw new BadRequestException(
-          'El área ya tiene un responsable asignado',
-        );
-      }
 
       // 3. Preparar datos (LÓGICA AMIGOS: CI es password + Rol dinámico)
       if (!dto.ci || !dto.ci.trim()) {
@@ -224,10 +223,21 @@ export class ResponsablesService {
   }
 
   async findAll(filters: FilterResponsableDto) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+
+    if (!gestion) {
+      return [];
+    }
+
     return this.prisma.responsables_area.findMany({
       where: {
-        id_area: filters.id_area,
-        activo: filters.activo,
+        id_gestion: gestion.id_gestion,
+        id_area: filters.id_area ?? undefined,
+        activo:
+          typeof filters.activo === 'boolean' ? filters.activo : undefined,
       },
       include: {
         usuario: true,
@@ -272,35 +282,47 @@ export class ResponsablesService {
       }
     }
     // Validar lógica de área única (TU CÓDIGO IMPORTANTE)
+    // Validar lógica de área única (TU CÓDIGO IMPORTANTE)
     if (typeof dto.id_area === 'number') {
+      // Gestión abierta ya la tienes arriba
       const relacionActual = await this.prisma.responsables_area.findFirst({
-        where: { id_usuario: id },
+        where: {
+          id_usuario: id,
+          id_gestion: gestion.id_gestion,
+        },
       });
 
-      if (!relacionActual || relacionActual.id_area !== dto.id_area) {
-        const ocupada = await this.prisma.responsables_area.findFirst({
-          where: { id_area: dto.id_area, activo: true },
-        });
-        if (ocupada) {
-          throw new BadRequestException(
-            'El área ya tiene un responsable asignado',
-          );
-        }
+      // Validar que el el area nueva no se muestre ocupada en la gestion actual
+      const ocupada = await this.prisma.responsables_area.findFirst({
+        where: {
+          id_area: dto.id_area,
+          id_gestion: gestion.id_gestion,
+          activo: true,
+          id_usuario: { not: id },
+        },
+      });
 
-        if (relacionActual) {
-          await this.prisma.responsables_area.update({
-            where: { id_responsable_area: relacionActual.id_responsable_area },
-            data: { id_area: dto.id_area },
-          });
-        } else {
-          await this.prisma.responsables_area.create({
-            data: {
-              id_usuario: id,
-              id_area: dto.id_area,
-              id_gestion: gestion.id_gestion,
-            },
-          });
-        }
+      if (ocupada) {
+        throw new BadRequestException(
+          'El área ya tiene un responsable asignado en la gestión actual',
+        );
+      }
+
+      if (relacionActual) {
+        // Solo cambias el área, manteniendo id_gestion de la gestión abierta
+        await this.prisma.responsables_area.update({
+          where: { id_responsable_area: relacionActual.id_responsable_area },
+          data: { id_area: dto.id_area },
+        });
+      } else {
+        // No existía para esta gestión -> creas una nueva relación
+        await this.prisma.responsables_area.create({
+          data: {
+            id_usuario: id,
+            id_area: dto.id_area,
+            id_gestion: gestion.id_gestion,
+          },
+        });
       }
     }
 
@@ -369,8 +391,21 @@ export class ResponsablesService {
   }
 
   async checkArea(id_area: number) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+
+    if (!gestion) {
+      return { exists: false };
+    }
+
     const exists = await this.prisma.responsables_area.findFirst({
-      where: { id_area, activo: true },
+      where: {
+        id_area,
+        id_gestion: gestion.id_gestion,
+        activo: true,
+      },
     });
     return { exists: !!exists };
   }
