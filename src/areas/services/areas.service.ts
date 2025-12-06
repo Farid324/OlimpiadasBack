@@ -143,6 +143,7 @@ export class AreasService {
       });
 
       const notaAprobacion = areaActualizada.nota_aprobacion;
+      const notaAprobacionFinal = areaActualizada.nota_aprobacion_final;
 
       // Actualizar clasificaciones (Lógica existente)
       await tx.inscripciones.updateMany({
@@ -168,6 +169,33 @@ export class AreasService {
             puntaje_clasificacion: { lt: notaAprobacion },
           },
           data: { clasificacion: 'NO_CLASIFICADO' },
+        });
+      }
+
+      // Actualizar clasificaciones (Lógica existente)
+      await tx.inscripciones.updateMany({
+        where: {
+          id_area: id,
+          puntaje_final: { not: null },
+        },
+        data: { estado_final: null },
+      });
+
+      if (notaAprobacionFinal !== null) {
+        await tx.inscripciones.updateMany({
+          where: {
+            id_area: id,
+            puntaje_final: { gte: notaAprobacionFinal },
+          },
+          data: { estado_final: 'APROBADO' },
+        });
+
+        await tx.inscripciones.updateMany({
+          where: {
+            id_area: id,
+            puntaje_final: { lt: notaAprobacionFinal },
+          },
+          data: { estado_final: 'NO_APROBADO' },
         });
       }
 
