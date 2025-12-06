@@ -48,7 +48,7 @@ function calcularClasificacionPorArea(
   if (nota === null || nota === undefined) return null;
   if (nota === -1) return 'DESCALIFICADO';
 
-  const minimo = notaAprobacion ?? 51;
+  const minimo = notaAprobacion ?? 0;
 
   if (nota >= minimo) return 'CLASIFICADO';
   if (nota >= 0) return 'NO_CLASIFICADO';
