@@ -38,10 +38,18 @@ export class FasesService {
     idArea: number,
     _idNivel: number,
   ): Promise<boolean> {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+
+    if (!gestion) return false;
+
     const responsable = await this.prisma.responsables_area.findFirst({
       where: {
         id_usuario: idUsuario,
         id_area: idArea,
+        id_gestion: gestion.id_gestion,
         activo: true,
       },
       select: { id_usuario: true },
@@ -82,7 +90,10 @@ export class FasesService {
     id_gestion: number,
   ): Promise<boolean> {
     if (type === PhaseType.CLASIFICACION) {
-      const sinPuntaje = await this.prisma.inscripciones.count({
+      // REGLA CORRECTA:
+      // Hay pendientes si existe al menos una inscripción SIN puntaje_clasificacion
+      // en esa área, nivel y gestión (no importa la clasificacion final).
+      const sinPuntajeClasificacion = await this.prisma.inscripciones.count({
         where: {
           id_area,
           id_nivel,
@@ -90,22 +101,23 @@ export class FasesService {
           puntaje_clasificacion: null,
         },
       });
-      return sinPuntaje > 0;
+      return sinPuntajeClasificacion > 0;
     }
 
-    // FASE FINAL: queremos asegurar que, en la gestión actual,
-    // exista al menos 1 clasificado con puntaje_final registrado.
-    const withFinalScore = await this.prisma.inscripciones.count({
+    // FASE FINAL:
+    // Hay pendientes si hay inscripciones CLASIFICADO SIN puntaje_final
+    // en esa área, nivel y gestión.
+    const sinPuntajeFinal = await this.prisma.inscripciones.count({
       where: {
         id_area,
         id_nivel,
-        id_gestion, // <- NUEVO
+        id_gestion,
         clasificacion: 'CLASIFICADO',
-        puntaje_final: { not: null },
+        puntaje_final: null,
       },
     });
 
-    return withFinalScore === 0;
+    return sinPuntajeFinal > 0;
   }
 
   async closePhase(params: {
@@ -183,7 +195,11 @@ export class FasesService {
       },
     });
     const inscripciones = await this.prisma.inscripciones.findMany({
-      where: { id_area, id_nivel },
+      where: {
+        id_area,
+        id_nivel,
+        id_gestion: gestion.id_gestion,
+      },
       select: { id_inscripcion: true },
     });
 

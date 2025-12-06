@@ -64,7 +64,14 @@ export class ControlFasesService {
     // - FINAL: solo quienes llegaron a final (clasificacion = CLASIFICADO)
     const basePairs = await this.prisma.inscripciones.groupBy({
       by: ['id_area', 'id_nivel'],
-      where: isFinal ? { clasificacion: 'CLASIFICADO' } : {},
+      where: isFinal
+        ? {
+            id_gestion: gestion.id_gestion,
+            clasificacion: 'CLASIFICADO',
+          }
+        : {
+            id_gestion: gestion.id_gestion,
+          },
       _count: { _all: true },
     });
 
