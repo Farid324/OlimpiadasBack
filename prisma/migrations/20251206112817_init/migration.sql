@@ -57,8 +57,22 @@ CREATE TABLE "public"."gestiones" (
     "nombre" TEXT,
     "estado" "public"."estado_gestion" NOT NULL DEFAULT 'ABIERTA',
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "closed_at" TIMESTAMP(3),
 
     CONSTRAINT "gestiones_pkey" PRIMARY KEY ("id_gestion")
+);
+
+-- CreateTable
+CREATE TABLE "public"."areas_gestion" (
+    "id_area_gestion" SERIAL NOT NULL,
+    "id_gestion" INTEGER NOT NULL,
+    "nombre_area" TEXT NOT NULL,
+    "nota_aprobacion" INTEGER,
+    "tipo" "public"."tipo_area_config" NOT NULL DEFAULT 'INDIVIDUAL',
+    "niveles_target" TEXT,
+    "archived_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "areas_gestion_pkey" PRIMARY KEY ("id_area_gestion")
 );
 
 -- CreateTable
@@ -98,7 +112,6 @@ CREATE TABLE "public"."areas" (
     "nota_aprobacion" INTEGER DEFAULT 51,
     "tipo" "public"."tipo_area_config" DEFAULT 'INDIVIDUAL',
     "niveles_target" TEXT,
-    "id_gestion" INTEGER NOT NULL,
 
     CONSTRAINT "areas_pkey" PRIMARY KEY ("id_area")
 );
@@ -346,19 +359,22 @@ CREATE INDEX "gestiones_estado_idx" ON "public"."gestiones"("estado");
 CREATE INDEX "gestiones_anio_estado_idx" ON "public"."gestiones"("anio", "estado");
 
 -- CreateIndex
+CREATE INDEX "areas_gestion_id_gestion_idx" ON "public"."areas_gestion"("id_gestion");
+
+-- CreateIndex
+CREATE INDEX "areas_gestion_archived_at_idx" ON "public"."areas_gestion"("archived_at");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "roles_nombre_key" ON "public"."roles"("nombre");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "usuarios_correo_key" ON "public"."usuarios"("correo");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "areas_nombre_area_key" ON "public"."areas"("nombre_area");
+
+-- CreateIndex
 CREATE INDEX "areas_nombre_area_idx" ON "public"."areas"("nombre_area");
-
--- CreateIndex
-CREATE INDEX "areas_id_gestion_idx" ON "public"."areas"("id_gestion");
-
--- CreateIndex
-CREATE UNIQUE INDEX "areas_nombre_area_id_gestion_key" ON "public"."areas"("nombre_area", "id_gestion");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "niveles_nombre_nivel_key" ON "public"."niveles"("nombre_nivel");
@@ -538,10 +554,10 @@ ALTER TABLE "public"."premios_otorgados" ADD CONSTRAINT "premios_otorgados_id_ge
 ALTER TABLE "public"."premios_otorgados" ADD CONSTRAINT "premios_otorgados_generado_desde_fkey" FOREIGN KEY ("generado_desde") REFERENCES "public"."listas_generadas"("id_lista") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."usuarios" ADD CONSTRAINT "usuarios_id_rol_fkey" FOREIGN KEY ("id_rol") REFERENCES "public"."roles"("id_rol") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."areas_gestion" ADD CONSTRAINT "areas_gestion_id_gestion_fkey" FOREIGN KEY ("id_gestion") REFERENCES "public"."gestiones"("id_gestion") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "public"."areas" ADD CONSTRAINT "areas_id_gestion_fkey" FOREIGN KEY ("id_gestion") REFERENCES "public"."gestiones"("id_gestion") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "public"."usuarios" ADD CONSTRAINT "usuarios_id_rol_fkey" FOREIGN KEY ("id_rol") REFERENCES "public"."roles"("id_rol") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "public"."competidores" ADD CONSTRAINT "competidores_id_tutor_fkey" FOREIGN KEY ("id_tutor") REFERENCES "public"."tutores"("id_tutor") ON DELETE SET NULL ON UPDATE CASCADE;
