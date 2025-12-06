@@ -129,24 +129,40 @@ export class ResponsablesService {
       });
       if (!gestion) throw new BadRequestException('No hay gestión abierta.');
 
-      // 1. Validar duplicados (TU LOGICA + LOGGING AMIGOS)
-      const exists = await this.prisma.usuarios.findFirst({
-        where: {
-          OR: [
-            { correo: dto.correo },
-            { ci: dto.ci },
-            { telefono: dto.telefono },
-          ],
-        },
+      // 1.1 Validar duplicados globales de CORREO y TELÉFONO
+      const dupCorreo = await this.prisma.usuarios.findFirst({
+        where: { correo: dto.correo },
       });
+      if (dupCorreo) {
+        throw new BadRequestException('El correo ya está registrado');
+      }
 
-      if (exists) {
-        if (exists.correo === dto.correo)
-          throw new BadRequestException('El correo ya está registrado');
-        if (exists.ci === dto.ci)
-          throw new BadRequestException('El CI ya está registrado');
-        if (exists.telefono === dto.telefono)
-          throw new BadRequestException('El teléfono ya está registrado');
+      const dupTelefono = await this.prisma.usuarios.findFirst({
+        where: { telefono: dto.telefono },
+      });
+      if (dupTelefono) {
+        throw new BadRequestException('El teléfono ya está registrado');
+      }
+
+      // 1.2 Validar CI solo en la gestión actual:
+      //     El CI se puede repetir entre gestiones distintas,
+      //     pero NO puede repetirse dentro de la misma gestión.
+      if (dto.ci && dto.ci.trim()) {
+        const dupCiEnGestion = await this.prisma.responsables_area.findFirst({
+          where: {
+            id_gestion: gestion.id_gestion,
+            usuario: {
+              ci: dto.ci.trim(),
+            },
+          },
+          include: { usuario: true },
+        });
+
+        if (dupCiEnGestion) {
+          throw new BadRequestException(
+            'El CI ya está registrado para un responsable en la gestión actual',
+          );
+        }
       }
 
       // 2. Validar Área Ocupada EN LA GESTIÓN ACTUAL
@@ -262,10 +278,9 @@ export class ResponsablesService {
     if (!usuario) throw new NotFoundException('Responsable no encontrado');
 
     // Validar duplicados en campos que cambian
-    if (dto.correo || dto.ci || dto.telefono) {
+    if (dto.correo || dto.telefono) {
       const orConditions: Prisma.usuariosWhereInput[] = [];
       if (dto.correo) orConditions.push({ correo: dto.correo });
-      if (dto.ci) orConditions.push({ ci: dto.ci });
       if (dto.telefono) orConditions.push({ telefono: dto.telefono });
 
       if (orConditions.length > 0) {
@@ -278,13 +293,32 @@ export class ResponsablesService {
         if (dup) {
           if (dto.correo && dup.correo === dto.correo)
             throw new BadRequestException('El correo ya está registrado');
-          if (dto.ci && dup.ci === dto.ci)
-            throw new BadRequestException('El CI ya está registrado');
           if (dto.telefono && dup.telefono === dto.telefono)
             throw new BadRequestException('El teléfono ya está registrado');
         }
       }
     }
+
+    // Validar CI solo a nivel de gestión (puede repetirse en otras gestiones)
+    if (dto.ci && dto.ci.trim()) {
+      const dupCiEnGestion = await this.prisma.responsables_area.findFirst({
+        where: {
+          id_gestion: gestion.id_gestion,
+          id_usuario: { not: id },
+          usuario: {
+            ci: dto.ci.trim(),
+          },
+        },
+        include: { usuario: true },
+      });
+
+      if (dupCiEnGestion) {
+        throw new BadRequestException(
+          'El CI ya está registrado para otro responsable en la gestión actual',
+        );
+      }
+    }
+
     // Validar lógica de área única (TU CÓDIGO IMPORTANTE)
     // Validar lógica de área única (TU CÓDIGO IMPORTANTE)
     if (typeof dto.id_area === 'number') {

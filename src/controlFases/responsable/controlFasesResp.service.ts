@@ -49,13 +49,20 @@ export class ControlFasesRespService {
 
     let userId = input.userId;
 
-    // Fallback: si no vino id en el token, intenta buscar por correo
+    // Fallback: solo si el correo corresponde a un responsable ACTIVO en la gestión ABIERTA
     if (!userId && input.email) {
-      const u = await this.prisma.usuarios.findUnique({
-        where: { correo: input.email },
+      const responsableActual = await this.prisma.responsables_area.findFirst({
+        where: {
+          activo: true,
+          id_gestion: gestion.id_gestion,
+          usuario: {
+            correo: input.email,
+          },
+        },
         select: { id_usuario: true },
       });
-      userId = u?.id_usuario ?? null;
+
+      userId = responsableActual?.id_usuario ?? null;
     }
 
     if (!userId) {

@@ -199,11 +199,28 @@ export class OlimpistasService {
   }
 
   async existsByCi(ci: string): Promise<boolean> {
-    if (!ci) return false;
+    if (!ci || !ci.trim()) return false;
+
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+
+    if (!gestion) return false;
+
+    // Buscamos si hay competidor con ese CI que esté inscrito en la gestión abierta, si no hay se asume que no existe y se puede registrar
     const found = await this.prisma.competidores.findFirst({
-      where: { ci },
+      where: {
+        ci: ci.trim(),
+        inscripciones: {
+          some: {
+            id_gestion: gestion.id_gestion,
+          },
+        },
+      },
       select: { id_competidor: true },
     });
+
     return !!found;
   }
 
@@ -225,7 +242,9 @@ export class OlimpistasService {
 
     const duplicado = await this.existsByCi(dto.ci);
     if (duplicado) {
-      throw new BadRequestException('El CI ya está registrado');
+      throw new BadRequestException(
+        'El CI ya está registrado para un olimpista en la gestión actual',
+      );
     }
 
     const tutor = await this.prisma.tutores.findUnique({
@@ -373,7 +392,9 @@ export class OlimpistasService {
           splitNombreCompleto(dto.nombreCompleto);
 
           if (await this.existsByCi(dto.ci)) {
-            throw new BadRequestException('El CI ya está registrado');
+            throw new BadRequestException(
+              'El CI ya está registrado para un olimpista en la gestión actual',
+            );
           }
 
           summary.ok++;
@@ -634,16 +655,24 @@ export class OlimpistasService {
     const { nombres, apellidos } = splitNombreCompleto(dto.nombreCompleto);
 
     // Validar CI único (excluyendo al propio competidor)
+    // Validar CI único SOLO dentro de la gestión actual
     const duplicated = await this.prisma.competidores.findFirst({
       where: {
         ci: dto.ci,
-        NOT: { id_competidor: inscripcion.id_competidor },
+        id_competidor: { not: inscripcion.id_competidor },
+        inscripciones: {
+          some: {
+            id_gestion: gestion.id_gestion,
+          },
+        },
       },
       select: { id_competidor: true },
     });
 
     if (duplicated) {
-      throw new BadRequestException('El CI ya está registrado');
+      throw new BadRequestException(
+        'El CI ya está registrado para otro olimpista en la gestión actual',
+      );
     }
 
     // Validar tutor

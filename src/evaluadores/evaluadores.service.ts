@@ -288,13 +288,27 @@ export class EvaluadoresService {
         if (dupTel)
           throw new BadRequestException('El teléfono ya está registrado');
       }
-      if (ci) {
-        const dupCi = await this.prisma.usuarios.findFirst({
-          where: { ci },
-          select: { id_usuario: true },
+      // CI: único solo dentro de la gestión actual.
+      // Puede repetirse en otras gestiones.
+      if (ci && ci.trim()) {
+        const dupCiEnGestion = await this.prisma.evaluadores_area.findFirst({
+          where: {
+            id_gestion: gestion.id_gestion,
+            usuario: {
+              ci: ci.trim(),
+              rol: { nombre: 'EVALUADOR' },
+            },
+          },
+          include: { usuario: true },
         });
-        if (dupCi) throw new BadRequestException('El CI ya está registrado');
+
+        if (dupCiEnGestion) {
+          throw new BadRequestException(
+            'El CI ya está registrado para un evaluador en la gestión actual',
+          );
+        }
       }
+
       if (!correo?.trim()) {
         throw new BadRequestException('Correo es obligatorio');
       }
@@ -426,10 +440,31 @@ export class EvaluadoresService {
 
   /** GET /evaluadores/check-ci/:ci */
   async existsByCi(ci: string) {
-    const found = await this.prisma.usuarios.findFirst({
-      where: { rol: { nombre: 'EVALUADOR' }, ci },
-      select: { id_usuario: true },
+    if (!ci || !ci.trim()) {
+      return { exists: false };
+    }
+
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
     });
+
+    if (!gestion) {
+      // Sin gestión abierta, no bloqueamos por CI
+      return { exists: false };
+    }
+
+    const found = await this.prisma.evaluadores_area.findFirst({
+      where: {
+        id_gestion: gestion.id_gestion,
+        usuario: {
+          ci: ci.trim(),
+          rol: { nombre: 'EVALUADOR' },
+        },
+      },
+      select: { id_evaluador_area: true },
+    });
+
     return { exists: !!found };
   }
 
@@ -474,15 +509,25 @@ export class EvaluadoresService {
             'El teléfono ya está registrado en otro usuario',
           );
       }
-      if (dto.ci) {
-        const dupCi = await this.prisma.usuarios.findFirst({
-          where: { ci: dto.ci, id_usuario: { not: id } },
-          select: { id_usuario: true },
+      // CI: único solo dentro de la gestión actual
+      if (dto.ci && dto.ci.trim()) {
+        const dupCiEnGestion = await this.prisma.evaluadores_area.findFirst({
+          where: {
+            id_gestion: gestion.id_gestion,
+            id_usuario: { not: id },
+            usuario: {
+              ci: dto.ci.trim(),
+              rol: { nombre: 'EVALUADOR' },
+            },
+          },
+          include: { usuario: true },
         });
-        if (dupCi)
+
+        if (dupCiEnGestion) {
           throw new BadRequestException(
-            'El CI ya está registrado en otro usuario',
+            'El CI ya está registrado para otro evaluador en la gestión actual',
           );
+        }
       }
 
       if (dto.id_areas) {
