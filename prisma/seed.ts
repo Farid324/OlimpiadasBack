@@ -7,36 +7,6 @@ import bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  // ==========================================================
-  // 1. GESTIÓN ACTIVA (CRUCIAL)
-  // ==========================================================
-  const anioActual = new Date().getFullYear();
-  const nombreGestion = `Olimpiadas Científicas ${anioActual} - Demo`;
-
-  // Asegurar la creación o actualización de la gestión activa
-  const gestionActiva = await prisma.gestiones.upsert({
-    where: {
-      id_gestion: 1, // Intentamos usar un ID fijo para la primera gestión
-    },
-    update: {
-      anio: anioActual,
-      nombre: nombreGestion,
-      estado: 'ABIERTA',
-    },
-    create: {
-      anio: anioActual,
-      nombre: nombreGestion,
-      estado: 'ABIERTA',
-    },
-  });
-
-  const ID_GESTION_ACTIVA = gestionActiva.id_gestion;
-  console.log(`✅ Gestión Activa: ${gestionActiva.nombre} (ID: ${ID_GESTION_ACTIVA})`);
-  // ==========================================================
-  // FIN GESTIÓN
-  // ==========================================================
-
-
   // Roles
   const adminRole = await prisma.roles.upsert({
     where: { nombre: 'ADMINISTRADOR' },
@@ -74,24 +44,22 @@ async function main() {
     update: { orden_fase: 1 },
     create: { nombre_fase: 'CLASIFICATORIA', orden_fase: 1 },
   });
-  const faseFinal = await prisma.fases.upsert({
+  await prisma.fases.upsert({
     where: { nombre_fase: 'FINAL' },
     update: { orden_fase: 2 },
     create: { nombre_fase: 'FINAL', orden_fase: 2 },
   });
-  if (!faseFinal) throw new Error('Fase FINAL no encontrada (seed).');
-
 
   // Áreas
   const areaMate = await prisma.areas.upsert({
     where: { nombre_area: 'Matemática' },
-    update: { niveles_target: 'Secundaria,Primaria' },
-    create: { nombre_area: 'Matemática', activo: true, niveles_target: 'Secundaria,Primaria' },
+    update: {},
+    create: { nombre_area: 'Matemática', activo: true },
   });
   const areaFisica = await prisma.areas.upsert({
     where: { nombre_area: 'Física' },
-    update: { niveles_target: 'Secundaria' },
-    create: { nombre_area: 'Física', activo: true, niveles_target: 'Secundaria' },
+    update: {},
+    create: { nombre_area: 'Física', activo: true },
   });
   // ===================== GESTIÓN =====================
   const gestionActual = await prisma.gestiones.create({
@@ -108,7 +76,7 @@ async function main() {
   const passAdmin = process.env.ADMIN_PASSWORD ?? 'olimpiadas2024';
   const hashAdmin = await bcrypt.hash(passAdmin, 10);
 
-  const adminUser = await prisma.usuarios.upsert({
+  await prisma.usuarios.upsert({
     where: { correo: emailAdmin },
     update: {
       hash_password: hashAdmin,
@@ -155,9 +123,6 @@ async function main() {
     },
   });
 
-  // ==========================================================
-  // CORRECCIÓN: Agregar id_gestion a evaluadores_area
-  // ==========================================================
   await prisma.evaluadores_area.createMany({
     data: [
       {
@@ -177,7 +142,7 @@ async function main() {
   });
 
   // ==========================================================
-  // RESPONSABLES
+  //             RESPONSABLES: 2 usuarios distintos para HU-08
   // ==========================================================
   // Ana Martínez -> Matemática
   const respMathEmail =
@@ -239,15 +204,10 @@ async function main() {
 
   // Limpieza de asociaciones previas en estas áreas (por si re-seedeas)
   await prisma.responsables_area.deleteMany({
-    where: { 
-      id_gestion: ID_GESTION_ACTIVA, 
-      id_area: { in: [areaMate.id_area, areaFisica.id_area] } 
-    },
+    where: { id_area: { in: [areaMate.id_area, areaFisica.id_area] } },
   });
 
-  // ==========================================================
-  // CORRECCIÓN: Agregar id_gestion a responsables_area
-  // ==========================================================
+  // Asociaciones correctas (uno por área)
   await prisma.responsables_area.createMany({
     data: [
       {
@@ -267,24 +227,43 @@ async function main() {
   });
 
   // ========================================================================
-  // COMPETIDORES + INSCRIPCIONES DE EJEMPLO
-  // (La limpieza previa a la creación es correcta)
+  // NUEVA SECCIÓN: COMPETIDORES + INSCRIPCIONES DE EJEMPLO
   // ========================================================================
 
   // Limpieza previa
-  const cisDePrueba = [
-    'CI0001', 'CI0002', 'CI0003', 'CI0004', 'CI0005', 'CI0006', 'CI0007', 'CI0008',
-  ];
-
   await prisma.inscripciones.deleteMany({
     where: {
-      id_gestion: ID_GESTION_ACTIVA,
-      competidor: { ci: { in: cisDePrueba } },
+      competidor: {
+        ci: {
+          in: [
+            'CI0001',
+            'CI0002',
+            'CI0003',
+            'CI0004',
+            'CI0005',
+            'CI0006',
+            'CI0007',
+            'CI0008',
+          ],
+        },
+      },
     },
   });
-  // Nota: Dejar el deleteMany de competidores fuera de la gestión
   await prisma.competidores.deleteMany({
-    where: { ci: { in: cisDePrueba } },
+    where: {
+      ci: {
+        in: [
+          'CI0001',
+          'CI0002',
+          'CI0003',
+          'CI0004',
+          'CI0005',
+          'CI0006',
+          'CI0007',
+          'CI0008',
+        ],
+      },
+    },
   });
 
   // Insertar competidores
@@ -363,20 +342,18 @@ async function main() {
     where: { ci: { in: dataCompetidores.map((c) => c.ci) } },
   });
 
-  const getId = (ci: string): number => {
+  const getId = (ci: string) => {
     const competidor = compList.find((c) => c.ci === ci);
     if (!competidor) {
+      // Si esto pasa, algo salió muy mal (la creación o la búsqueda falló)
       throw new Error(
         `Error fatal en seed: No se pudo encontrar el competidor con CI ${ci} después de crearlo.`,
       );
     }
-    return competidor.id_competidor;
+    return competidor.id_competidor; // Esto ahora es 'number' (no undefined)
   };
   const now = new Date();
 
-  // ==========================================================
-  // CORRECCIÓN: Agregar id_gestion a inscripciones
-  // ==========================================================
   await prisma.inscripciones.createMany({
     data: [
       // Matemática / Secundaria
@@ -467,17 +444,14 @@ async function main() {
   });
 
   // ============================================================
-  // EXTRA PARA PRUEBAS HU-16 (Descomentando y ajustando para la gestión)
+  // EXTRA PARA PRUEBAS HU-16
   // ============================================================
 
-  const inscMatSec = await prisma.inscripciones.findMany({
-    where: { 
-      id_area: areaMate.id_area, 
-      id_nivel: secundaria.id_nivel, 
-      id_gestion: ID_GESTION_ACTIVA 
-    },
-    select: { id_inscripcion: true },
+  const faseFinal = await prisma.fases.findUnique({
+    where: { nombre_fase: 'FINAL' },
+    select: { id_fase: true },
   });
+  if (!faseFinal) throw new Error('Fase FINAL no encontrada (seed).');
 
   console.log('✅ Seed OK: competidores e inscripciones cargados.');
 }
@@ -490,5 +464,5 @@ async function main() {
     process.exit(1);
   } finally {
     await prisma.$disconnect();
-  }
+  }
 })();
