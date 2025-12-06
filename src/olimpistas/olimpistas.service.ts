@@ -406,22 +406,31 @@ export class OlimpistasService {
   /**
    * GET /olimpistas
    * - puntuacion: puntaje_clasificacion o promedio de evaluaciones.nota
-   * - si limitToUserAreasOf llega con userId => restringe a sus áreas
+   * - Sin filtros por gestión visibles para el usuario:
+   *   internamente se limita siempre a la gestión ABIERTA.
    */
-  // Sin restricciones por área para ningún rol
   async listOlimpistas(params: ListParams) {
     const gestion = await this.prisma.gestiones.findFirst({
       where: { estado: 'ABIERTA' },
     });
+
     // Si no hay gestión abierta, devolvemos lista vacía
     if (!gestion) return [];
 
     const { area, q } = params ?? {};
 
     const where: Prisma.inscripcionesWhereInput = {
+      // 🔹 Forzamos que todo salga solo de la gestión abierta
       id_gestion: gestion.id_gestion,
       ...(area
-        ? { area: { nombre_area: { equals: area, mode: 'insensitive' } } }
+        ? {
+            area: {
+              nombre_area: {
+                equals: area,
+                mode: 'insensitive',
+              },
+            },
+          }
         : {}),
       ...(q
         ? {
@@ -446,8 +455,16 @@ export class OlimpistasService {
                   departamento: { contains: q, mode: 'insensitive' },
                 },
               },
-              { competidor: { ci: { contains: q, mode: 'insensitive' } } },
-              { area: { nombre_area: { contains: q, mode: 'insensitive' } } },
+              {
+                competidor: {
+                  ci: { contains: q, mode: 'insensitive' },
+                },
+              },
+              {
+                area: {
+                  nombre_area: { contains: q, mode: 'insensitive' },
+                },
+              },
             ],
           }
         : {}),
