@@ -20,19 +20,24 @@ import { OlimpistasModule } from './olimpistas/olimpistas.module';
 import { GruposModule } from './grupos/grupos.module';
 import { TutoresModule } from './tutores/tutores.module';
 import { FasesModule } from './fases/fases.module';
+import { PasswordRecoveryModule } from './ContraseñaRecuperada/password-recovery.module';
 //import { FasesController } from './fases/fases.controller';
 
 // NUEVOS
 import { NivelesModule } from './niveles/niveles.module';
 import { ReportesModule } from './reportes/reportes.module';
 import { EvaluacionesAdminModule } from './evaluaciones/evaluaciones-admin.module';
+import { NewPasswordModule } from './NewPassword/new-password.module';
 
-// ⬇️ IMPORTA TU MÓDULO AQUÍ
 import { ControlFasesModule } from './controlFases/controlFases.module';
 
 import { LogsModule } from './registroActividad/logs.module';
 import { MedalleroConfigModule } from './medallero-config/medallero-config.module';
 import { PrincipalModule } from './principal/principal.module';
+
+//gestiones
+import { GestionesModule } from './gestiones/gestiones.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -52,9 +57,13 @@ import { PrincipalModule } from './principal/principal.module';
     MedalleroConfigModule,
     PrincipalModule,
 
-    ControlFasesModule, // ⬅️ AÑADIDO
+    ControlFasesModule, 
     FasesModule,
     EvaluacionesAdminModule,
+    NewPasswordModule,
+    PasswordRecoveryModule,
+
+    GestionesModule,
 
     JwtModule.register({
       secret: process.env.JWT_SECRET,
