@@ -511,11 +511,23 @@ export class OlimpistasService {
 
   /**
    * GET /olimpistas/:id
-   * Datos completos para edición
+   * Datos completos para edición.
+   * Solo devuelve olimpistas de la GESTIÓN ABIERTA.
    */
   async getOlimpistaById(inscripcionId: number) {
-    const insc = await this.prisma.inscripciones.findUnique({
-      where: { id_inscripcion: inscripcionId },
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+
+    if (!gestion) {
+      throw new BadRequestException('No hay gestión abierta.');
+    }
+
+    const insc = await this.prisma.inscripciones.findFirst({
+      where: {
+        id_inscripcion: inscripcionId,
+        id_gestion: gestion.id_gestion,
+      },
       include: {
         competidor: true,
         area: true,
@@ -524,7 +536,9 @@ export class OlimpistasService {
     });
 
     if (!insc) {
-      throw new BadRequestException('Olimpista no encontrado.');
+      throw new BadRequestException(
+        'Olimpista no encontrado en la gestión actual.',
+      );
     }
 
     const nivelRaw = (insc.competidor.nivel ?? '').toString().toUpperCase();
@@ -578,20 +592,33 @@ export class OlimpistasService {
     }));
   }
 
-  // Actualización de olimpista (por id_inscripcion)
+  // Actualización de olimpista (por id_inscripcion) solo en gestión ABIERTA
   async updateOlimpista(
     inscripcionId: number,
     dto: UpdateOlimpistaDto,
     _userId?: number,
   ) {
-    // Buscar la inscripción y su competidor asociado
-    const inscripcion = await this.prisma.inscripciones.findUnique({
-      where: { id_inscripcion: inscripcionId },
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+
+    if (!gestion) {
+      throw new BadRequestException('No hay gestión abierta.');
+    }
+
+    // Buscar la inscripción y su competidor asociado dentro de la gestión actual
+    const inscripcion = await this.prisma.inscripciones.findFirst({
+      where: {
+        id_inscripcion: inscripcionId,
+        id_gestion: gestion.id_gestion,
+      },
       include: { competidor: true },
     });
 
     if (!inscripcion) {
-      throw new BadRequestException('Olimpista no encontrado.');
+      throw new BadRequestException(
+        'Olimpista no encontrado en la gestión actual.',
+      );
     }
 
     // Resolver área
@@ -653,7 +680,7 @@ export class OlimpistasService {
         },
       });
 
-      // Actualizar inscripción (área / nivel)
+      // Actualizar inscripción (área / nivel) solo dentro de esta gestión
       await tx.inscripciones.update({
         where: { id_inscripcion: inscripcionId },
         data: {
@@ -666,11 +693,33 @@ export class OlimpistasService {
     return { ok: true };
   }
 
-  // Eliminación de olimpista (por id_inscripcion)
+  // Eliminación de olimpista (por id_inscripcion) solo en gestión ABIERTA
   async removeOlimpista(inscripcionId: number, _userId?: number) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+
+    if (!gestion) {
+      throw new BadRequestException('No hay gestión abierta.');
+    }
+
+    const inscripcion = await this.prisma.inscripciones.findFirst({
+      where: {
+        id_inscripcion: inscripcionId,
+        id_gestion: gestion.id_gestion,
+      },
+      select: { id_inscripcion: true },
+    });
+
+    if (!inscripcion) {
+      throw new BadRequestException(
+        'Olimpista no encontrado en la gestión actual.',
+      );
+    }
+
     try {
       await this.prisma.inscripciones.delete({
-        where: { id_inscripcion: inscripcionId },
+        where: { id_inscripcion: inscripcion.id_inscripcion },
       });
       return { ok: true, deleted: true };
     } catch (e: unknown) {
