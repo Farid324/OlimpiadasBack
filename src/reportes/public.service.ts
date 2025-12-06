@@ -6,12 +6,16 @@ import { PrismaService } from '../prisma/prisma.service';
 export class PublicReportService {
   constructor(private prisma: PrismaService) {}
 
-    async getPublicClasificados() {
+  async getPublicClasificados() {
     const gestion = await this.prisma.gestiones.findFirst({
       where: { estado: 'ABIERTA' },
+      select: {
+        id_gestion: true,
+        anio: true,
+      },
     });
 
-    // Si no hay gestión abierta, no exponemos datos antiguos
+    // Si no hay gestión abierta, no exponemos nada
     if (!gestion) {
       return [];
     }
@@ -22,11 +26,11 @@ export class PublicReportService {
         id_gestion: gestion.id_gestion,
       },
       include: {
-        competidor: true, 
+        competidor: true,
         area: true,
         nivel: true,
       },
-      orderBy: [{ created_at: 'desc' }, { puntaje_clasificacion: 'desc' }],
+      orderBy: [{ puntaje_clasificacion: 'desc' }, { created_at: 'desc' }],
     });
 
     return inscripciones.map((insc) => ({
@@ -41,9 +45,8 @@ export class PublicReportService {
         ? Number(insc.puntaje_clasificacion)
         : 0,
       medal: 'N/A',
-      year: new Date(insc.created_at).getFullYear(),
+      year: gestion.anio || new Date(insc.created_at).getFullYear(),
       status: 'Clasificado',
     }));
   }
-
 }

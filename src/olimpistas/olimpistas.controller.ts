@@ -54,12 +54,15 @@ export class OlimpistasController {
     @UploadedFile() file: Express.Multer.File,
     @Body() body: unknown, // Mantenemos unknown para validar runtime
     @Req() req: RequestWithUser,
-    @Query('dryRun') dryRun?: string,
   ) {
     const contentType = (req.headers['content-type'] as string) || '';
 
-    // Normalizamos dryRun (acepta ?dryRun=true / ?dryRun=TRUE, etc.)
-    const isDryRun = String(dryRun).toLowerCase() === 'true';
+    // Extraer dryRun de query (?dryRun=true|1)
+    const rawDryRun = req.query?.dryRun ?? req.query?.dryrun;
+    const dryRun =
+      typeof rawDryRun === 'string'
+        ? rawDryRun === 'true' || rawDryRun === '1'
+        : false;
 
     // Lógica para CSV (Multipart)
     if (contentType.includes('multipart/form-data')) {
@@ -71,7 +74,7 @@ export class OlimpistasController {
         file.originalname ?? 'upload.csv',
         {
           userId: req.user?.sub ? Number(req.user.sub) : undefined,
-          dryRun: isDryRun,
+          dryRun,
         },
       );
     }
@@ -83,8 +86,8 @@ export class OlimpistasController {
         req.user?.sub ? Number(req.user.sub) : undefined,
       );
     }
+
     // Lógica para JSON ({ data: [...] })
-    // Validación de tipos segura para evitar 'unsafe member access'
     if (
       typeof body === 'object' &&
       body !== null &&
@@ -96,13 +99,12 @@ export class OlimpistasController {
         req.user?.sub ? Number(req.user.sub) : undefined,
       );
     }
+
     // Lógica para JSON (Objeto único)
-    else {
-      return this.service.registerOne(
-        body as RegistroOlimpistaDto,
-        req.user?.sub ? Number(req.user.sub) : undefined,
-      );
-    }
+    return this.service.registerOne(
+      body as RegistroOlimpistaDto,
+      req.user?.sub ? Number(req.user.sub) : undefined,
+    );
   }
 
   @Get()
