@@ -1,4 +1,4 @@
-//src/reportes/public.controller.ts
+// src/reportes/public.controller.ts
 import { Controller, Get, Query } from '@nestjs/common';
 import { PublicReportService } from './public.service';
 
@@ -6,20 +6,32 @@ import { PublicReportService } from './public.service';
 export class PublicReportController {
   constructor(private readonly publicService: PublicReportService) {}
 
+  /**
+   * Endpoint público de clasificados.
+   *
+   * Comportamiento:
+   * - Sin parámetros => usa la última gestión CERRADA.
+   * - Con ?anio=YYYY   => intenta usar esa gestión (si está CERRADA).
+   * - Filtros opcionales:
+   *    - area  => nombre del área (match insensible a mayúsculas).
+   *    - nivel => nombre del nivel (Primaria / Secundaria / texto que coincida con nombre_nivel).
+   *    - ci    => CI exacto del competidor.
+   */
   @Get('clasificados')
   async getClasificados(
-    @Query('anio') anio?: string,
+    @Query('anio') anioRaw?: string,
     @Query('area') area?: string,
     @Query('nivel') nivel?: string,
     @Query('ci') ci?: string,
   ) {
-    const anioNum = anio ? Number(anio) : undefined;
+    const anio =
+      anioRaw && !Number.isNaN(Number(anioRaw)) ? Number(anioRaw) : undefined;
 
     return this.publicService.getPublicClasificados({
-      anio: Number.isFinite(anioNum) ? anioNum : undefined,
-      area: area?.trim() || undefined,
-      nivel: nivel?.trim() || undefined,
-      ci: ci?.trim() || undefined,
+      anio,
+      area,
+      nivel,
+      ci,
     });
   }
 }
