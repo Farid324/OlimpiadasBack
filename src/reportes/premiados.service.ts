@@ -86,7 +86,20 @@ export class PremiadosService {
       );
     }
 
-    // 1) medallero del area/nivel/gestión
+    // 0) Nota mínima de aprobación (configuración de área)
+    const areaCfg = await this.prisma.areas.findUnique({
+      where: { id_area },
+      select: {
+        nota_aprobacion: true,
+        nota_aprobacion_final: true,
+      },
+    });
+
+    // Si en el futuro subes de 51 a 60, este valor se actualiza solo leyendo la config
+    const minScore =
+      areaCfg?.nota_aprobacion_final ?? areaCfg?.nota_aprobacion ?? 51;
+
+    // 1) Medallero del área/nivel/gestión
     const medallero = await this.prisma.medallero_config.findFirst({
       where: {
         id_area,
@@ -103,7 +116,7 @@ export class PremiadosService {
       menciones: medallero?.menciones ?? 0,
     };
 
-    // 2) inscripciones del area/nivel/gestión
+    // 2) Inscripciones del área/nivel/gestión
     const inscripciones = await this.prisma.inscripciones.findMany({
       where: {
         id_area,
@@ -121,7 +134,7 @@ export class PremiadosService {
 
     const ids = inscripciones.map((i) => i.id_inscripcion);
 
-    // 3) sacar promedio de evaluaciones finales firmadas
+    // 3) Sacar promedio de evaluaciones finales firmadas
     const evals = await this.prisma.evaluaciones.groupBy({
       by: ['id_inscripcion'],
       where: {
@@ -159,15 +172,27 @@ export class PremiadosService {
 
     if (ordenados.length === 0) return [];
 
-    // 5) asignar medallas
+    // 5) Asignar medallas SOLO a quienes cumplen la nota mínima
     const salida: PremiadoRow[] = [];
     let pos = 0;
 
     for (const item of ordenados) {
-      pos += 1;
       const { inscripcion, score } = item;
+      const numericScore = Number(score);
+
+      if (Number.isNaN(numericScore)) continue;
+
+      // Filtrar por nota mínima de aprobación
+      if (numericScore < minScore) {
+        continue;
+      }
+
+      // La posición solo cuenta entre los que cumplen la nota mínima
+      pos += 1;
+
       const med = this.medallaDePosicion(pos, cfg);
       if (!med.tipo) continue;
+
       salida.push({
         id_inscripcion: inscripcion.id_inscripcion,
         posicion: pos,
@@ -177,7 +202,7 @@ export class PremiadosService {
         estadoPremio: med.tipo,
         area: inscripcion.area.nombre_area,
         nivel: inscripcion.nivel.nombre_nivel,
-        puntuacion: Number(score),
+        puntuacion: numericScore,
         unidadEducativa: inscripcion.competidor.escuela ?? '',
         departamento: inscripcion.competidor.departamento ?? '',
       });
