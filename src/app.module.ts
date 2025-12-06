@@ -33,6 +33,7 @@ import { ControlFasesModule } from './controlFases/controlFases.module';
 
 import { LogsModule } from './registroActividad/logs.module';
 import { MedalleroConfigModule } from './medallero-config/medallero-config.module';
+import { PrincipalModule } from './principal/principal.module';
 
 //gestiones
 import { GestionesModule } from './gestiones/gestiones.module';
@@ -54,6 +55,7 @@ import { GestionesModule } from './gestiones/gestiones.module';
     ReportesModule,
     LogsModule,
     MedalleroConfigModule,
+    PrincipalModule,
 
     ControlFasesModule, 
     FasesModule,

@@ -16,4 +16,9 @@ export class CreateAreaDto {
   @IsString()
   @IsOptional()
   niveles_target?: string; // Ejemplo: "Primaria, Secundaria"
+
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  nota_aprobacion_final: number;
 }

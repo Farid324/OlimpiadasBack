@@ -1,5 +1,9 @@
 // src/areas/services/areas.service.ts
-import { Injectable, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAreaDto } from '../dto/create-area.dto';
 import {
@@ -47,6 +51,7 @@ export class AreasService {
           where: { id_area: existing.id_area },
           data: {
             nota_aprobacion: data.nota_aprobacion,
+            nota_aprobacion_final: data.nota_aprobacion_final,
             tipo: data.tipo,
             niveles_target: data.niveles_target,
             activo: true, // ✨ Reactivamos el área
@@ -60,6 +65,7 @@ export class AreasService {
       data: {
         nombre_area: data.nombre_area,
         nota_aprobacion: data.nota_aprobacion,
+        nota_aprobacion_final: data.nota_aprobacion_final,
         tipo: data.tipo,
         niveles_target: data.niveles_target,
         activo: true,
@@ -82,18 +88,71 @@ export class AreasService {
       );
     }
 
+    const areaActual = await this.prisma.areas.findUnique({
+      where: { id_area: id },
+    });
+
+    if (!areaActual) {
+      throw new NotFoundException('Área no encontrada.');
+    }
+
+    // No se puede quitar niveles, solo agregar
+    const nivelesOriginal = (areaActual.niveles_target ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const nivelesNuevos = (data.niveles_target ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const nivelesQuitados = nivelesOriginal.filter(
+      (n) => !nivelesNuevos.includes(n),
+    );
+
+    if (nivelesQuitados.length > 0) {
+      throw new ConflictException(
+        `No puedes quitar niveles registrados previamente: ${nivelesQuitados.join(', ')}`,
+      );
+    }
+
+    // No se puede quitar tipo
+    if (areaActual.tipo === 'GRUPAL' && data.tipo === 'INDIVIDUAL') {
+      throw new ConflictException(
+        'No se puede cambiar el tipo de GRUPAL a INDIVIDUAL porque ya existe información registrada.',
+      );
+    }
+
+    // 3️⃣ Si la fase 1 está cerrada → no se puede modificar nota_aprobacion
+    const fase1Cerrada = await this.prisma.cierres_fase.findFirst({
+      where: {
+        id_area: id,
+        id_fase: 1, // fase de clasificación
+      },
+    });
+
+    if (fase1Cerrada) {
+      if (data.nota_aprobacion !== areaActual.nota_aprobacion) {
+        throw new ConflictException(
+          'La fase de clasificación (fase 1) ya está cerrada. No se puede modificar la nota de aprobación.',
+        );
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const areaActualizada = await tx.areas.update({
         where: { id_area: id },
         data: {
           nombre_area: data.nombre_area,
           nota_aprobacion: data.nota_aprobacion,
+          nota_aprobacion_final: data.nota_aprobacion_final,
           tipo: data.tipo,
           niveles_target: data.niveles_target,
         },
       });
 
       const notaAprobacion = areaActualizada.nota_aprobacion;
+      const notaAprobacionFinal = areaActualizada.nota_aprobacion_final;
 
       // Actualizar clasificaciones (Lógica existente)
       await tx.inscripciones.updateMany({
@@ -119,6 +178,33 @@ export class AreasService {
             puntaje_clasificacion: { lt: notaAprobacion },
           },
           data: { clasificacion: 'NO_CLASIFICADO' },
+        });
+      }
+
+      // Actualizar clasificaciones (Lógica existente)
+      await tx.inscripciones.updateMany({
+        where: {
+          id_area: id,
+          puntaje_final: { not: null },
+        },
+        data: { estado_final: null },
+      });
+
+      if (notaAprobacionFinal !== null) {
+        await tx.inscripciones.updateMany({
+          where: {
+            id_area: id,
+            puntaje_final: { gte: notaAprobacionFinal },
+          },
+          data: { estado_final: 'APROBADO' },
+        });
+
+        await tx.inscripciones.updateMany({
+          where: {
+            id_area: id,
+            puntaje_final: { lt: notaAprobacionFinal },
+          },
+          data: { estado_final: 'NO_APROBADO' },
         });
       }
 
