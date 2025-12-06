@@ -59,29 +59,38 @@ export class ControlFasesService {
 
     const idFase = fase.id_fase;
 
-    // 2) PARES BASE área/nivel (todas las inscripciones de la gestión):
-    //    CLASIFICACIÓN: todas las inscripciones de la gestión
-    //    FINAL: solo quienes llegaron a final (clasificacion = CLASIFICADO) en la gestión
+    // 2) PARES BASE área/nivel:
+    // - CLASIFICACIÓN: todas las inscripciones
+    // - FINAL: solo quienes llegaron a final (clasificacion = CLASIFICADO)
     const basePairs = await this.prisma.inscripciones.groupBy({
       by: ['id_area', 'id_nivel'],
-      where: isFinal
-        ? {
-            id_gestion: gestion.id_gestion,
-            clasificacion: 'CLASIFICADO',
-          }
-        : {
-            id_gestion: gestion.id_gestion,
-          },
+      where: isFinal ? { clasificacion: 'CLASIFICADO' } : {},
       _count: { _all: true },
     });
 
     if (basePairs.length === 0) {
-      return empty;
+      return {
+        kpis: {
+          evaluacionesCompletadas: { valor: 0, total: 0 },
+          fasesCompletadas: { valor: 0, total: 0 },
+          aprobacionesPendientes: {
+            valor: 0,
+            nota: isFinal
+              ? 'Fases finales pendientes de revisión'
+              : 'Fases clasificatorias pendientes de revisión',
+          },
+          progresoGeneral: {
+            porcentaje: 0,
+            nota: 'del total de evaluaciones completadas',
+          },
+        },
+        filas: [],
+      };
     }
 
-    // 3) Agrupación SOLO de inscripciones evaluadas para esta fase
-    //    CLASIFICACIÓN: puntaje_clasificacion NOT NULL
-    //    FINAL: clasificacion = CLASIFICADO y puntaje_final NOT NULL
+    // 3) Agrupación base de inscripciones por área/nivel + clasificación
+    // CLASIFICACIÓN: puntaje_clasificacion NOT NULL
+    // FINAL: solo clasificacion=CLASIFICADO con puntaje_final NOT NULL
     const grouped = await this.prisma.inscripciones.groupBy({
       by: ['id_area', 'id_nivel', 'clasificacion'],
       where: isFinal
@@ -93,6 +102,7 @@ export class ControlFasesService {
         : {
             id_gestion: gestion.id_gestion,
             puntaje_clasificacion: { not: null },
+            id_gestion: gestion.id_gestion,
           },
       _count: { _all: true },
     });
@@ -253,11 +263,9 @@ export class ControlFasesService {
           faseActual =
             progresoHecho === 0
               ? 'Clasificación'
-              : clasificados > 0 &&
-                noClasificados === 0 &&
-                descalificados === 0
-              ? 'Completado'
-              : 'Evaluación Final';
+              : clasificados > 0 && noClasificados === 0 && descalificados === 0
+                ? 'Completado'
+                : 'Evaluación Final';
         }
 
         // Estado UI
@@ -303,7 +311,12 @@ export class ControlFasesService {
           faseActual,
           progresoHecho,
           progresoTotal,
-          resumen: { clasificados, noClasificados, descalificados, noEvaluados },
+          resumen: {
+            clasificados,
+            noClasificados,
+            descalificados,
+            noEvaluados,
+          },
           responsable: '—', // luego se rellena en el servicio de FE con responsablesApi
           fechaHora: new Date().toISOString().slice(0, 16).replace('T', ' '),
           estado: estadoUI,

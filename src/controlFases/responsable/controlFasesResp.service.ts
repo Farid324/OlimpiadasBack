@@ -373,11 +373,9 @@ export class ControlFasesRespService {
           faseActual =
             progresoHecho === 0
               ? 'Clasificación'
-              : clasificados > 0 &&
-                noClasificados === 0 &&
-                descalificados === 0
-              ? 'Completado'
-              : 'Evaluación Final';
+              : clasificados > 0 && noClasificados === 0 && descalificados === 0
+                ? 'Completado'
+                : 'Evaluación Final';
         }
 
         // Estado UI

@@ -1,3 +1,4 @@
+// src/areas/services/areas.service.ts
 import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAreaDto } from '../dto/create-area.dto';

@@ -3,6 +3,8 @@ import {
   Body,
   Controller,
   Get,
+  Param,
+  ParseIntPipe,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -34,10 +36,11 @@ export class GestionesController {
   @Post('close')
   @Roles(ADMIN)
   async close() {
-    const gestion = await this.gestiones.closeCurrentGestion();
+    const result = await this.gestiones.closeCurrentGestion();
     return {
       ok: true,
-      gestion,
+      gestion: result.gestion,
+      areasArchivadas: result.areasArchivadas,
     };
   }
 
@@ -56,5 +59,40 @@ export class GestionesController {
   async list() {
     const gestiones = await this.gestiones.listAll();
     return { gestiones };
+  }
+
+  // ===================== ENDPOINTS PARA HISTORIAL DE ÁREAS =====================
+
+  /**
+   * Obtener historial completo de áreas por gestiones cerradas
+   * GET /gestiones/historial-areas
+   */
+  @Get('historial-areas')
+  @Roles(ADMIN, RESPONSABLE)
+  async getAreasHistorial() {
+    const historial = await this.gestiones.getAreasHistorial();
+    return { historial };
+  }
+
+  /**
+   * Obtener lista de gestiones cerradas (solo metadatos)
+   * GET /gestiones/cerradas
+   */
+  @Get('cerradas')
+  @Roles(ADMIN, RESPONSABLE)
+  async getGestionesCerradas() {
+    const gestiones = await this.gestiones.getGestionesCerradas();
+    return { gestiones };
+  }
+
+  /**
+   * Obtener áreas de una gestión específica
+   * GET /gestiones/:id/areas
+   */
+  @Get(':id/areas')
+  @Roles(ADMIN, RESPONSABLE)
+  async getAreasByGestion(@Param('id', ParseIntPipe) id: number) {
+    const areas = await this.gestiones.getAreasByGestion(id);
+    return { areas };
   }
 }
