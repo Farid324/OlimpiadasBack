@@ -130,15 +130,28 @@ export class EvaluadoresService {
   /** GET /evaluadores */
   async findAll(query: QueryEvaluadorDto) {
     const { q, telefono, ci } = query ?? {};
-    const baseWhere: Prisma.usuariosWhereInput = {
-      rol: { is: { nombre: 'EVALUADOR' } },
-    };
 
-    // Gest abierta (para filtrar las áreas por gestion)
+    // 1) Gestion ABIERTA obligatoria para listar
     const gestion = await this.prisma.gestiones.findFirst({
       where: { estado: 'ABIERTA' },
       select: { id_gestion: true },
     });
+
+    if (!gestion) {
+      // No hay gestión abierta => no mostramos nada
+      return [];
+    }
+
+    // 2) Base: rol evaluador + que tenga al menos un evaluadores_area activo en la gestión abierta
+    const baseWhere: Prisma.usuariosWhereInput = {
+      rol: { is: { nombre: 'EVALUADOR' } },
+      evaluadores_area: {
+        some: {
+          id_gestion: gestion.id_gestion,
+          activo: true,
+        },
+      },
+    };
 
     const select = {
       id_usuario: true,
@@ -152,13 +165,15 @@ export class EvaluadoresService {
       experiencia: true,
       activo: true,
       evaluadores_area: {
-        where: gestion
-          ? { id_gestion: gestion.id_gestion, activo: true }
-          : { activo: true },
+        where: {
+          id_gestion: gestion.id_gestion,
+          activo: true,
+        },
         select: { area: { select: { id_area: true, nombre_area: true } } },
       },
     } satisfies Prisma.usuariosSelect;
 
+    // Búsqueda por teléfono
     if (telefono) {
       return this.prisma.usuarios.findMany({
         where: { ...baseWhere, telefono },
@@ -167,6 +182,7 @@ export class EvaluadoresService {
       });
     }
 
+    // Búsqueda por CI
     if (ci) {
       return this.prisma.usuarios.findMany({
         where: { ...baseWhere, ci },
@@ -175,6 +191,7 @@ export class EvaluadoresService {
       });
     }
 
+    // Búsqueda general
     return this.prisma.usuarios.findMany({
       where: {
         ...baseWhere,
