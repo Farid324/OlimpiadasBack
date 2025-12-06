@@ -413,13 +413,20 @@ export class OlimpistasService {
     const gestion = await this.prisma.gestiones.findFirst({
       where: { estado: 'ABIERTA' },
     });
-    // Si no hay gestión abierta, devolvemos lista vacía
+    // Si no hay gestion abierta, devolvemos lista vacia
     if (!gestion) return [];
+
     const { area, q } = params ?? {};
 
-    const where: Record<string, unknown> = {
+    const where: Prisma.inscripcionesWhereInput = {
+      //filtramos por gestion
+      id_gestion: gestion.id_gestion,
       ...(area
-        ? { area: { nombre_area: { equals: area, mode: 'insensitive' } } }
+        ? {
+            area: {
+              nombre_area: { equals: area, mode: 'insensitive' },
+            },
+          }
         : {}),
       ...(q
         ? {

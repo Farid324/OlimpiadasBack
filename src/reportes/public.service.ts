@@ -6,13 +6,23 @@ import { PrismaService } from '../prisma/prisma.service';
 export class PublicReportService {
   constructor(private prisma: PrismaService) {}
 
-  async getPublicClasificados() {
+    async getPublicClasificados() {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+
+    // Si no hay gestión abierta, no exponemos datos antiguos
+    if (!gestion) {
+      return [];
+    }
+
     const inscripciones = await this.prisma.inscripciones.findMany({
       where: {
         clasificacion: 'CLASIFICADO',
+        id_gestion: gestion.id_gestion,
       },
       include: {
-        competidor: true, // Ya incluye el CI
+        competidor: true, 
         area: true,
         nivel: true,
       },
@@ -22,7 +32,7 @@ export class PublicReportService {
     return inscripciones.map((insc) => ({
       id: insc.id_inscripcion,
       name: `${insc.competidor.nombres} ${insc.competidor.apellidos}`,
-      ci: insc.competidor.ci, // 👈 AÑADIR CI
+      ci: insc.competidor.ci,
       area: insc.area.nombre_area,
       level: insc.nivel.nombre_nivel,
       school: insc.competidor.escuela ?? 'N/A',
@@ -35,4 +45,5 @@ export class PublicReportService {
       status: 'Clasificado',
     }));
   }
+
 }

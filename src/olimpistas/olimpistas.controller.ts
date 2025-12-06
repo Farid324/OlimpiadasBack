@@ -1,3 +1,4 @@
+///src/olimpistas/olimpistas.controller.ts
 import {
   BadRequestException,
   Body,
@@ -52,9 +53,13 @@ export class OlimpistasController {
   async register(
     @UploadedFile() file: Express.Multer.File,
     @Body() body: unknown, // Mantenemos unknown para validar runtime
-    @Req() req: RequestWithUser, // 4️⃣ Usamos el tipo correcto
+    @Req() req: RequestWithUser,
+    @Query('dryRun') dryRun?: string,
   ) {
     const contentType = (req.headers['content-type'] as string) || '';
+
+    // Normalizamos dryRun (acepta ?dryRun=true / ?dryRun=TRUE, etc.)
+    const isDryRun = String(dryRun).toLowerCase() === 'true';
 
     // Lógica para CSV (Multipart)
     if (contentType.includes('multipart/form-data')) {
@@ -66,7 +71,7 @@ export class OlimpistasController {
         file.originalname ?? 'upload.csv',
         {
           userId: req.user?.sub ? Number(req.user.sub) : undefined,
-          dryRun: false,
+          dryRun: isDryRun,
         },
       );
     }
