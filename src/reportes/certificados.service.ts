@@ -341,7 +341,11 @@ export class CertificadosService {
 
     // Medallero por area+nivel
     const medallero = await this.prisma.medallero_config.findFirst({
-      where: { id_area, id_nivel },
+      where: {
+        id_area,
+        id_nivel,
+        id_gestion: gestion.id_gestion, 
+      },
       orderBy: { id_medallero: 'desc' },
     });
 
