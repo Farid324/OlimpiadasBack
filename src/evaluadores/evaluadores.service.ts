@@ -134,6 +134,12 @@ export class EvaluadoresService {
       rol: { is: { nombre: 'EVALUADOR' } },
     };
 
+    // Gest abierta (para filtrar las áreas por gestion)
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+
     const select = {
       id_usuario: true,
       nombre: true,
@@ -146,6 +152,9 @@ export class EvaluadoresService {
       experiencia: true,
       activo: true,
       evaluadores_area: {
+        where: gestion
+          ? { id_gestion: gestion.id_gestion, activo: true }
+          : { activo: true },
         select: { area: { select: { id_area: true, nombre_area: true } } },
       },
     } satisfies Prisma.usuariosSelect;
@@ -365,16 +374,28 @@ export class EvaluadoresService {
       throw new BadRequestException('id_area inválido');
     }
 
-    // Total de inscripciones de esa área (fase clasificatoria)
-    const totalClasif = await this.prisma.inscripciones.count({
-      where: { id_area },
+    // Gestión abierta para calculo
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
     });
 
-    // Total de FINALISTAS en esa área
-    // (ajusta el criterio si en tu sistema se marca de otra forma)
+    if (!gestion) {
+      throw new BadRequestException(
+        'No hay una gestión abierta para consultar el estado de asignación.',
+      );
+    }
+
+    // Total de inscripciones de esa area (fase clasificatoria) en la gestion actual
+    const totalClasif = await this.prisma.inscripciones.count({
+      where: { id_area, id_gestion: gestion.id_gestion },
+    });
+
+    // Total de FINALISTAS en esa área (clasificados) en la gestión actual
     const totalFinal = await this.prisma.inscripciones.count({
       where: {
         id_area,
+        id_gestion: gestion.id_gestion,
         clasificacion: 'CLASIFICADO',
       },
     });
@@ -598,21 +619,33 @@ export class EvaluadoresService {
       throw new BadRequestException('Se requieren asignaciones.');
     }
 
-    // 1) Obtener totales de inscripciones
+    // Gestión ABIERTA obligatoria para distribuir cupos
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+
+    if (!gestion) {
+      throw new BadRequestException(
+        'No hay una gestión abierta para asignar olimpistas.',
+      );
+    }
+
+    // 1) Obtener totales de inscripciones EN LA GESTIÓN ACTUAL
     const [totalClasif, totalFinal] = await Promise.all([
       this.prisma.inscripciones.count({
-        where: { id_area },
+        where: { id_area, id_gestion: gestion.id_gestion },
       }),
       this.prisma.inscripciones.count({
         where: {
           id_area,
+          id_gestion: gestion.id_gestion,
           clasificacion: 'CLASIFICADO',
         },
       }),
     ]);
 
     // 2) Determinar modo: CLASIFICATORIA o FINAL
-    //    Regla: si hay finalistas -> estamos editando FINAL
     const faseClasif = await this.prisma.fases.findFirst({
       where: { nombre_fase: 'CLASIFICATORIA' },
     });
@@ -640,9 +673,13 @@ export class EvaluadoresService {
       );
     }
 
-    // 3) Obtener evaluadores del área
+    // 3) Obtener evaluadores del área EN LA GESTIÓN ACTUAL
     const evaluadoresArea = await this.prisma.evaluadores_area.findMany({
-      where: { id_area, activo: true },
+      where: {
+        id_area,
+        activo: true,
+        id_gestion: gestion.id_gestion,
+      },
       select: {
         id_evaluador_area: true,
         id_usuario: true,
@@ -652,7 +689,7 @@ export class EvaluadoresService {
 
     if (!evaluadoresArea.length) {
       throw new BadRequestException(
-        'No hay evaluadores activos registrados para esta área.',
+        'No hay evaluadores activos registrados para esta área en la gestión actual.',
       );
     }
 
@@ -711,7 +748,6 @@ export class EvaluadoresService {
       if (sinCupo.length === 1) {
         sinCupo[0][campoCupo] = restante;
       } else {
-        // sinCupo.length === 0
         throw new BadRequestException(
           `Quedan ${restante} olimpistas sin asignar. Deja un evaluador sin cupo para que reciba el resto automáticamente.`,
         );
@@ -724,7 +760,6 @@ export class EvaluadoresService {
         for (const item of lista) {
           const cupo = item[campoCupo] ?? 0;
 
-          // Si no hay cupo en esta fase, igual guardamos 0
           await tx.asignacion_evaluador_fase.upsert({
             where: {
               uq_eval_area_fase: {
