@@ -45,7 +45,7 @@ export class MiembroGrupoDto {
     '5ºS',
     '6ºS',
   ])
-  gradoEscolar!: string;
+  gradoEscolar?: string;
 
   @IsOptional()
   @IsString()
@@ -120,7 +120,7 @@ export class CreateGrupoDto {
   @IsInt()
   tutorId?: number;
 
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
   @Matches(/^\d{7,12}$/, { message: 'Teléfono inválido para tutor' })
   tutorTelefono?: string;
