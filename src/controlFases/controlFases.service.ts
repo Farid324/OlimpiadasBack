@@ -102,7 +102,6 @@ export class ControlFasesService {
         : {
             id_gestion: gestion.id_gestion,
             puntaje_clasificacion: { not: null },
-            id_gestion: gestion.id_gestion,
           },
       _count: { _all: true },
     });
