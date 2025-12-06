@@ -95,4 +95,14 @@ export class GestionesController {
     const areas = await this.gestiones.getAreasByGestion(id);
     return { areas };
   }
+
+  /**
+   * Equipo académico (responsables y evaluadores) de la gestión abierta.
+   * GET /gestiones/equipo-actual
+   */
+  @Get('equipo-actual')
+  @Roles(ADMIN)
+  async getEquipoActual() {
+    return this.gestiones.getEquipoGestionActual();
+  }
 }
