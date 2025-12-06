@@ -121,12 +121,14 @@ export class ResponsablesService {
     }
   }
 
+  // src/responsables/responsables.service.ts
   async create(dto: CreateResponsableDto) {
     try {
       const gestion = await this.prisma.gestiones.findFirst({
         where: { estado: 'ABIERTA' },
       });
       if (!gestion) throw new BadRequestException('No hay gestión abierta.');
+
       // 1. Validar duplicados (TU LOGICA + LOGGING AMIGOS)
       const exists = await this.prisma.usuarios.findFirst({
         where: {
@@ -147,7 +149,7 @@ export class ResponsablesService {
           throw new BadRequestException('El teléfono ya está registrado');
       }
 
-      // 2. Validar Área Ocupada (TU LOGICA RESTAURADA)
+      // 2. Validar Área Ocupada EN LA GESTIÓN ACTUAL
       const ocupada = await this.prisma.responsables_area.findFirst({
         where: {
           id_area: dto.id_area,
@@ -156,7 +158,13 @@ export class ResponsablesService {
         },
       });
 
-      // 3. Preparar datos (LÓGICA AMIGOS: CI es password + Rol dinámico)
+      if (ocupada) {
+        throw new BadRequestException(
+          'El área ya tiene un responsable asignado en la gestión actual',
+        );
+      }
+
+      // 3. Preparar datos (CI = password + Rol dinámico)
       if (!dto.ci || !dto.ci.trim()) {
         throw new BadRequestException(
           'El CI es obligatorio para la contraseña inicial.',
@@ -166,13 +174,11 @@ export class ResponsablesService {
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
       const idRolResponsable = await this.getResponsableRoleId();
 
-      // ⬇️ Experiencia: si no se envía o es 0, usamos 1 año por defecto
       const experienciaFinal =
         typeof dto.experiencia === 'number' && dto.experiencia > 0
           ? dto.experiencia
           : 1;
 
-      // 4. Crear Usuario y Relación
       const usuario = await this.prisma.usuarios.create({
         data: {
           nombre: dto.nombre,
@@ -181,7 +187,7 @@ export class ResponsablesService {
           hash_password: hashedPassword,
           telefono: dto.telefono,
           institucion: dto.institucion,
-          experiencia: experienciaFinal, // ⬅️ USAMOS experienciaFinal
+          experiencia: experienciaFinal,
           especialidad: dto.especialidad,
           ci: dto.ci,
           rol: { connect: { id_rol: idRolResponsable } },
@@ -194,11 +200,9 @@ export class ResponsablesService {
           id_usuario: usuario.id_usuario,
           id_area: dto.id_area,
           id_gestion: gestion.id_gestion,
-          // activo: true (default por prisma schema usualmente)
         },
       });
 
-      // 5. Enviar Correo (LÓGICA AMIGOS)
       this.emailService
         .sendResponsableWelcomeEmail(
           usuario.correo,
@@ -343,21 +347,52 @@ export class ResponsablesService {
   }
 
   async remove(id_usuario: number) {
-    const rel = await this.prisma.responsables_area.findFirst({
-      where: { id_usuario },
-    });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // Eliminar relaciones de responsable_area (todas las gestiones)
+        await tx.responsables_area.deleteMany({
+          where: { id_usuario },
+        });
 
-    if (rel) {
-      await this.prisma.responsables_area.delete({
-        where: { id_responsable_area: rel.id_responsable_area },
+        try {
+          // Intentar borrar el usuario físicamente
+          await tx.usuarios.delete({
+            where: { id_usuario },
+          });
+          return {
+            ok: true,
+            deleted: true,
+            softDeleted: false,
+            message: 'Responsable eliminado correctamente',
+          };
+        } catch (e: unknown) {
+          // Si hay FKs (por ejemplo, usado en cierres), baja lógica
+          if (isKnownPrismaError(e) && e.code === 'P2003') {
+            await tx.usuarios.update({
+              where: { id_usuario },
+              data: { activo: false },
+            });
+            return {
+              ok: true,
+              deleted: false,
+              softDeleted: true,
+              message:
+                'Responsable desactivado porque tiene registros relacionados.',
+            };
+          }
+          throw e;
+        }
       });
+    } catch (err: unknown) {
+      this.logger.error('Error al eliminar responsable:', errorToLog(err));
+      if (isKnownPrismaError(err)) {
+        throw new BadRequestException(formatPrismaError(err));
+      }
+      if (err instanceof HttpException) throw err;
+      throw new BadRequestException(
+        formatPrismaError(err) || 'No se pudo eliminar el responsable',
+      );
     }
-
-    await this.prisma.usuarios.delete({
-      where: { id_usuario },
-    });
-
-    return { ok: true, message: 'Responsable eliminado correctamente' };
   }
 
   async toggleActivo(id_responsable_area: number) {

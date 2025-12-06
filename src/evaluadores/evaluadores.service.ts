@@ -544,18 +544,26 @@ export class EvaluadoresService {
           select: { id_usuario: true },
         });
         if (!exists) throw new NotFoundException('Evaluador no encontrado');
+
         if (Object.keys(data).length > 0) {
           await tx.usuarios.update({ where: { id_usuario: id }, data });
         }
 
         if (dto.id_areas) {
-          await tx.evaluadores_area.deleteMany({ where: { id_usuario: id } });
+          // Eliminar SOLO las relaciones de la gestión abierta
+          await tx.evaluadores_area.deleteMany({
+            where: {
+              id_usuario: id,
+              id_gestion: gestion.id_gestion,
+            },
+          });
+
           if (dto.id_areas.length) {
             await tx.evaluadores_area.createMany({
               data: dto.id_areas.map((id_area) => ({
                 id_usuario: id,
                 id_area,
-                id_gestion: gestion.id_gestion, // <--- ⚠️ ESTO FALTABA
+                id_gestion: gestion.id_gestion,
                 activo: true,
               })),
               skipDuplicates: true,
