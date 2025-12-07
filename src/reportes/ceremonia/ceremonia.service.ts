@@ -1,5 +1,6 @@
+// src/reportes/ceremonia/ceremonia.service.ts
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PremiadosService } from '../premiados.service';
 import { QueryCeremoniaDto } from './dto/query-ceremonia.dto';
 import type { tipo_premio } from '@prisma/client';
 import type { CeremoniaRow } from './excel/ceremonia.excel';
@@ -17,52 +18,40 @@ const cmpStr = (a: string, b: string) =>
 
 @Injectable()
 export class CeremoniaService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly premiados: PremiadosService) {}
 
   private normalizeYear(anio?: number) {
     return anio ?? new Date().getFullYear();
   }
 
   /**
-   * Filas usadas tanto para JSON como para Excel
+   * Ceremonia ahora usa la MISMA fuente que Premiados y Certificados.
+   * No usa premios_otorgados.
    */
   async findRows(query: QueryCeremoniaDto): Promise<CeremoniaRow[]> {
-    const year = this.normalizeYear(query.anio);
+    const anio = this.normalizeYear(query.anio);
 
-    const premios = await this.prisma.premios_otorgados.findMany({
-      where: {
-        anio: year,
-        ...(query.id_area ? { id_area: query.id_area } : {}),
-        ...(query.id_nivel ? { id_nivel: query.id_nivel } : {}),
-      },
-      include: {
-        area: true,
-        nivel: true,
-        inscripcion: {
-          include: {
-            competidor: true, // aquí vienen escuela y departamento
-            area: true,
-            nivel: true,
-          },
-        },
-      },
+    // 1️⃣ Obtener premiados igual que certificados/premiados
+    const lista = await this.premiados.list({
+      id_area: query.id_area,
+      id_nivel: query.id_nivel,
+      estado: undefined,
+      actorId: undefined,
     });
 
-    // ✅ CORRECCIÓN AQUÍ: 'anio' tipado seguro
-    let rows: CeremoniaRow[] = premios.map((p) => ({
-      area: p.area?.nombre_area ?? p.inscripcion?.area?.nombre_area ?? '',
-      nivel: p.nivel?.nombre_nivel ?? p.inscripcion?.nivel?.nombre_nivel ?? '',
-      anio: p.anio ?? year, // Si es null, usa el año de la query
-      premio: String(p.tipo),
-      ci: p.inscripcion?.competidor?.ci ?? null,
-      competidor: `${p.inscripcion?.competidor?.nombres ?? ''} ${
-        p.inscripcion?.competidor?.apellidos ?? ''
-      }`.trim(),
-      departamento: p.inscripcion?.competidor?.departamento ?? '',
-      unidadEducativa: p.inscripcion?.competidor?.escuela ?? '',
+    // 2️⃣ Mapear al formato de CeremoniaRow
+    let rows: CeremoniaRow[] = lista.map((p) => ({
+      area: p.area,
+      nivel: p.nivel,
+      anio,
+      premio: p.estadoPremio, // ORO, PLATA, BRONCE, MENCION
+      ci: null,               // opcional, no se usa en Excel
+      competidor: p.nombreCompleto,
+      departamento: p.departamento,
+      unidadEducativa: p.unidadEducativa,
     }));
 
-    // Filtro de búsqueda por nombre o CI
+    // 3️⃣ Filtro por búsqueda
     if (query.q) {
       const q = query.q.toLowerCase();
       rows = rows.filter(
@@ -72,7 +61,7 @@ export class CeremoniaService {
       );
     }
 
-    // Orden: área → nivel → premio → nombre
+    // 4️⃣ Ordenamiento:
     rows.sort((a, b) => {
       const areaCmp = cmpStr(a.area || '', b.area || '');
       if (areaCmp !== 0) return areaCmp;
@@ -92,12 +81,12 @@ export class CeremoniaService {
   }
 
   /**
-   * Resumen para cards y modal.
+   * Resumen para cards y modal
    */
   async resumen(query: QueryCeremoniaDto) {
     const rows = await this.findRows(query);
 
-    const byPremio: Record<string, number> = {
+    const summary = {
       ORO: 0,
       PLATA: 0,
       BRONCE: 0,
@@ -105,29 +94,22 @@ export class CeremoniaService {
     };
 
     for (const r of rows) {
-      byPremio[r.premio] = (byPremio[r.premio] ?? 0) + 1;
+      summary[r.premio]++;
     }
 
-    const total = rows.length;
-    const oro = byPremio.ORO || 0;
-    const plata = byPremio.PLATA || 0;
-    const bronce = byPremio.BRONCE || 0;
-    const mencion = byPremio.MENCION || 0;
-
     return {
-      // formato nuevo
-      total,
-      oro,
-      plata,
-      bronce,
-      mencion,
+      total: rows.length,
+      oro: summary.ORO,
+      plata: summary.PLATA,
+      bronce: summary.BRONCE,
+      mencion: summary.MENCION,
 
-      // formato viejo
-      totales: total,
-      oros: oro,
-      platas: plata,
-      bronces: bronce,
-      menciones: mencion,
+      // compatibilidad con frontend viejo
+      totales: rows.length,
+      oros: summary.ORO,
+      platas: summary.PLATA,
+      bronces: summary.BRONCE,
+      menciones: summary.MENCION,
     };
   }
 }
