@@ -1,35 +1,51 @@
 // src/reportes/publicacion/publicacion.controller.ts
-import { Controller, Get, Query, Res } from '@nestjs/common';
+import { Controller, Get, Query, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { PublicacionService } from './publicacion.service';
 import { QueryPublicacionDto } from './dto/query-publicacion.dto';
-import { buildPublicacionExcel } from './excel/publicacion.excel';
+import { generatePublicacionExcel } from './excel/publicacion.excel';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { ADMIN, RESPONSABLE } from '../../auth/constants';
 
-// CAMBIO 1: Nueva ruta
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(ADMIN, RESPONSABLE)
 @Controller('reportes/publicacion')
 export class PublicacionController {
   constructor(private readonly service: PublicacionService) {}
 
-  // CAMBIO 2: Quitamos los endpoints 'resumen' y 'lista'
-  // Dejamos solo 'export'
+  /** Lista de filas para mostrar en la tabla del frontend */
+  @Get()
+  async list(@Query() query: QueryPublicacionDto) {
+    return this.service.findRows(query);
+  }
 
-  /** Excel para el botón "Generar para Publicación" */
+  /** Exportar Excel - EXACTAMENTE igual que premiados.controller.ts */
   @Get('export')
-  async export(@Query() query: QueryPublicacionDto, @Res() res: Response) {
-    // Llama al nuevo servicio
-    const rows = await this.service.findRows(query);
-    // Llama al nuevo generador de Excel
-    const buf = await buildPublicacionExcel(rows, 'Reporte de Publicación');
+  async export(
+    @Res() res: Response,
+    @Query('id_area') id_area?: string,
+    @Query('id_nivel') id_nivel?: string,
+  ) {
+    const area = id_area ? Number(id_area) : undefined;
+    const nivel = id_nivel ? Number(id_nivel) : undefined;
+
+    const data = await this.service.findRows({
+      id_area: area,
+      id_nivel: nivel,
+    });
+
+    const buffer = await generatePublicacionExcel(data);
 
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
-    // CAMBIO 3: Nuevo nombre de archivo
     res.setHeader(
       'Content-Disposition',
-      'attachment; filename="publicacion.xlsx"',
+      'attachment; filename="lista-publicacion.xlsx"',
     );
-    res.send(buf);
+    res.send(buffer);
   }
 }

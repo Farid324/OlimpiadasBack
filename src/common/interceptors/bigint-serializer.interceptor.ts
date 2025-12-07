@@ -13,10 +13,18 @@ function stringifyBigInt(value: any): any {
   );
 }
 
-
 @Injectable()
 export class BigIntSerializerInterceptor implements NestInterceptor {
-  intercept(_context: ExecutionContext, next: CallHandler) {
-    return next.handle().pipe(map((data) => stringifyBigInt(data)));
+  intercept(context: ExecutionContext, next: CallHandler) {
+    return next.handle().pipe(
+      map((data) => {
+        // Si data es undefined (como en endpoints que usan res.send() directamente),
+        // no intentar serializar - esto ocurre en exports de Excel
+        if (data === undefined) {
+          return data;
+        }
+        return stringifyBigInt(data);
+      }),
+    );
   }
 }
