@@ -1,11 +1,11 @@
 // src/reportes/publicacion/excel/publicacion.excel.ts
-import ExcelJS from 'exceljs';
+import * as ExcelJS from 'exceljs';
 
-// CAMBIO 1: Define las columnas que quieres
 export type PublicacionRow = {
   name: string;
   ci: string;
   area: string;
+  nivel: string;
   school: string;
   city: string;
   year: number;
@@ -13,75 +13,140 @@ export type PublicacionRow = {
   medal: string;
 };
 
-// CAMBIO 2: Renombra la función
-export async function buildPublicacionExcel(
+/**
+ * Genera el Excel de publicación con el mismo diseño que premiados
+ * pero manteniendo las columnas originales de publicación
+ */
+export async function generatePublicacionExcel(
   rows: PublicacionRow[],
-  title = 'Reporte de Publicación', // CAMBIO 3: Nuevo título
 ): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Publicacion');
+  const ws = wb.addWorksheet('Publicación');
 
-  // CAMBIO 4: Ajusta el merge de celdas (A-I son 9 columnas)
-  ws.mergeCells('A1', 'I1');
-  ws.getCell('A1').value = 'Olimpiadas — Sistema de Reportes';
-  ws.getCell('A1').font = { bold: true, size: 14 };
-  ws.getCell('A1').alignment = { vertical: 'middle', horizontal: 'center' };
+  const now = new Date();
+  const fecha = now.toLocaleDateString('es-BO');
 
-  ws.mergeCells('A2', 'I2');
-  ws.getCell('A2').value = title;
-  ws.getCell('A2').alignment = { vertical: 'middle', horizontal: 'center' };
+  const titulo = 'Sistema de Registro y Evaluaciones Oh SanSi – Publicación';
+  const subtitulo = `LISTA DE RESULTADOS – ${fecha}`;
 
-  ws.addRow([]);
-
-  // CAMBIO 5: Define las nuevas cabeceras
-  const header = [
-    '#',
-    'Nombre',
+  // Columnas de publicación (originales)
+  const headers = [
+    'Nombre Completo',
     'CI',
     'Área',
-    'Colegio',
-    'Ciudad',
+    'Nivel',
+    'Unidad Educativa',
+    'Departamento',
     'Año',
-    'Puntaje',
+    'Puntuación',
     'Medalla',
   ];
-  const hr = ws.addRow(header);
-  hr.font = { bold: true };
-  hr.alignment = { horizontal: 'center' };
 
-  // CAMBIO 6: Mapea los datos a las nuevas columnas
-  rows.forEach((r, i) => {
-    ws.addRow([
-      i + 1,
+  // Título y subtítulo
+  ws.addRow([titulo]);
+  ws.addRow([subtitulo]);
+
+  const totalCols = headers.length;
+  const colLetter = (n: number) => {
+    let s = '';
+    while (n > 0) {
+      const m = (n - 1) % 26;
+      s = String.fromCharCode(65 + m) + s;
+      n = Math.floor((n - 1) / 26);
+    }
+    return s;
+  };
+  const lastCol = colLetter(totalCols);
+
+  // Merge y estilo de títulos
+  ws.mergeCells(`A1:${lastCol}1`);
+  ws.mergeCells(`A2:${lastCol}2`);
+  ws.getCell('A1').font = { bold: true, size: 14 };
+  ws.getCell('A2').font = { bold: true, size: 12 };
+  ws.getCell('A1').alignment = { horizontal: 'center' };
+  ws.getCell('A2').alignment = { horizontal: 'center' };
+
+  // Fila vacía
+  ws.addRow([]);
+
+  const startRow = ws.lastRow!.number + 1;
+
+  // Crear tabla con filtros (igual que premiados)
+  ws.addTable({
+    name: 'TablaPublicacion',
+    ref: `A${startRow}`,
+    headerRow: true,
+    style: {
+      theme: 'TableStyleMedium9',
+      showRowStripes: true,
+    },
+    columns: headers.map((name) => ({ name, filterButton: true })),
+    rows: rows.map((r) => [
       r.name,
       r.ci,
       r.area,
+      r.nivel,
       r.school,
       r.city,
       r.year,
-      r.score,
+      typeof r.score === 'number' ? r.score.toFixed(2) : '',
       r.medal,
-    ]);
+    ]),
   });
 
-  // CAMBIO 7: Define los nuevos anchos de columna
-  const widths = [6, 30, 15, 20, 30, 20, 8, 10, 15];
-  widths.forEach((w, i) => (ws.getColumn(i + 1).width = w));
+  // Anchos de columnas
+  ws.getColumn(1).width = 32; // Nombre Completo
+  ws.getColumn(2).width = 14; // CI
+  ws.getColumn(3).width = 18; // Área
+  ws.getColumn(4).width = 14; // Nivel
+  ws.getColumn(5).width = 30; // Unidad Educativa
+  ws.getColumn(6).width = 16; // Departamento
+  ws.getColumn(7).width = 8; // Año
+  ws.getColumn(8).width = 12; // Puntuación
+  ws.getColumn(9).width = 20; // Medalla
 
-  // La lógica de bordes es genérica y puede quedarse igual
-  ws.eachRow((row, idx) => {
-    if (idx >= 4) {
-      row.eachCell((cell) => {
-        cell.border = {
-          top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-          bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-          left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-          right: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-        };
-      });
+  // Aplicar colores a las celdas de medalla
+  const dataStartRow = startRow + 1; // +1 por el header de la tabla
+  const medalColIndex = 9; // Columna I (Medalla)
+
+  for (let i = 0; i < rows.length; i++) {
+    const rowNum = dataStartRow + i;
+    const cell = ws.getCell(rowNum, medalColIndex);
+    const medal = rows[i].medal;
+
+    // Colores según el tipo de medalla
+    if (medal === 'Medalla de Oro') {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFFFD700' }, // Dorado
+      };
+      cell.font = { bold: true, color: { argb: 'FF8B4513' } };
+    } else if (medal === 'Medalla de Plata') {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFC0C0C0' }, // Plateado
+      };
+      cell.font = { bold: true, color: { argb: 'FF2F4F4F' } };
+    } else if (medal === 'Medalla de Bronce') {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFCD7F32' }, // Bronce
+      };
+      cell.font = { bold: true, color: { argb: 'FF3E2723' } };
+    } else if (medal === 'Mención Honorífica') {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF98D8C8' }, // Verde agua
+      };
+      cell.font = { bold: true, color: { argb: 'FF1B5E20' } };
     }
-  });
+    // Sin Medalla queda sin color especial
+  }
 
-  const ab = await wb.xlsx.writeBuffer();
-  return Buffer.isBuffer(ab) ? ab : Buffer.from(ab as ArrayBuffer);
+  const buf = await wb.xlsx.writeBuffer();
+  return Buffer.isBuffer(buf) ? buf : Buffer.from(buf as ArrayBuffer);
 }
