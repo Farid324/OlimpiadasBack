@@ -118,14 +118,14 @@ export class AreasService {
     const fase1Cerrada = await this.prisma.cierres_fase.findFirst({
       where: {
         id_area: id,
-        id_fase: 1, // fase de clasificación
+        id_fase: 1,
       },
     });
 
     if (fase1Cerrada) {
       if (data.nota_aprobacion !== areaActual.nota_aprobacion) {
         throw new ConflictException(
-          'La fase de clasificación (fase 1) ya está cerrada. No se puede modificar la nota de aprobación.',
+          'La fase de clasificación ya está cerrada. No se puede modificar la nota de aprobación.',
         );
       }
     }
@@ -263,6 +263,7 @@ export class AreasService {
         nombre_area: area.nombre_area,
         estado: area.estado,
         nota_aprobacion: area.nota_aprobacion,
+        nota_aprobacion_final: area.nota_aprobacion_final,
         tipo: area.tipo,
         niveles_target: area.niveles_target,
         activo: area.activo,
