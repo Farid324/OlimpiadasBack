@@ -29,6 +29,12 @@ enum clasificacion_estado {
   DESCALIFICADO
 }
 
+enum aprobacion_estado {
+  APROBADO 
+  NO_APROBADO
+  DESCALIFICADO
+}
+
 enum estado_inscripcion {
   INSCRITO
   CLASIFICADO
@@ -187,6 +193,7 @@ model areas {
 
   // 2. Agrega estos campos nuevos
   nota_aprobacion Int?              @default(51) // Del 51 al 100
+  nota_aprobacion_final Int?            @default(51)
   tipo            tipo_area_config? @default(INDIVIDUAL)
   niveles_target  String? // Guardaremos "Primaria, Secundaria" o uno solo como texto simple por simplicidad
 
@@ -312,6 +319,7 @@ model inscripciones {
   puntaje_clasificacion Decimal?              @db.Decimal(5, 2)
   clasificacion         clasificacion_estado? @default(NO_CLASIFICADO)
   puntaje_final         Decimal?             @db.Decimal(5, 2)
+  estado_final          aprobacion_estado? @default(NO_APROBADO)
 
   competidor competidores @relation(fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
   area       areas        @relation(fields: [id_area], references: [id_area])

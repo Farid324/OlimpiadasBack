@@ -1,5 +1,9 @@
 // src/areas/services/areas.service.ts
-import { Injectable, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateAreaDto } from '../dto/create-area.dto';
 import {
@@ -14,6 +18,15 @@ type estado_area = 'EVALUANDO' | 'CLASIFICANDO' | 'COMPLETADO';
 @Injectable()
 export class AreasService {
   constructor(private prisma: PrismaService) {}
+
+  /** Gestio actual abierta.
+   * Si no hay devuelve null */
+  private async getGestionAbierta() {
+    return this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      orderBy: { created_at: 'desc' },
+    });
+  }
 
   findAll() {
     return this.prisma.areas.findMany({
@@ -38,6 +51,7 @@ export class AreasService {
           where: { id_area: existing.id_area },
           data: {
             nota_aprobacion: data.nota_aprobacion,
+            nota_aprobacion_final: data.nota_aprobacion_final,
             tipo: data.tipo,
             niveles_target: data.niveles_target,
             activo: true, // ✨ Reactivamos el área
@@ -51,6 +65,7 @@ export class AreasService {
       data: {
         nombre_area: data.nombre_area,
         nota_aprobacion: data.nota_aprobacion,
+        nota_aprobacion_final: data.nota_aprobacion_final,
         tipo: data.tipo,
         niveles_target: data.niveles_target,
         activo: true,
@@ -73,18 +88,71 @@ export class AreasService {
       );
     }
 
+    const areaActual = await this.prisma.areas.findUnique({
+      where: { id_area: id },
+    });
+
+    if (!areaActual) {
+      throw new NotFoundException('Área no encontrada.');
+    }
+
+    // No se puede quitar niveles, solo agregar
+    const nivelesOriginal = (areaActual.niveles_target ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const nivelesNuevos = (data.niveles_target ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const nivelesQuitados = nivelesOriginal.filter(
+      (n) => !nivelesNuevos.includes(n),
+    );
+
+    if (nivelesQuitados.length > 0) {
+      throw new ConflictException(
+        `No puedes quitar niveles registrados previamente: ${nivelesQuitados.join(', ')}`,
+      );
+    }
+
+    // No se puede quitar tipo
+    if (areaActual.tipo === 'GRUPAL' && data.tipo === 'INDIVIDUAL') {
+      throw new ConflictException(
+        'No se puede cambiar el tipo de GRUPAL a INDIVIDUAL porque ya existe información registrada.',
+      );
+    }
+
+    // 3️⃣ Si la fase 1 está cerrada → no se puede modificar nota_aprobacion
+    const fase1Cerrada = await this.prisma.cierres_fase.findFirst({
+      where: {
+        id_area: id,
+        id_fase: 1, // fase de clasificación
+      },
+    });
+
+    if (fase1Cerrada) {
+      if (data.nota_aprobacion !== areaActual.nota_aprobacion) {
+        throw new ConflictException(
+          'La fase de clasificación (fase 1) ya está cerrada. No se puede modificar la nota de aprobación.',
+        );
+      }
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const areaActualizada = await tx.areas.update({
         where: { id_area: id },
         data: {
           nombre_area: data.nombre_area,
           nota_aprobacion: data.nota_aprobacion,
+          nota_aprobacion_final: data.nota_aprobacion_final,
           tipo: data.tipo,
           niveles_target: data.niveles_target,
         },
       });
 
       const notaAprobacion = areaActualizada.nota_aprobacion;
+      const notaAprobacionFinal = areaActualizada.nota_aprobacion_final;
 
       // Actualizar clasificaciones (Lógica existente)
       await tx.inscripciones.updateMany({
@@ -110,6 +178,33 @@ export class AreasService {
             puntaje_clasificacion: { lt: notaAprobacion },
           },
           data: { clasificacion: 'NO_CLASIFICADO' },
+        });
+      }
+
+      // Actualizar clasificaciones (Lógica existente)
+      await tx.inscripciones.updateMany({
+        where: {
+          id_area: id,
+          puntaje_final: { not: null },
+        },
+        data: { estado_final: null },
+      });
+
+      if (notaAprobacionFinal !== null) {
+        await tx.inscripciones.updateMany({
+          where: {
+            id_area: id,
+            puntaje_final: { gte: notaAprobacionFinal },
+          },
+          data: { estado_final: 'APROBADO' },
+        });
+
+        await tx.inscripciones.updateMany({
+          where: {
+            id_area: id,
+            puntaje_final: { lt: notaAprobacionFinal },
+          },
+          data: { estado_final: 'NO_APROBADO' },
         });
       }
 
@@ -141,19 +236,26 @@ export class AreasService {
   async getAreasConEstadisticas() {
     console.log('💡 Iniciando consulta a Prisma (general)...');
 
+    const gestion = await this.getGestionAbierta();
+    if (!gestion) {
+      console.log('⚠️ No hay gestión ABIERTA. Devolviendo lista vacía.');
+      return [];
+    }
+
     const areas = await this.prisma.areas.findMany({
       where: { activo: true },
       include: {
         inscripciones: {
+          where: { id_gestion: gestion.id_gestion }, // ← SOLO gestión actual
           include: { nivel: true },
         },
       },
+      orderBy: { nombre_area: 'asc' },
     });
 
     console.log('💡 Consulta realizada, areas:', areas.length);
 
     const mapped = areas.map((area) => {
-      //1️⃣ CORRECCIÓN: Tipado explícito en lugar de 'any'
       const nivelesMap: Record<
         string,
         { id_nivel: number; nombre_nivel: string; inscritos: number }
@@ -188,20 +290,27 @@ export class AreasService {
   }
 
   /* =================================================================
-   * 2) Estadísticas para PANEL PRINCIPAL
+   * 2) Estadísticas para PANEL PRINCIPAL (por gestión ABIERTA)
    * ================================================================= */
   async getAreasConEstadisticasPanelPrincipal(): Promise<AreaNivelStats[]> {
     console.log('💡 Iniciando consulta a Prisma (panel principal)...');
 
+    const gestion = await this.getGestionAbierta();
+    if (!gestion) {
+      console.log('⚠️ No hay gestión ABIERTA. Devolviendo lista vacía.');
+      return [];
+    }
+
     const NIVELES_PERMITIDOS = ['PRIMARIA', 'SECUNDARIA'];
 
-    // 1. Consulta inicial
+    // 1. Consulta inicial: áreas + inscripciones SOLO de la gestión actual
     const areas = await this.prisma.areas.findMany({
       where: { activo: true },
       select: {
         id_area: true,
         nombre_area: true,
         inscripciones: {
+          where: { id_gestion: gestion.id_gestion }, // ← filtro por gestión
           select: {
             nivel: {
               select: {
@@ -215,7 +324,6 @@ export class AreasService {
       orderBy: { nombre_area: 'asc' },
     });
 
-    // --- Preparación ---
     const areaNivelKeys = new Set<string>();
     const nivelDetailsMap = new Map<number, { id: number; nombre: string }>();
 
@@ -254,11 +362,12 @@ export class AreasService {
       select: { id_fase: true, orden_fase: true },
     });
 
-    // 3. Consultar CIERRES
+    // 3. Consultar CIERRES SOLO de la gestión actual
     const cierresValidados = await this.prisma.cierres_fase.findMany({
       where: {
         id_area: { in: areaIds },
         id_nivel: { in: nivelIds },
+        id_gestion: gestion.id_gestion, // ← clave de gestión
         estado_validacion: { in: ['VALIDADO', 'PENDIENTE'] },
       },
       select: {
@@ -268,7 +377,6 @@ export class AreasService {
       },
     });
 
-    // 4. Mapear estados
     const estadoPorAreaNivel = new Map<string, estado_area>();
 
     for (const key of areaNivelKeys) {
@@ -300,7 +408,6 @@ export class AreasService {
       estadoPorAreaNivel.set(key, estado);
     }
 
-    // --- Generación de la Respuesta Final ---
     const combinaciones: AreaNivelStats[] = [];
 
     areas.forEach((area) => {
@@ -351,10 +458,37 @@ export class AreasService {
    * 3) FUNCIÓN PRINCIPAL DEL DASHBOARD
    * ================================================================= */
   async getDashboardData(): Promise<DashboardResponse> {
-    // 1. Obtener Stats Detalladas
+    // Stats detalladas por Área/Nivel, ya filtradas por gestión ABIERTA
     const areasStats = await this.getAreasConEstadisticasPanelPrincipal();
 
-    // 2. Obtener contadores globales
+    const gestion = await this.getGestionAbierta();
+
+    // Si no hay gestión abierta, devolvemos métricas "en cero" pero válidas
+    if (!gestion) {
+      const areasActivasCount = await this.prisma.areas.count({
+        where: { activo: true },
+      });
+
+      const metrics: DashboardMetrics = {
+        totalOlimpiadas: 0,
+        totalRegistros: 0,
+        totalAreas: areasActivasCount,
+        areasActivas: areasActivasCount,
+        totalEvaluadores: 0,
+        totalResponsables: 0,
+        totalClasificados: 0,
+        totalPremiados: 0,
+        areasEnEvaluacion: 0,
+      };
+
+      return {
+        metrics,
+        areasStats: [],
+      };
+    }
+
+    const idGestion = gestion.id_gestion;
+
     const [
       totalRegistrosCount,
       totalEvaluadoresCount,
@@ -363,17 +497,25 @@ export class AreasService {
       totalClasificadosCount,
       totalPremiadosCount,
     ] = await Promise.all([
-      this.prisma.inscripciones.count({}),
-      this.prisma.evaluadores_area.count({ where: { activo: true } }),
-      this.prisma.responsables_area.count({ where: { activo: true } }),
+      this.prisma.inscripciones.count({ where: { id_gestion: idGestion } }),
+      this.prisma.evaluadores_area.count({
+        where: { activo: true, id_gestion: idGestion },
+      }),
+      this.prisma.responsables_area.count({
+        where: { activo: true, id_gestion: idGestion },
+      }),
       this.prisma.areas.count({ where: { activo: true } }),
       this.prisma.inscripciones.count({
-        where: { clasificacion: 'CLASIFICADO' },
+        where: {
+          id_gestion: idGestion,
+          clasificacion: 'CLASIFICADO',
+        },
       }),
-      this.prisma.premios_otorgados.count({}),
+      this.prisma.premios_otorgados.count({
+        where: { id_gestion: idGestion },
+      }),
     ]);
 
-    // 7. Áreas en Evaluación
     const areasEnEvaluacion = areasStats.filter(
       (a) => a.estado === 'EVALUANDO' || a.estado === 'CLASIFICANDO',
     ).length;
@@ -387,7 +529,7 @@ export class AreasService {
       totalResponsables: totalResponsablesCount,
       totalClasificados: totalClasificadosCount,
       totalPremiados: totalPremiadosCount,
-      areasEnEvaluacion: areasEnEvaluacion,
+      areasEnEvaluacion,
     };
 
     return {

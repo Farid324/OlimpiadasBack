@@ -199,11 +199,28 @@ export class OlimpistasService {
   }
 
   async existsByCi(ci: string): Promise<boolean> {
-    if (!ci) return false;
+    if (!ci || !ci.trim()) return false;
+
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+
+    if (!gestion) return false;
+
+    // Buscamos si hay competidor con ese CI que esté inscrito en la gestión abierta, si no hay se asume que no existe y se puede registrar
     const found = await this.prisma.competidores.findFirst({
-      where: { ci },
+      where: {
+        ci: ci.trim(),
+        inscripciones: {
+          some: {
+            id_gestion: gestion.id_gestion,
+          },
+        },
+      },
       select: { id_competidor: true },
     });
+
     return !!found;
   }
 
@@ -225,7 +242,9 @@ export class OlimpistasService {
 
     const duplicado = await this.existsByCi(dto.ci);
     if (duplicado) {
-      throw new BadRequestException('El CI ya está registrado');
+      throw new BadRequestException(
+        'El CI ya está registrado para un olimpista en la gestión actual',
+      );
     }
 
     const tutor = await this.prisma.tutores.findUnique({
@@ -373,7 +392,9 @@ export class OlimpistasService {
           splitNombreCompleto(dto.nombreCompleto);
 
           if (await this.existsByCi(dto.ci)) {
-            throw new BadRequestException('El CI ya está registrado');
+            throw new BadRequestException(
+              'El CI ya está registrado para un olimpista en la gestión actual',
+            );
           }
 
           summary.ok++;
@@ -406,20 +427,31 @@ export class OlimpistasService {
   /**
    * GET /olimpistas
    * - puntuacion: puntaje_clasificacion o promedio de evaluaciones.nota
-   * - si limitToUserAreasOf llega con userId => restringe a sus áreas
+   * - Sin filtros por gestión visibles para el usuario:
+   *   internamente se limita siempre a la gestión ABIERTA.
    */
-  // Sin restricciones por área para ningún rol
   async listOlimpistas(params: ListParams) {
     const gestion = await this.prisma.gestiones.findFirst({
       where: { estado: 'ABIERTA' },
     });
+
     // Si no hay gestión abierta, devolvemos lista vacía
     if (!gestion) return [];
+
     const { area, q } = params ?? {};
 
-    const where: Record<string, unknown> = {
+    const where: Prisma.inscripcionesWhereInput = {
+      // 🔹 Forzamos que todo salga solo de la gestión abierta
+      id_gestion: gestion.id_gestion,
       ...(area
-        ? { area: { nombre_area: { equals: area, mode: 'insensitive' } } }
+        ? {
+            area: {
+              nombre_area: {
+                equals: area,
+                mode: 'insensitive',
+              },
+            },
+          }
         : {}),
       ...(q
         ? {
@@ -444,8 +476,16 @@ export class OlimpistasService {
                   departamento: { contains: q, mode: 'insensitive' },
                 },
               },
-              { competidor: { ci: { contains: q, mode: 'insensitive' } } },
-              { area: { nombre_area: { contains: q, mode: 'insensitive' } } },
+              {
+                competidor: {
+                  ci: { contains: q, mode: 'insensitive' },
+                },
+              },
+              {
+                area: {
+                  nombre_area: { contains: q, mode: 'insensitive' },
+                },
+              },
             ],
           }
         : {}),
@@ -492,11 +532,23 @@ export class OlimpistasService {
 
   /**
    * GET /olimpistas/:id
-   * Datos completos para edición
+   * Datos completos para edición.
+   * Solo devuelve olimpistas de la GESTIÓN ABIERTA.
    */
   async getOlimpistaById(inscripcionId: number) {
-    const insc = await this.prisma.inscripciones.findUnique({
-      where: { id_inscripcion: inscripcionId },
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+
+    if (!gestion) {
+      throw new BadRequestException('No hay gestión abierta.');
+    }
+
+    const insc = await this.prisma.inscripciones.findFirst({
+      where: {
+        id_inscripcion: inscripcionId,
+        id_gestion: gestion.id_gestion,
+      },
       include: {
         competidor: true,
         area: true,
@@ -505,7 +557,9 @@ export class OlimpistasService {
     });
 
     if (!insc) {
-      throw new BadRequestException('Olimpista no encontrado.');
+      throw new BadRequestException(
+        'Olimpista no encontrado en la gestión actual.',
+      );
     }
 
     const nivelRaw = (insc.competidor.nivel ?? '').toString().toUpperCase();
@@ -559,20 +613,33 @@ export class OlimpistasService {
     }));
   }
 
-  // Actualización de olimpista (por id_inscripcion)
+  // Actualización de olimpista (por id_inscripcion) solo en gestión ABIERTA
   async updateOlimpista(
     inscripcionId: number,
     dto: UpdateOlimpistaDto,
     _userId?: number,
   ) {
-    // Buscar la inscripción y su competidor asociado
-    const inscripcion = await this.prisma.inscripciones.findUnique({
-      where: { id_inscripcion: inscripcionId },
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+
+    if (!gestion) {
+      throw new BadRequestException('No hay gestión abierta.');
+    }
+
+    // Buscar la inscripción y su competidor asociado dentro de la gestión actual
+    const inscripcion = await this.prisma.inscripciones.findFirst({
+      where: {
+        id_inscripcion: inscripcionId,
+        id_gestion: gestion.id_gestion,
+      },
       include: { competidor: true },
     });
 
     if (!inscripcion) {
-      throw new BadRequestException('Olimpista no encontrado.');
+      throw new BadRequestException(
+        'Olimpista no encontrado en la gestión actual.',
+      );
     }
 
     // Resolver área
@@ -588,16 +655,24 @@ export class OlimpistasService {
     const { nombres, apellidos } = splitNombreCompleto(dto.nombreCompleto);
 
     // Validar CI único (excluyendo al propio competidor)
+    // Validar CI único SOLO dentro de la gestión actual
     const duplicated = await this.prisma.competidores.findFirst({
       where: {
         ci: dto.ci,
-        NOT: { id_competidor: inscripcion.id_competidor },
+        id_competidor: { not: inscripcion.id_competidor },
+        inscripciones: {
+          some: {
+            id_gestion: gestion.id_gestion,
+          },
+        },
       },
       select: { id_competidor: true },
     });
 
     if (duplicated) {
-      throw new BadRequestException('El CI ya está registrado');
+      throw new BadRequestException(
+        'El CI ya está registrado para otro olimpista en la gestión actual',
+      );
     }
 
     // Validar tutor
@@ -634,7 +709,7 @@ export class OlimpistasService {
         },
       });
 
-      // Actualizar inscripción (área / nivel)
+      // Actualizar inscripción (área / nivel) solo dentro de esta gestión
       await tx.inscripciones.update({
         where: { id_inscripcion: inscripcionId },
         data: {
@@ -647,11 +722,33 @@ export class OlimpistasService {
     return { ok: true };
   }
 
-  // Eliminación de olimpista (por id_inscripcion)
+  // Eliminación de olimpista (por id_inscripcion) solo en gestión ABIERTA
   async removeOlimpista(inscripcionId: number, _userId?: number) {
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+    });
+
+    if (!gestion) {
+      throw new BadRequestException('No hay gestión abierta.');
+    }
+
+    const inscripcion = await this.prisma.inscripciones.findFirst({
+      where: {
+        id_inscripcion: inscripcionId,
+        id_gestion: gestion.id_gestion,
+      },
+      select: { id_inscripcion: true },
+    });
+
+    if (!inscripcion) {
+      throw new BadRequestException(
+        'Olimpista no encontrado en la gestión actual.',
+      );
+    }
+
     try {
       await this.prisma.inscripciones.delete({
-        where: { id_inscripcion: inscripcionId },
+        where: { id_inscripcion: inscripcion.id_inscripcion },
       });
       return { ok: true, deleted: true };
     } catch (e: unknown) {

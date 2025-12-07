@@ -10,7 +10,7 @@ type Filtros = { id_area?: number; id_nivel?: number; estado?: Estado };
 type Row = {
   id_inscripcion: number;
   posicion: number | null;
-  ci: string | null; // ← CI correcto desde competidores.ci
+  ci: string | null;
   nombreCompleto: string;
   area: string;
   nivel: string;
@@ -31,14 +31,27 @@ export class ClasificadosService {
     return where;
   }
 
-  /** Lista con joins y posiciones calculadas por área+nivel */
+  /** Lista con joins y posiciones calculadas por área+nivel (solo gestión ABIERTA) */
   async list(f: Filtros) {
-    const where = this.buildWhere(f);
+    // 🔹 Gestion ABIERTA obligatoria
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+
+    if (!gestion) {
+      return [];
+    }
+
+    const where: Prisma.inscripcionesWhereInput = {
+      ...this.buildWhere(f),
+      id_gestion: gestion.id_gestion, // 🔹 Solo gestión actual
+    };
 
     const items = await this.prisma.inscripciones.findMany({
       where,
       include: {
-        competidor: true, // ← necesitamos competidor.ci
+        competidor: true,
         area: true,
         nivel: true,
       },
@@ -52,6 +65,7 @@ export class ClasificadosService {
 
     type Item = (typeof items)[number];
     const groups = new Map<string, Item[]>();
+
     for (const it of items) {
       const k = `${it.id_area}|${it.id_nivel}`;
       const arr = groups.get(k);
@@ -67,13 +81,12 @@ export class ClasificadosService {
         const esClasificado = it.clasificacion === 'CLASIFICADO';
         const posicion = esClasificado ? ++pos : null;
 
-        // ⚠️ CI correcto: del competidor según tu schema.prisma
         const ci = (it.competidor?.ci ?? null) as string | null;
 
         salida.push({
           id_inscripcion: it.id_inscripcion,
           posicion,
-          ci, // ← ahora sí el CI correcto
+          ci,
           nombreCompleto:
             `${it.competidor.nombres} ${it.competidor.apellidos}`.trim(),
           area: it.area.nombre_area,
@@ -88,9 +101,29 @@ export class ClasificadosService {
     return salida;
   }
 
-  /** Resumen para cards */
+  /** Resumen para cards (solo gestión ABIERTA) */
   async resumen(f: Filtros) {
-    const base = this.buildWhere({ id_area: f.id_area, id_nivel: f.id_nivel });
+    // 🔹 Gestion ABIERTA obligatoria
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+
+    if (!gestion) {
+      return {
+        clasificados: 0,
+        oro: 0,
+        plata: 0,
+        bronce: 0,
+        menciones: 0,
+        totalPremiados: 0,
+      };
+    }
+
+    const base = {
+      ...this.buildWhere({ id_area: f.id_area, id_nivel: f.id_nivel }),
+      id_gestion: gestion.id_gestion, // 🔹 Solo gestión actual
+    } satisfies Prisma.inscripcionesWhereInput;
 
     const clasificados = await this.prisma.inscripciones.count({
       where: { ...base, clasificacion: { equals: 'CLASIFICADO' } },
@@ -125,14 +158,13 @@ export class ClasificadosService {
     return 'CLASIFICADOS / NO CLASIFICADOS / DESCALIFICADOS';
   }
 
-  /** 📦 Generar Excel con CI + cabecera institucional en TABLA (ExcelJS) */
+  /** Exportar Excel (se apoya en list(), ya filtrado por gestión actual) */
   async exportarExcel(f: Filtros): Promise<Buffer> {
     const rows = await this.list(f);
 
     const wb = new ExcelJS.Workbook();
     const ws = wb.addWorksheet('Clasificados');
 
-    // --- Cabecera institucional (2 filas) ---
     const now = new Date();
     const dd = String(now.getDate()).padStart(2, '0');
     const mm = String(now.getMonth() + 1).padStart(2, '0');
@@ -149,11 +181,9 @@ export class ClasificadosService {
           : 'DESCALIFICADOS';
     const subtitulo = `LISTA DE OLIMPISTAS ${estadoTexto} – ${fecha}`;
 
-    // 1) Título y subtítulo
     ws.addRow([titulo]); // row 1
     ws.addRow([subtitulo]); // row 2
 
-    // Columnas visibles de la TABLA (no usamos headers aquí)
     const tableColumns = [
       { key: 'posicion', width: 10 },
       { key: 'ci', width: 18 },
@@ -176,8 +206,7 @@ export class ClasificadosService {
       'Departamento',
     ];
 
-    // Merge del título y subtítulo a lo ancho de la tabla
-    const totalCols = tableColumns.length; // 8
+    const totalCols = tableColumns.length;
     const colLetter = (n: number) => {
       let s = '';
       while (n > 0) {
@@ -195,14 +224,11 @@ export class ClasificadosService {
     ws.getCell('A1').alignment = { horizontal: 'center' };
     ws.getCell('A2').alignment = { horizontal: 'center' };
 
-    // Espacio entre cabecera y tabla
-    ws.addRow([]); // row 3
+    ws.addRow([]); // row 3 espacio
 
-    // Definir anchos de columna
     ws.columns = tableColumns as any;
 
-    // === TABLA ESTRUCTURADA (con filtros, franjas y estilo azul) ===
-    const startRow = (ws.lastRow?.number ?? 3) + 1; // fila donde colocaremos la tabla (encabezados incluidos)
+    const startRow = (ws.lastRow?.number ?? 3) + 1;
     const tableRows = rows.map((r) => [
       r.posicion ?? null,
       r.ci ?? '',
@@ -220,7 +246,6 @@ export class ClasificadosService {
       headerRow: true,
       totalsRow: false,
       style: {
-        // estilos "Medium" en Excel suelen ser azules; 9 y 2 son buenas opciones
         theme: 'TableStyleMedium9',
         showRowStripes: true,
         showFirstColumn: false,
@@ -230,9 +255,8 @@ export class ClasificadosService {
       rows: tableRows,
     });
 
-    // Formato numérico SOLO para la columna Puntuación dentro de la tabla
-    const puntajeColIdx = 6; // A=1, B=2, ..., F=6 (Puntuación)
-    const firstDataRow = startRow + 1; // fila de datos (debajo del header de tabla)
+    const puntajeColIdx = 6;
+    const firstDataRow = startRow + 1;
     const lastDataRow = firstDataRow + tableRows.length - 1;
     for (let i = firstDataRow; i <= lastDataRow; i++) {
       ws.getRow(i).getCell(puntajeColIdx).numFmt = '0.00';

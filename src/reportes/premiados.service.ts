@@ -75,9 +75,37 @@ export class PremiadosService {
   ): Promise<PremiadoRow[]> {
     const id_fase_final = await this.getFinalPhaseId();
 
-    // 1)medallero del area
+    // Gestión actual
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      orderBy: { created_at: 'desc' },
+    });
+    if (!gestion) {
+      throw new BadRequestException(
+        'No hay gestión abierta para generar premiados.',
+      );
+    }
+
+    // 0) Nota mínima de aprobación (configuración de área)
+    const areaCfg = await this.prisma.areas.findUnique({
+      where: { id_area },
+      select: {
+        nota_aprobacion: true,
+        nota_aprobacion_final: true,
+      },
+    });
+
+    // Si en el futuro subes de 51 a 60, este valor se actualiza solo leyendo la config
+    const minScore =
+      areaCfg?.nota_aprobacion_final ?? areaCfg?.nota_aprobacion ?? 51;
+
+    // 1) Medallero del área/nivel/gestión
     const medallero = await this.prisma.medallero_config.findFirst({
-      where: { id_area, id_nivel },
+      where: {
+        id_area,
+        id_nivel,
+        id_gestion: gestion.id_gestion,
+      },
       orderBy: { id_medallero: 'desc' },
     });
 
@@ -88,9 +116,13 @@ export class PremiadosService {
       menciones: medallero?.menciones ?? 0,
     };
 
-    // 2)inscripciones del area/nivel
+    // 2) Inscripciones del área/nivel/gestión
     const inscripciones = await this.prisma.inscripciones.findMany({
-      where: { id_area, id_nivel },
+      where: {
+        id_area,
+        id_nivel,
+        id_gestion: gestion.id_gestion,
+      },
       include: {
         competidor: true,
         area: true,
@@ -102,7 +134,7 @@ export class PremiadosService {
 
     const ids = inscripciones.map((i) => i.id_inscripcion);
 
-    // 3) sacar promedio de evaluaciones finales firmadas
+    // 3) Sacar promedio de evaluaciones finales firmadas
     const evals = await this.prisma.evaluaciones.groupBy({
       by: ['id_inscripcion'],
       where: {
@@ -120,15 +152,10 @@ export class PremiadosService {
       scoreMap.set(e.id_inscripcion, Number(e._avg.nota ?? 0));
     }
 
-    // 4) ordenar por puntaje descendente y id_inscripcion ascendente
     const ordenados = [...inscripciones]
       .map((insc) => {
-        // CORRECCIÓN: Acceso directo y tipado seguro (sin 'any')
-        // 1. Si existe puntaje_final en BD (Decimal), lo convertimos a Number.
         const dbScore = insc.puntaje_final ? Number(insc.puntaje_final) : null;
-        // 2. Si no, buscamos el promedio calculado en el mapa.
         const calcScore = scoreMap.get(insc.id_inscripcion) ?? null;
-        // 3. Prioridad: BD > Calculado
         const score = dbScore ?? calcScore;
 
         return {
@@ -136,7 +163,6 @@ export class PremiadosService {
           score,
         };
       })
-      // ⬇️ EXCLUIMOS sin nota final ni promedio firmado
       .filter((x) => typeof x.score === 'number' && !Number.isNaN(x.score))
       .sort(
         (a, b) =>
@@ -144,18 +170,29 @@ export class PremiadosService {
           a.inscripcion.id_inscripcion - b.inscripcion.id_inscripcion,
       );
 
-    // Si nadie tiene nota, no hay premiados
     if (ordenados.length === 0) return [];
 
-    // 5) asignar medallas
+    // 5) Asignar medallas SOLO a quienes cumplen la nota mínima
     const salida: PremiadoRow[] = [];
-
     let pos = 0;
+
     for (const item of ordenados) {
-      pos += 1;
       const { inscripcion, score } = item;
+      const numericScore = Number(score);
+
+      if (Number.isNaN(numericScore)) continue;
+
+      // Filtrar por nota mínima de aprobación
+      if (numericScore < minScore) {
+        continue;
+      }
+
+      // La posición solo cuenta entre los que cumplen la nota mínima
+      pos += 1;
+
       const med = this.medallaDePosicion(pos, cfg);
       if (!med.tipo) continue;
+
       salida.push({
         id_inscripcion: inscripcion.id_inscripcion,
         posicion: pos,
@@ -165,7 +202,7 @@ export class PremiadosService {
         estadoPremio: med.tipo,
         area: inscripcion.area.nombre_area,
         nivel: inscripcion.nivel.nombre_nivel,
-        puntuacion: Number(score),
+        puntuacion: numericScore,
         unidadEducativa: inscripcion.competidor.escuela ?? '',
         departamento: inscripcion.competidor.departamento ?? '',
       });
@@ -225,10 +262,18 @@ export class PremiadosService {
 
     // si no viene area+nivel entonces devolver para todos los pares validados
     const id_fase_final = await this.getFinalPhaseId();
+
+    // Gestión actual
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      orderBy: { created_at: 'desc' },
+    });
+
     const cierres = await this.prisma.cierres_fase.findMany({
       where: {
         id_fase: id_fase_final,
         estado_validacion: 'VALIDADO',
+        ...(gestion ? { id_gestion: gestion.id_gestion } : {}),
       },
       select: { id_area: true, id_nivel: true },
     });

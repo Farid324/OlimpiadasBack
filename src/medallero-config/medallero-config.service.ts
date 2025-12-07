@@ -31,64 +31,128 @@ export class MedalleroConfigService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Obtener todas las áreas/niveles con su medallero y participantes */
+  /**
+   * Obtener todas las combinaciones Área/Nivel habilitadas para la GESTIÓN ABIERTA,
+   * con:
+   * - participantes = inscripciones en esa gestión (si hay)
+   * - configuración de medallero propia de esa gestión (si existe; si no, 0)
+   *
+   * Esto permite configurar medallas AUNQUE TODAVÍA NO HAYA INSCRIPCIONES.
+   */
   async findAll(): Promise<MedalleroConfigWithDetails[]> {
-    // 1. Obtener todas las inscripciones para agrupar por Area/Nivel y contar participantes.
-    const inscripcionesAgrupadas = await this.prisma.inscripciones.groupBy({
-      by: ['id_area', 'id_nivel'],
-      _count: { id_competidor: true }, // Usamos id_competidor para contar participantes
+    // 0. Gestión actual
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      orderBy: { created_at: 'desc' },
     });
 
+    if (!gestion) {
+      this.logger.warn(
+        'No hay gestión ABIERTA. Devolviendo medallero vacío en findAll().',
+      );
+      return [];
+    }
+
+    // 1. Áreas activas (son las "vigentes" para la gestión abierta)
+    const areasActivas = await this.prisma.areas.findMany({
+      where: { activo: true },
+      select: {
+        id_area: true,
+        nombre_area: true,
+        niveles_target: true, // "Primaria, Secundaria", etc.
+      },
+      orderBy: { nombre_area: 'asc' },
+    });
+
+    if (areasActivas.length === 0) {
+      this.logger.warn(
+        `No hay áreas activas al consultar medallero para gestión ${gestion.id_gestion}`,
+      );
+      return [];
+    }
+
+    // 2. Todos los niveles disponibles
+    const niveles = await this.prisma.niveles.findMany({
+      select: {
+        id_nivel: true,
+        nombre_nivel: true,
+      },
+      orderBy: { orden: 'asc' },
+    });
+
+    // 3. Participantes por Área/Nivel en la gestión ABIERTA
+    const inscripcionesAgrupadas = await this.prisma.inscripciones.groupBy({
+      by: ['id_area', 'id_nivel'],
+      where: { id_gestion: gestion.id_gestion },
+      _count: { id_competidor: true },
+    });
+
+    const participantesMap = new Map<string, number>();
+    for (const g of inscripcionesAgrupadas) {
+      const key = `${g.id_area}-${g.id_nivel}`;
+      participantesMap.set(key, g._count.id_competidor);
+    }
+
     this.logger.debug(
-      `Encontradas ${inscripcionesAgrupadas.length} combinaciones Area/Nivel con participantes`,
+      `findAll(): ${inscripcionesAgrupadas.length} combinaciones Área/Nivel con participantes para gestión ${gestion.id_gestion}`,
     );
 
     const results: MedalleroConfigWithDetails[] = [];
 
-    for (const grupo of inscripcionesAgrupadas) {
-      const { id_area, id_nivel, _count } = grupo;
+    const getNivelesParaArea = (nivelesTarget: string | null | undefined) => {
+      if (!nivelesTarget || nivelesTarget.trim() === '') {
+        // Sin filtro explícito -> todos los niveles definidos
+        return niveles;
+      }
 
-      // 2. Buscar el área y el nivel (para los nombres)
-      const area = await this.prisma.areas.findUnique({
-        where: { id_area },
-        select: { nombre_area: true },
+      const tokens = nivelesTarget
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+
+      // Ejemplo: tokens = ["PRIMARIA", "SECUNDARIA"]
+      return niveles.filter((n) => {
+        const nombre = (n.nombre_nivel ?? '').toUpperCase();
+        return tokens.some((t) => nombre.includes(t));
       });
-      const nivel = await this.prisma.niveles.findUnique({
-        where: { id_nivel },
-        select: { nombre_nivel: true },
-      });
+    };
 
-      // ✨ AJUSTE para manejar áreas/niveles eliminados o no encontrados
-      const areaNombre =
-        area?.nombre_area ?? `[Área No Encontrada ID: ${id_area}]`;
-      const nivelNombre =
-        nivel?.nombre_nivel ?? `[Nivel No Encontrado ID: ${id_nivel}]`;
+    // 4. Construir TODAS las combinaciones área/nivel según niveles_target
+    for (const area of areasActivas) {
+      const nivelesParaArea = getNivelesParaArea(area.niveles_target);
 
-      // 3. Buscar la configuración de medallero para esta combinación Área/Nivel
-      const config = await this.prisma.medallero_config.findFirst({
-        where: { id_area, id_nivel },
-        orderBy: { id_medallero: 'desc' },
-      });
+      for (const nivel of nivelesParaArea) {
+        const key = `${area.id_area}-${nivel.id_nivel}`;
+        const participantes = participantesMap.get(key) ?? 0;
 
-      const m = config;
+        // 5. Configuración de medallero PARA ESTA GESTIÓN
+        const config = await this.prisma.medallero_config.findFirst({
+          where: {
+            id_area: area.id_area,
+            id_nivel: nivel.id_nivel,
+            id_gestion: gestion.id_gestion,
+          },
+          orderBy: { id_medallero: 'desc' },
+        });
 
-      results.push({
-        id_medallero: m?.id_medallero ?? 0, // CRÍTICO: 0 si no existe para indicar 'crear' en el frontend
-        id_area: id_area,
-        id_nivel: id_nivel,
-        area_nombre: areaNombre, // Usamos el nombre seguro
-        nivel_nombre: nivelNombre, // Usamos el nombre seguro
-        participantes: _count.id_competidor,
-        oros: m?.oros ?? 0,
-        platas: m?.platas ?? 0,
-        bronces: m?.bronces ?? 0,
-        menciones: m?.menciones ?? 0,
-        vigente_desde: m?.vigente_desde ?? null,
-        vigente_hasta: m?.vigente_hasta ?? null,
-      });
+        results.push({
+          id_medallero: config?.id_medallero ?? 0,
+          id_area: area.id_area,
+          id_nivel: nivel.id_nivel,
+          area_nombre: area.nombre_area,
+          nivel_nombre: nivel.nombre_nivel,
+          participantes,
+          oros: config?.oros ?? 0,
+          platas: config?.platas ?? 0,
+          bronces: config?.bronces ?? 0,
+          menciones: config?.menciones ?? 0,
+          vigente_desde: config?.vigente_desde ?? null,
+          vigente_hasta: config?.vigente_hasta ?? null,
+        });
+      }
     }
 
-    // Opcional: Ordenar por Área y luego por Nivel
+    // 6. Ordenar por Área y luego por Nivel
     return results.sort((a, b) => {
       if (a.area_nombre < b.area_nombre) return -1;
       if (a.area_nombre > b.area_nombre) return 1;
@@ -131,33 +195,45 @@ export class MedalleroConfigService {
 
   /** Actualizar medallero de un área/nivel O CREAR si no existe (id <= 0) */
   async update(id: number, dto: UpdateMedalleroConfigDto) {
-    // CRÍTICO: Si el id es 0 o inválido, CREAMOS la configuración
+    // CRÍTICO: Si el id es 0 o inválido, CREAMOS la configuración para la gestión ABIERTA
     if (!id || id <= 0) {
       this.logger.debug(
         `ID de medallero es 0 o inválido. Creando nueva configuración para Area ${dto.id_area}/Nivel ${dto.id_nivel}...`,
       );
 
-      const createDto: CreateMedalleroConfigDto = {
-        id_area: dto.id_area,
-        id_nivel: dto.id_nivel,
-        oros: dto.oros ?? 0,
-        platas: dto.platas ?? 0,
-        bronces: dto.bronces ?? 0,
-        menciones: dto.menciones ?? 0,
-        // No pasamos las fechas aquí, ya que UpdateMedalleroConfigDto no las tiene.
-      };
+      const gestion = await this.prisma.gestiones.findFirst({
+        where: { estado: 'ABIERTA' },
+        orderBy: { created_at: 'desc' },
+      });
+      if (!gestion) {
+        throw new BadRequestException(
+          'No hay una gestión abierta para configurar el medallero.',
+        );
+      }
 
-      // Usar create en lugar de updateOrCreate para que Prisma gestione la clave única
       try {
-        return await this.create(createDto); // Reutilizamos la función de creación (que ya tiene la lógica de gestión)
+        return await this.prisma.medallero_config.create({
+          data: {
+            id_area: dto.id_area,
+            id_nivel: dto.id_nivel,
+            id_gestion: gestion.id_gestion,
+            oros: dto.oros ?? 0,
+            platas: dto.platas ?? 0,
+            bronces: dto.bronces ?? 0,
+            menciones: dto.menciones ?? 0,
+          },
+        });
       } catch (e) {
         this.logger.warn(
           `Intento de creación fallido para Area ${dto.id_area}/Nivel ${dto.id_nivel}. Buscando existente para actualizar...`,
         );
 
-        // Si la creación falla por duplicado, intentamos actualizar el existente
         const existingConfig = await this.prisma.medallero_config.findFirst({
-          where: { id_area: dto.id_area, id_nivel: dto.id_nivel },
+          where: {
+            id_area: dto.id_area,
+            id_nivel: dto.id_nivel,
+            id_gestion: gestion.id_gestion,
+          },
         });
 
         if (existingConfig) {
@@ -171,7 +247,7 @@ export class MedalleroConfigService {
             },
           });
         }
-        throw e; // Si aún falla, lanzamos el error original
+        throw e;
       }
     }
 
@@ -196,11 +272,9 @@ export class MedalleroConfigService {
     }
   }
 
-  // Puedes dejar findOne si es necesario
   async findOne(id: number) {
     return this.prisma.medallero_config.findUnique({
       where: { id_medallero: id },
-      // include: { area: true, nivel: true },
     });
   }
 }

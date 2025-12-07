@@ -335,4 +335,167 @@ export class GestionesService {
       total_areas: g._count.areas_gestion,
     }));
   }
+
+    /**
+   * Obtener equipo académico de la gestión abierta:
+   * - Responsables de área (de la gestión abierta)
+   * - Evaluadores (asignados a la gestión abierta)
+   */
+  async getEquipoGestionActual(): Promise<{
+    gestion: gestiones | null;
+    responsables: {
+      id_responsable_area: number;
+      activo: boolean;
+      usuario: {
+        id_usuario: number;
+        nombre: string;
+        apellido: string;
+        correo: string;
+        telefono: string | null;
+        experiencia: number | null;
+        especialidad: string | null;
+        institucion: string | null;
+        ci: string | null;
+      };
+      area: {
+        id_area: number;
+        nombre_area: string;
+      };
+    }[];
+    evaluadores: {
+      id_usuario: number;
+      nombre: string;
+      apellido: string;
+      correo: string;
+      telefono: string | null;
+      institucion: string | null;
+      especialidad: string | null;
+      experiencia: number | null;
+      activo: boolean;
+      evaluadores_area: {
+        area: {
+          id_area: number;
+          nombre_area: string;
+        };
+      }[];
+    }[];
+  }> {
+    const gestion = await this.getCurrentOpenGestion();
+
+    if (!gestion) {
+      return {
+        gestion: null,
+        responsables: [],
+        evaluadores: [],
+      };
+    }
+
+    const [responsablesRaw, evaluadoresRaw] = await this.prisma.$transaction([
+      this.prisma.responsables_area.findMany({
+        where: {
+          id_gestion: gestion.id_gestion,
+          activo: true,
+        },
+        include: {
+          usuario: true,
+          area: true,
+        },
+        orderBy: {
+          id_responsable_area: 'asc',
+        },
+      }),
+      this.prisma.evaluadores_area.findMany({
+        where: {
+          id_gestion: gestion.id_gestion,
+          activo: true,
+          usuario: {
+            rol: { nombre: 'EVALUADOR' },
+          },
+        },
+        include: {
+          usuario: true,
+          area: true,
+        },
+        orderBy: {
+          id_usuario: 'asc',
+        },
+      }),
+    ]);
+
+    const responsables = responsablesRaw.map((r) => ({
+      id_responsable_area: r.id_responsable_area,
+      activo: r.activo,
+      usuario: {
+        id_usuario: r.usuario.id_usuario,
+        nombre: r.usuario.nombre,
+        apellido: r.usuario.apellido,
+        correo: r.usuario.correo,
+        telefono: r.usuario.telefono ?? null,
+        experiencia: r.usuario.experiencia ?? null,
+        especialidad: r.usuario.especialidad ?? null,
+        institucion: r.usuario.institucion ?? null,
+        ci: r.usuario.ci ?? null,
+      },
+      area: {
+        id_area: r.area.id_area,
+        nombre_area: r.area.nombre_area,
+      },
+    }));
+
+    type EvaluadorEquipo = {
+      id_usuario: number;
+      nombre: string;
+      apellido: string;
+      correo: string;
+      telefono: string | null;
+      institucion: string | null;
+      especialidad: string | null;
+      experiencia: number | null;
+      activo: boolean;
+      evaluadores_area: {
+        area: {
+          id_area: number;
+          nombre_area: string;
+        };
+      }[];
+    };
+
+    const evaluadoresMap = new Map<number, EvaluadorEquipo>();
+
+    for (const row of evaluadoresRaw) {
+      const u = row.usuario;
+      if (!evaluadoresMap.has(u.id_usuario)) {
+        evaluadoresMap.set(u.id_usuario, {
+          id_usuario: u.id_usuario,
+          nombre: u.nombre,
+          apellido: u.apellido,
+          correo: u.correo,
+          telefono: u.telefono ?? null,
+          institucion: u.institucion ?? null,
+          especialidad: u.especialidad ?? null,
+          experiencia: u.experiencia ?? null,
+          activo: u.activo,
+          evaluadores_area: [],
+        });
+      }
+      const item = evaluadoresMap.get(u.id_usuario);
+      if (item) {
+        item.evaluadores_area.push({
+          area: {
+            id_area: row.area.id_area,
+            nombre_area: row.area.nombre_area,
+          },
+        });
+      }
+    }
+
+    const evaluadores = Array.from(evaluadoresMap.values());
+
+    return {
+      gestion,
+      responsables,
+      evaluadores,
+    };
+  }
+
 }

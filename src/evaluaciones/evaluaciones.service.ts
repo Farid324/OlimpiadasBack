@@ -1,3 +1,4 @@
+//src/evaluaciones/evaluaciones.service.ts
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 //import { PhaseType } from '../fases/dto/close-phase.dto';
@@ -7,6 +8,7 @@ export interface InscripcionRow {
   id_inscripcion: number;
   estado_inscripcion: string;
   clasificacion?: string | null; // Puede ser null
+  estado_final?: string | null;
   area: { nombre_area: string };
   nivel: { nombre_nivel: string };
   competidor: {
@@ -320,7 +322,7 @@ export class EvaluacionesAdminService {
         select: {
           id_inscripcion: true,
           estado_inscripcion: true,
-          clasificacion: true,
+          estado_final: true,
 
           area: { select: { nombre_area: true } },
           nivel: { select: { nombre_nivel: true } },

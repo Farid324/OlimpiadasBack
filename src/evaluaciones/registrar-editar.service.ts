@@ -1,8 +1,14 @@
+//src/evaluaciones/registrar-editar.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma, clasificacion_estado } from '@prisma/client';
+import {
+  Prisma,
+  clasificacion_estado,
+  aprobacion_estado,
+} from '@prisma/client';
 
 type clasificacion_estadoType = clasificacion_estado | null;
+type aprobacion_estadoType = aprobacion_estado | null;
 
 type RegistrarNotaDto = {
   idInscripcion: number;
@@ -28,6 +34,7 @@ async function getArea(
   prisma: PrismaService | Prisma.TransactionClient,
 ): Promise<{
   nota_aprobacion: number | null;
+  nota_aprobacion_final: number | null;
   tipo: string | null;
   niveles_target: string | null;
 } | null> {
@@ -35,6 +42,7 @@ async function getArea(
     where: { id_area },
     select: {
       nota_aprobacion: true,
+      nota_aprobacion_final: true,
       tipo: true,
       niveles_target: true,
     },
@@ -48,10 +56,25 @@ function calcularClasificacionPorArea(
   if (nota === null || nota === undefined) return null;
   if (nota === -1) return 'DESCALIFICADO';
 
-  const minimo = notaAprobacion ?? 51;
+  const minimo = notaAprobacion ?? 0;
 
   if (nota >= minimo) return 'CLASIFICADO';
   if (nota >= 0) return 'NO_CLASIFICADO';
+
+  return null;
+}
+
+function calcularAprobacionFinalPorArea(
+  nota: number | null | undefined,
+  notaAprobacion: number | null | undefined,
+): aprobacion_estadoType {
+  if (nota === null || nota === undefined) return null;
+  if (nota === -1) return 'DESCALIFICADO';
+
+  const minimo = notaAprobacion ?? 0;
+
+  if (nota >= minimo) return 'APROBADO';
+  if (nota >= 0) return 'NO_APROBADO';
 
   return null;
 }
@@ -77,9 +100,14 @@ export class EvaluacionesService {
 
     // ✔ obtener área real de la inscripción
     const area = await getArea(inscripcion.id_area, this.prisma);
-    const notaAprobacion = area?.nota_aprobacion ?? 60;
+    const notaAprobacion = area?.nota_aprobacion ?? 0;
+    const notaAprobacionFinal = area?.nota_aprobacion_final ?? 0;
 
     const clasificacion = calcularClasificacionPorArea(nota, notaAprobacion);
+    const aprobacionFinal = calcularAprobacionFinalPorArea(
+      nota,
+      notaAprobacionFinal,
+    );
     const notaDecimal = new Prisma.Decimal(nota);
     const puntajeField =
       idFase === 1 ? 'puntaje_clasificacion' : 'puntaje_final';
@@ -114,6 +142,7 @@ export class EvaluacionesService {
       };
 
       if (idFase === 1) updateData.clasificacion = clasificacion;
+      if (idFase === 2) updateData.estado_final = aprobacionFinal;
 
       await tx.inscripciones.update({
         where: { id_inscripcion: idInscripcion },
@@ -149,11 +178,16 @@ export class EvaluacionesService {
     if (!inscripcion) throw new NotFoundException('Inscripción no encontrada');
 
     const area = await getArea(inscripcion.id_area, this.prisma);
-    const notaAprobacion = area?.nota_aprobacion ?? 60;
+    const notaAprobacion = area?.nota_aprobacion ?? 0;
+    const notaAprobacionFinal = area?.nota_aprobacion_final ?? 0;
 
     const nuevaClasificacion = calcularClasificacionPorArea(
       nuevaNota,
       notaAprobacion,
+    );
+    const nuevaAprobacionFinal = calcularAprobacionFinalPorArea(
+      nuevaNota,
+      notaAprobacionFinal,
     );
 
     const notaAnterior = evaluacion.nota;
@@ -191,6 +225,9 @@ export class EvaluacionesService {
 
       if (evaluacion.id_fase === 1)
         updateData.clasificacion = nuevaClasificacion;
+
+      if (evaluacion.id_fase === 2)
+        updateData.estado_final = nuevaAprobacionFinal;
 
       await tx.inscripciones.update({
         where: { id_inscripcion: idInscripcion },

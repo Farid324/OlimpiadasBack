@@ -32,7 +32,7 @@ export class ControlFasesRespService {
         },
         progresoGeneral: {
           porcentaje: 0,
-          nota: 'del total de evaluaciones completadas',
+          nota: 'del total de evaluaciones firmadas',
         },
       },
       filas: [],
@@ -49,20 +49,27 @@ export class ControlFasesRespService {
 
     let userId = input.userId;
 
-    // Fallback: si no vino id en el token, intenta buscar por correo
+    // Fallback: solo si el correo corresponde a un responsable ACTIVO en la gestión ABIERTA
     if (!userId && input.email) {
-      const u = await this.prisma.usuarios.findUnique({
-        where: { correo: input.email },
+      const responsableActual = await this.prisma.responsables_area.findFirst({
+        where: {
+          activo: true,
+          id_gestion: gestion.id_gestion,
+          usuario: {
+            correo: input.email,
+          },
+        },
         select: { id_usuario: true },
       });
-      userId = u?.id_usuario ?? null;
+
+      userId = responsableActual?.id_usuario ?? null;
     }
 
     if (!userId) {
       return emptyResponse;
     }
 
-    // Áreas a cargo del responsable
+    // Áreas a cargo del responsable (ligadas a la gestión)
     const misAreas = await this.prisma.responsables_area.findMany({
       where: {
         id_usuario: userId,
@@ -90,6 +97,7 @@ export class ControlFasesRespService {
 
     const idFase = fase.id_fase;
 
+    // FINAL: limitar a pares área/nivel cuya CLASIFICACIÓN esté VALIDADA
     let allowedPairsForFinal = new Set<string>();
 
     if (isFinal) {
@@ -99,7 +107,6 @@ export class ControlFasesRespService {
       });
 
       if (!faseClasif) {
-        // No hay fase de clasificación definida => no mostramos nada en FINAL
         return emptyResponse;
       }
 
@@ -117,26 +124,29 @@ export class ControlFasesRespService {
         cierresClasif.map((c) => `${c.id_area}:${c.id_nivel}`),
       );
 
-      // Si no hay ninguna área/nivel con fase CLASIFICATORIA cerrada,
-      // entonces la fase FINAL no debe mostrar nada aún.
       if (allowedPairsForFinal.size === 0) {
         return emptyResponse;
       }
     }
 
-    // 2) PARES BASE área/nivel (todas las "materias" con inscripciones del responsable)
-    // CLASIFICACION: todas las inscripciones de mis áreas
-    // FINAL: solo los que llegaron a final (clasificados) en mis áreas
+    // 2) PARES BASE área/nivel (todas las "materias" con inscripciones del responsable en la gestión)
+    // CLASIFICACION: todas las inscripciones de mis áreas en la gestión
+    // FINAL: solo los que llegaron a final (clasificados) en mis áreas y gestión
     const basePairs = await this.prisma.inscripciones.groupBy({
       by: ['id_area', 'id_nivel'],
-      where: {
-        id_area: { in: areaIds },
-        ...(isFinal ? { clasificacion: 'CLASIFICADO' } : {}),
-      },
+      where: isFinal
+        ? {
+            id_area: { in: areaIds },
+            id_gestion: gestion.id_gestion,
+            clasificacion: 'CLASIFICADO',
+          }
+        : {
+            id_area: { in: areaIds },
+            id_gestion: gestion.id_gestion,
+          },
       _count: { _all: true },
     });
 
-    // Si ni siquiera hay inscripciones en mis áreas, no hay nada que mostrar
     if (basePairs.length === 0) {
       return emptyResponse;
     }
@@ -238,7 +248,6 @@ export class ControlFasesRespService {
       });
     }
 
-    // Si después de filtrar no queda ninguna materia, no mostramos nada
     if (acc.size === 0) {
       return emptyResponse;
     }
@@ -253,7 +262,7 @@ export class ControlFasesRespService {
       bucket.counts[clasif] = (bucket.counts[clasif] ?? 0) + g._count._all;
     }
 
-    // 7) KPIs globales: evaluaciones de ESTA fase (id_fase) y SOLO mis áreas
+    // 7) KPIs globales: evaluaciones de ESTA fase (id_fase) y SOLO mis áreas en la gestión
     const [totalEvaluaciones, completadas] = await Promise.all([
       this.prisma.evaluaciones
         .count({
@@ -310,7 +319,7 @@ export class ControlFasesRespService {
       pendMap.set(`${p.id_area}:${p.id_nivel}`, p._count._all);
     }
 
-    // 9) Estado de cierre desde cierres_fase para ESTA fase y mis áreas
+    // 9) Estado de cierre desde cierres_fase para ESTA fase y mis áreas en la gestión
     const cierres = await this.prisma.cierres_fase.findMany({
       where: {
         id_fase: idFase,
@@ -361,7 +370,7 @@ export class ControlFasesRespService {
             ? (finalScoresByKey.get(key) ?? 0) > 0
             : !isFinal;
 
-        // Fase actual en función del tipo (igual que admin)
+        // Fase actual en función del tipo
         let faseActual: 'Clasificación' | 'Evaluación Final' | 'Completado';
 
         if (isFinal) {
@@ -394,7 +403,7 @@ export class ControlFasesRespService {
           }
         }
 
-        // Botón / acción (igual que admin)
+        // Botón / acción
         let accionLabel: string;
         let accionColor: 'primary' | 'neutral' | 'success';
         let accionDisabled = false;
