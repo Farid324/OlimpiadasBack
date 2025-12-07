@@ -130,8 +130,27 @@ export class EvaluadoresService {
   /** GET /evaluadores */
   async findAll(query: QueryEvaluadorDto) {
     const { q, telefono, ci } = query ?? {};
+
+    // 1) Gestion ABIERTA obligatoria para listar
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+
+    if (!gestion) {
+      // No hay gestión abierta => no mostramos nada
+      return [];
+    }
+
+    // 2) Base: rol evaluador + que tenga al menos un evaluadores_area activo en la gestión abierta
     const baseWhere: Prisma.usuariosWhereInput = {
       rol: { is: { nombre: 'EVALUADOR' } },
+      evaluadores_area: {
+        some: {
+          id_gestion: gestion.id_gestion,
+          activo: true,
+        },
+      },
     };
 
     const select = {
@@ -146,10 +165,15 @@ export class EvaluadoresService {
       experiencia: true,
       activo: true,
       evaluadores_area: {
+        where: {
+          id_gestion: gestion.id_gestion,
+          activo: true,
+        },
         select: { area: { select: { id_area: true, nombre_area: true } } },
       },
     } satisfies Prisma.usuariosSelect;
 
+    // Búsqueda por teléfono
     if (telefono) {
       return this.prisma.usuarios.findMany({
         where: { ...baseWhere, telefono },
@@ -158,6 +182,7 @@ export class EvaluadoresService {
       });
     }
 
+    // Búsqueda por CI
     if (ci) {
       return this.prisma.usuarios.findMany({
         where: { ...baseWhere, ci },
@@ -166,6 +191,7 @@ export class EvaluadoresService {
       });
     }
 
+    // Búsqueda general
     return this.prisma.usuarios.findMany({
       where: {
         ...baseWhere,
@@ -279,13 +305,27 @@ export class EvaluadoresService {
         if (dupTel)
           throw new BadRequestException('El teléfono ya está registrado');
       }
-      if (ci) {
-        const dupCi = await this.prisma.usuarios.findFirst({
-          where: { ci },
-          select: { id_usuario: true },
+      // CI: único solo dentro de la gestión actual.
+      // Puede repetirse en otras gestiones.
+      if (ci && ci.trim()) {
+        const dupCiEnGestion = await this.prisma.evaluadores_area.findFirst({
+          where: {
+            id_gestion: gestion.id_gestion,
+            usuario: {
+              ci: ci.trim(),
+              rol: { nombre: 'EVALUADOR' },
+            },
+          },
+          include: { usuario: true },
         });
-        if (dupCi) throw new BadRequestException('El CI ya está registrado');
+
+        if (dupCiEnGestion) {
+          throw new BadRequestException(
+            'El CI ya está registrado para un evaluador en la gestión actual',
+          );
+        }
       }
+
       if (!correo?.trim()) {
         throw new BadRequestException('Correo es obligatorio');
       }
@@ -365,16 +405,28 @@ export class EvaluadoresService {
       throw new BadRequestException('id_area inválido');
     }
 
-    // Total de inscripciones de esa área (fase clasificatoria)
-    const totalClasif = await this.prisma.inscripciones.count({
-      where: { id_area },
+    // Gestión abierta para calculo
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
     });
 
-    // Total de FINALISTAS en esa área
-    // (ajusta el criterio si en tu sistema se marca de otra forma)
+    if (!gestion) {
+      throw new BadRequestException(
+        'No hay una gestión abierta para consultar el estado de asignación.',
+      );
+    }
+
+    // Total de inscripciones de esa area (fase clasificatoria) en la gestion actual
+    const totalClasif = await this.prisma.inscripciones.count({
+      where: { id_area, id_gestion: gestion.id_gestion },
+    });
+
+    // Total de FINALISTAS en esa área (clasificados) en la gestión actual
     const totalFinal = await this.prisma.inscripciones.count({
       where: {
         id_area,
+        id_gestion: gestion.id_gestion,
         clasificacion: 'CLASIFICADO',
       },
     });
@@ -405,10 +457,31 @@ export class EvaluadoresService {
 
   /** GET /evaluadores/check-ci/:ci */
   async existsByCi(ci: string) {
-    const found = await this.prisma.usuarios.findFirst({
-      where: { rol: { nombre: 'EVALUADOR' }, ci },
-      select: { id_usuario: true },
+    if (!ci || !ci.trim()) {
+      return { exists: false };
+    }
+
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
     });
+
+    if (!gestion) {
+      // Sin gestión abierta, no bloqueamos por CI
+      return { exists: false };
+    }
+
+    const found = await this.prisma.evaluadores_area.findFirst({
+      where: {
+        id_gestion: gestion.id_gestion,
+        usuario: {
+          ci: ci.trim(),
+          rol: { nombre: 'EVALUADOR' },
+        },
+      },
+      select: { id_evaluador_area: true },
+    });
+
     return { exists: !!found };
   }
 
@@ -453,15 +526,25 @@ export class EvaluadoresService {
             'El teléfono ya está registrado en otro usuario',
           );
       }
-      if (dto.ci) {
-        const dupCi = await this.prisma.usuarios.findFirst({
-          where: { ci: dto.ci, id_usuario: { not: id } },
-          select: { id_usuario: true },
+      // CI: único solo dentro de la gestión actual
+      if (dto.ci && dto.ci.trim()) {
+        const dupCiEnGestion = await this.prisma.evaluadores_area.findFirst({
+          where: {
+            id_gestion: gestion.id_gestion,
+            id_usuario: { not: id },
+            usuario: {
+              ci: dto.ci.trim(),
+              rol: { nombre: 'EVALUADOR' },
+            },
+          },
+          include: { usuario: true },
         });
-        if (dupCi)
+
+        if (dupCiEnGestion) {
           throw new BadRequestException(
-            'El CI ya está registrado en otro usuario',
+            'El CI ya está registrado para otro evaluador en la gestión actual',
           );
+        }
       }
 
       if (dto.id_areas) {
@@ -523,18 +606,26 @@ export class EvaluadoresService {
           select: { id_usuario: true },
         });
         if (!exists) throw new NotFoundException('Evaluador no encontrado');
+
         if (Object.keys(data).length > 0) {
           await tx.usuarios.update({ where: { id_usuario: id }, data });
         }
 
         if (dto.id_areas) {
-          await tx.evaluadores_area.deleteMany({ where: { id_usuario: id } });
+          // Eliminar SOLO las relaciones de la gestión abierta
+          await tx.evaluadores_area.deleteMany({
+            where: {
+              id_usuario: id,
+              id_gestion: gestion.id_gestion,
+            },
+          });
+
           if (dto.id_areas.length) {
             await tx.evaluadores_area.createMany({
               data: dto.id_areas.map((id_area) => ({
                 id_usuario: id,
                 id_area,
-                id_gestion: gestion.id_gestion, // <--- ⚠️ ESTO FALTABA
+                id_gestion: gestion.id_gestion,
                 activo: true,
               })),
               skipDuplicates: true,
@@ -598,21 +689,33 @@ export class EvaluadoresService {
       throw new BadRequestException('Se requieren asignaciones.');
     }
 
-    // 1) Obtener totales de inscripciones
+    // Gestión ABIERTA obligatoria para distribuir cupos
+    const gestion = await this.prisma.gestiones.findFirst({
+      where: { estado: 'ABIERTA' },
+      select: { id_gestion: true },
+    });
+
+    if (!gestion) {
+      throw new BadRequestException(
+        'No hay una gestión abierta para asignar olimpistas.',
+      );
+    }
+
+    // 1) Obtener totales de inscripciones EN LA GESTIÓN ACTUAL
     const [totalClasif, totalFinal] = await Promise.all([
       this.prisma.inscripciones.count({
-        where: { id_area },
+        where: { id_area, id_gestion: gestion.id_gestion },
       }),
       this.prisma.inscripciones.count({
         where: {
           id_area,
+          id_gestion: gestion.id_gestion,
           clasificacion: 'CLASIFICADO',
         },
       }),
     ]);
 
     // 2) Determinar modo: CLASIFICATORIA o FINAL
-    //    Regla: si hay finalistas -> estamos editando FINAL
     const faseClasif = await this.prisma.fases.findFirst({
       where: { nombre_fase: 'CLASIFICATORIA' },
     });
@@ -640,9 +743,13 @@ export class EvaluadoresService {
       );
     }
 
-    // 3) Obtener evaluadores del área
+    // 3) Obtener evaluadores del área EN LA GESTIÓN ACTUAL
     const evaluadoresArea = await this.prisma.evaluadores_area.findMany({
-      where: { id_area, activo: true },
+      where: {
+        id_area,
+        activo: true,
+        id_gestion: gestion.id_gestion,
+      },
       select: {
         id_evaluador_area: true,
         id_usuario: true,
@@ -652,7 +759,7 @@ export class EvaluadoresService {
 
     if (!evaluadoresArea.length) {
       throw new BadRequestException(
-        'No hay evaluadores activos registrados para esta área.',
+        'No hay evaluadores activos registrados para esta área en la gestión actual.',
       );
     }
 
@@ -711,7 +818,6 @@ export class EvaluadoresService {
       if (sinCupo.length === 1) {
         sinCupo[0][campoCupo] = restante;
       } else {
-        // sinCupo.length === 0
         throw new BadRequestException(
           `Quedan ${restante} olimpistas sin asignar. Deja un evaluador sin cupo para que reciba el resto automáticamente.`,
         );
@@ -724,7 +830,6 @@ export class EvaluadoresService {
         for (const item of lista) {
           const cupo = item[campoCupo] ?? 0;
 
-          // Si no hay cupo en esta fase, igual guardamos 0
           await tx.asignacion_evaluador_fase.upsert({
             where: {
               uq_eval_area_fase: {

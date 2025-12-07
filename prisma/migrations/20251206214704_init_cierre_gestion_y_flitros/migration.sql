@@ -8,6 +8,9 @@ CREATE TYPE "public"."tipo_premio" AS ENUM ('ORO', 'PLATA', 'BRONCE', 'MENCION')
 CREATE TYPE "public"."clasificacion_estado" AS ENUM ('CLASIFICADO', 'NO_CLASIFICADO', 'DESCALIFICADO');
 
 -- CreateEnum
+CREATE TYPE "public"."aprobacion_estado" AS ENUM ('APROBADO', 'NO_APROBADO', 'DESCALIFICADO');
+
+-- CreateEnum
 CREATE TYPE "public"."estado_inscripcion" AS ENUM ('INSCRITO', 'CLASIFICADO', 'FINALISTA', 'PREMIADO', 'DESCALIFICADO');
 
 -- CreateEnum
@@ -110,6 +113,7 @@ CREATE TABLE "public"."areas" (
     "activo" BOOLEAN NOT NULL DEFAULT true,
     "estado" "public"."estado_area" NOT NULL DEFAULT 'EVALUANDO',
     "nota_aprobacion" INTEGER DEFAULT 51,
+    "nota_aprobacion_final" INTEGER DEFAULT 51,
     "tipo" "public"."tipo_area_config" DEFAULT 'INDIVIDUAL',
     "niveles_target" TEXT,
 
@@ -196,6 +200,7 @@ CREATE TABLE "public"."inscripciones" (
     "puntaje_clasificacion" DECIMAL(5,2),
     "clasificacion" "public"."clasificacion_estado" DEFAULT 'NO_CLASIFICADO',
     "puntaje_final" DECIMAL(5,2),
+    "estado_final" "public"."aprobacion_estado" DEFAULT 'NO_APROBADO',
 
     CONSTRAINT "inscripciones_pkey" PRIMARY KEY ("id_inscripcion")
 );
