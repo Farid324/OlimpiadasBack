@@ -7,6 +7,8 @@ import {
   tipo_area_config,
   gestiones,
   areas_gestion,
+  tipo_premio,
+  Prisma,
 } from '@prisma/client';
 
 // ===================== TIPOS =====================
@@ -162,7 +164,156 @@ export class GestionesService {
   }
 
   /**
-   * Cierra la gestión actual y archiva las áreas activas
+   * ===========================
+   * MATERIALIZACIÓN PREMIADOS
+   * ===========================
+   * Persiste medallas/premios de la FASE FINAL en `premios_otorgados`
+   * y marca inscripciones ganadoras con `estado_inscripcion = PREMIADO`.
+   *
+   * Se ejecuta al CERRAR GESTIÓN para que `principal` (home)
+   * pueda consultar históricos sin recalcular en runtime.
+   */
+  private async materializarPremiadosFinal(
+    tx: Prisma.TransactionClient,
+    idGestion: number,
+  ): Promise<void> {
+    // 1) Fase FINAL
+    const faseFinal = await tx.fases.findFirst({
+      where: { nombre_fase: 'FINAL' },
+      select: { id_fase: true },
+    });
+    if (!faseFinal) return;
+
+    // 2) Config de medallero por área/nivel (OJO: campos en plural)
+    const configs = await tx.medallero_config.findMany({
+      where: { id_gestion: idGestion },
+      select: {
+        id_area: true,
+        id_nivel: true,
+        oros: true,
+        platas: true,
+        bronces: true,
+        menciones: true,
+      },
+    });
+
+    if (configs.length === 0) return;
+
+    // 3) Idempotencia: borrar premios FINAL de esta gestión y recalcular
+    await tx.premios_otorgados.deleteMany({
+      where: { id_gestion: idGestion, fuente: 'FINAL' },
+    });
+
+    // (Opcional y seguro) resetear estado PREMIADO a FINALISTA para recalcular
+    // No rompe nada si tu flujo ya usa FINALISTA/CLASIFICADO.
+    await tx.inscripciones.updateMany({
+      where: { id_gestion: idGestion, estado_inscripcion: 'PREMIADO' },
+      data: { estado_inscripcion: 'FINALISTA' },
+    });
+
+    // 4) Recalcular por cada (área, nivel)
+    for (const cfg of configs) {
+      const oros = cfg.oros ?? 0;
+      const platas = cfg.platas ?? 0;
+      const bronces = cfg.bronces ?? 0;
+      const menciones = cfg.menciones ?? 0;
+
+      const total = oros + platas + bronces + menciones;
+      if (total <= 0) continue;
+
+      const elegibles = await tx.inscripciones.findMany({
+        where: {
+          id_gestion: idGestion,
+          id_area: cfg.id_area,
+          id_nivel: cfg.id_nivel,
+          clasificacion: 'CLASIFICADO',
+          puntaje_final: { not: null },
+          evaluaciones: {
+            some: {
+              id_fase: faseFinal.id_fase,
+              estado_registro: 'FIRMADA',
+            },
+          },
+        },
+        select: {
+          id_inscripcion: true,
+          puntaje_final: true,
+          puntaje_clasificacion: true,
+        },
+        orderBy: [
+          { puntaje_final: 'desc' },
+          { puntaje_clasificacion: 'desc' },
+          { id_inscripcion: 'asc' },
+        ],
+      });
+
+      if (elegibles.length === 0) continue;
+
+      const top = elegibles.slice(0, total);
+
+      const asignaciones: Array<{
+        id_inscripcion: number;
+        tipo: tipo_premio;
+      }> = [];
+
+      let idx = 0;
+
+      for (let i = 0; i < oros && idx < top.length; i++, idx++) {
+        asignaciones.push({
+          id_inscripcion: top[idx].id_inscripcion,
+          tipo: 'ORO',
+        });
+      }
+      for (let i = 0; i < platas && idx < top.length; i++, idx++) {
+        asignaciones.push({
+          id_inscripcion: top[idx].id_inscripcion,
+          tipo: 'PLATA',
+        });
+      }
+      for (let i = 0; i < bronces && idx < top.length; i++, idx++) {
+        asignaciones.push({
+          id_inscripcion: top[idx].id_inscripcion,
+          tipo: 'BRONCE',
+        });
+      }
+      for (let i = 0; i < menciones && idx < top.length; i++, idx++) {
+        asignaciones.push({
+          id_inscripcion: top[idx].id_inscripcion,
+          tipo: 'MENCION',
+        });
+      }
+
+      if (asignaciones.length === 0) continue;
+
+      // 5) Insertar premios otorgados (FINAL) -> incluye id_area e id_nivel (requeridos)
+      await tx.premios_otorgados.createMany({
+        data: asignaciones.map((a) => ({
+          id_gestion: idGestion,
+          id_area: cfg.id_area,
+          id_nivel: cfg.id_nivel,
+          id_inscripcion: a.id_inscripcion,
+          tipo: a.tipo,
+          fuente: 'FINAL',
+        })),
+      });
+
+      // 6) Marcar ganadores como PREMIADO
+      await tx.inscripciones.updateMany({
+        where: {
+          id_gestion: idGestion,
+          id_inscripcion: { in: asignaciones.map((a) => a.id_inscripcion) },
+        },
+        data: {
+          estado_inscripcion: 'PREMIADO',
+          updated_at: new Date(),
+        },
+      });
+    }
+  }
+
+  /**
+   * Cierra la gestión actual y archiva las áreas activas.
+   * Además materializa premiados para histórico (principal/home).
    */
   async closeCurrentGestion(): Promise<CloseGestionResult> {
     const current = await this.getCurrentOpenGestion();
@@ -178,9 +329,11 @@ export class GestionesService {
       );
     }
 
-    // Ejecutar todo en una transacción
     const result = await this.prisma.$transaction(async (tx) => {
-      // 1. Obtener todas las áreas activas
+      // 0) MATERIALIZAR PREMIADOS (antes de cerrar)
+      await this.materializarPremiadosFinal(tx, current.id_gestion);
+
+      // 1) Obtener todas las áreas activas
       const areasActivas = await tx.areas.findMany({
         where: { activo: true },
         select: {
@@ -191,7 +344,7 @@ export class GestionesService {
         },
       });
 
-      // 2. Archivar las áreas en areas_gestion
+      // 2) Archivar las áreas en areas_gestion
       if (areasActivas.length > 0) {
         const areasToArchive = areasActivas.map((area) => ({
           id_gestion: current.id_gestion,
@@ -206,16 +359,16 @@ export class GestionesService {
         });
       }
 
-      // 3. Desactivar todas las áreas activas (soft delete)
+      // 3) Desactivar todas las áreas activas (soft delete)
       await tx.areas.updateMany({
         where: { activo: true },
         data: {
           activo: false,
-          estado: 'EVALUANDO', // Resetear estado para la próxima gestión
+          estado: 'EVALUANDO',
         },
       });
 
-      // 4. Cerrar la gestión
+      // 4) Cerrar la gestión
       const updatedGestion = await tx.gestiones.update({
         where: { id_gestion: current.id_gestion },
         data: {
@@ -252,9 +405,6 @@ export class GestionesService {
     return gestion;
   }
 
-  /**
-   * Obtener historial de áreas por gestiones cerradas
-   */
   async getAreasHistorial(): Promise<GestionConAreas[]> {
     const gestionesCerradas: GestionWithAreas[] =
       await this.prisma.gestiones.findMany({
@@ -267,31 +417,24 @@ export class GestionesService {
         },
       });
 
-    const result: GestionConAreas[] = gestionesCerradas.map(
-      (gestion: GestionWithAreas) => ({
-        id_gestion: gestion.id_gestion,
-        anio: gestion.anio,
-        nombre: gestion.nombre,
-        estado: gestion.estado,
-        closed_at: gestion.closed_at,
-        areas: gestion.areas_gestion.map((area: areas_gestion) => ({
-          id_area_gestion: area.id_area_gestion,
-          id_gestion: area.id_gestion,
-          nombre_area: area.nombre_area,
-          nota_aprobacion: area.nota_aprobacion,
-          tipo: area.tipo,
-          niveles_target: area.niveles_target,
-          archived_at: area.archived_at,
-        })),
-      }),
-    );
-
-    return result;
+    return gestionesCerradas.map((gestion: GestionWithAreas) => ({
+      id_gestion: gestion.id_gestion,
+      anio: gestion.anio,
+      nombre: gestion.nombre,
+      estado: gestion.estado,
+      closed_at: gestion.closed_at,
+      areas: gestion.areas_gestion.map((area: areas_gestion) => ({
+        id_area_gestion: area.id_area_gestion,
+        id_gestion: area.id_gestion,
+        nombre_area: area.nombre_area,
+        nota_aprobacion: area.nota_aprobacion,
+        tipo: area.tipo,
+        niveles_target: area.niveles_target,
+        archived_at: area.archived_at,
+      })),
+    }));
   }
 
-  /**
-   * Obtener áreas de una gestión específica
-   */
   async getAreasByGestion(idGestion: number): Promise<AreaGestionHistorial[]> {
     const areas: areas_gestion[] = await this.prisma.areas_gestion.findMany({
       where: { id_gestion: idGestion },
@@ -309,9 +452,6 @@ export class GestionesService {
     }));
   }
 
-  /**
-   * Obtener lista de gestiones cerradas (solo metadatos)
-   */
   async getGestionesCerradas(): Promise<GestionCerradaMetadata[]> {
     const gestiones = await this.prisma.gestiones.findMany({
       where: { estado: estado_gestion.CERRADA },
@@ -336,11 +476,6 @@ export class GestionesService {
     }));
   }
 
-    /**
-   * Obtener equipo académico de la gestión abierta:
-   * - Responsables de área (de la gestión abierta)
-   * - Evaluadores (asignados a la gestión abierta)
-   */
   async getEquipoGestionActual(): Promise<{
     gestion: gestiones | null;
     responsables: {
@@ -497,5 +632,4 @@ export class GestionesService {
       evaluadores,
     };
   }
-
 }
