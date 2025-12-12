@@ -14,6 +14,7 @@ import * as bcrypt from 'bcrypt';
 import { EmailService } from '../email/email.service';
 import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
 import { Prisma } from '@prisma/client';
+
 // --- HELPERS DE TUS AMIGOS (Manejo de errores) ---
 function isKnownPrismaError(e: unknown): e is PrismaClientKnownRequestError {
   return e instanceof PrismaClientKnownRequestError;
@@ -121,7 +122,6 @@ export class ResponsablesService {
     }
   }
 
-  // src/responsables/responsables.service.ts
   async create(dto: CreateResponsableDto) {
     try {
       const gestion = await this.prisma.gestiones.findFirst({
@@ -129,24 +129,31 @@ export class ResponsablesService {
       });
       if (!gestion) throw new BadRequestException('No hay gestión abierta.');
 
-      // 1.1 Validar duplicados globales de CORREO y TELÉFONO
+      // ✅ Normalizar opcionales
+      const tel = dto.telefono?.trim() || undefined;
+      const institucion = dto.institucion?.trim() || undefined;
+      const especialidad = dto.especialidad?.trim() || undefined;
+      const correo = dto.correo?.trim();
+
+      // 1.1 Validar duplicados globales de CORREO
       const dupCorreo = await this.prisma.usuarios.findFirst({
-        where: { correo: dto.correo },
+        where: { correo },
       });
       if (dupCorreo) {
         throw new BadRequestException('El correo ya está registrado');
       }
 
-      const dupTelefono = await this.prisma.usuarios.findFirst({
-        where: { telefono: dto.telefono },
-      });
-      if (dupTelefono) {
-        throw new BadRequestException('El teléfono ya está registrado');
+      // ✅ 1.1 Validar duplicado de TELÉFONO SOLO si viene
+      if (tel) {
+        const dupTelefono = await this.prisma.usuarios.findFirst({
+          where: { telefono: tel },
+        });
+        if (dupTelefono) {
+          throw new BadRequestException('El teléfono ya está registrado');
+        }
       }
 
-      // 1.2 Validar CI solo en la gestión actual:
-      //     El CI se puede repetir entre gestiones distintas,
-      //     pero NO puede repetirse dentro de la misma gestión.
+      // 1.2 Validar CI solo en la gestión actual
       if (dto.ci && dto.ci.trim()) {
         const dupCiEnGestion = await this.prisma.responsables_area.findFirst({
           where: {
@@ -186,6 +193,7 @@ export class ResponsablesService {
           'El CI es obligatorio para la contraseña inicial.',
         );
       }
+
       const tempPassword = dto.ci.trim();
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
       const idRolResponsable = await this.getResponsableRoleId();
@@ -199,12 +207,15 @@ export class ResponsablesService {
         data: {
           nombre: dto.nombre,
           apellido: dto.apellido,
-          correo: dto.correo,
+          correo,
           hash_password: hashedPassword,
-          telefono: dto.telefono,
-          institucion: dto.institucion,
+
+          // ✅ Guardar opcionales sólo si existen
+          telefono: tel,
+          institucion,
+          especialidad,
+
           experiencia: experienciaFinal,
-          especialidad: dto.especialidad,
           ci: dto.ci,
           rol: { connect: { id_rol: idRolResponsable } },
         },
@@ -256,8 +267,7 @@ export class ResponsablesService {
       where: {
         id_gestion: gestion.id_gestion,
         id_area: filters.id_area ?? undefined,
-        activo:
-          typeof filters.activo === 'boolean' ? filters.activo : undefined,
+        activo: typeof filters.activo === 'boolean' ? filters.activo : undefined,
       },
       include: {
         usuario: true,
@@ -271,17 +281,22 @@ export class ResponsablesService {
       where: { estado: 'ABIERTA' },
     });
     if (!gestion) throw new BadRequestException('No hay gestión abierta.');
-    // TU LÓGICA DE UPDATE RESTAURADA
+
     const usuario = await this.prisma.usuarios.findUnique({
       where: { id_usuario: id },
     });
     if (!usuario) throw new NotFoundException('Responsable no encontrado');
 
+    // ✅ Normalizar teléfono por si llega vacío
+    const tel = dto.telefono?.trim() || undefined;
+
     // Validar duplicados en campos que cambian
-    if (dto.correo || dto.telefono) {
+    if (dto.correo || tel) {
       const orConditions: Prisma.usuariosWhereInput[] = [];
+
       if (dto.correo) orConditions.push({ correo: dto.correo });
-      if (dto.telefono) orConditions.push({ telefono: dto.telefono });
+      // ✅ SOLO si hay teléfono real
+      if (tel) orConditions.push({ telefono: tel });
 
       if (orConditions.length > 0) {
         const dup = await this.prisma.usuarios.findFirst({
@@ -293,13 +308,13 @@ export class ResponsablesService {
         if (dup) {
           if (dto.correo && dup.correo === dto.correo)
             throw new BadRequestException('El correo ya está registrado');
-          if (dto.telefono && dup.telefono === dto.telefono)
+          if (tel && dup.telefono === tel)
             throw new BadRequestException('El teléfono ya está registrado');
         }
       }
     }
 
-    // Validar CI solo a nivel de gestión (puede repetirse en otras gestiones)
+    // Validar CI solo a nivel de gestión
     if (dto.ci && dto.ci.trim()) {
       const dupCiEnGestion = await this.prisma.responsables_area.findFirst({
         where: {
@@ -319,10 +334,8 @@ export class ResponsablesService {
       }
     }
 
-    // Validar lógica de área única (TU CÓDIGO IMPORTANTE)
-    // Validar lógica de área única (TU CÓDIGO IMPORTANTE)
+    // Validar lógica de área única
     if (typeof dto.id_area === 'number') {
-      // Gestión abierta ya la tienes arriba
       const relacionActual = await this.prisma.responsables_area.findFirst({
         where: {
           id_usuario: id,
@@ -330,7 +343,6 @@ export class ResponsablesService {
         },
       });
 
-      // Validar que el el area nueva no se muestre ocupada en la gestion actual
       const ocupada = await this.prisma.responsables_area.findFirst({
         where: {
           id_area: dto.id_area,
@@ -347,13 +359,11 @@ export class ResponsablesService {
       }
 
       if (relacionActual) {
-        // Solo cambias el área, manteniendo id_gestion de la gestión abierta
         await this.prisma.responsables_area.update({
           where: { id_responsable_area: relacionActual.id_responsable_area },
           data: { id_area: dto.id_area },
         });
       } else {
-        // No existía para esta gestión -> creas una nueva relación
         await this.prisma.responsables_area.create({
           data: {
             id_usuario: id,
@@ -371,7 +381,10 @@ export class ResponsablesService {
         nombre: dto.nombre ?? undefined,
         apellido: dto.apellido ?? undefined,
         correo: dto.correo ?? undefined,
-        telefono: dto.telefono ?? undefined,
+
+        // ✅ usar tel normalizado
+        telefono: tel,
+
         institucion: dto.institucion ?? undefined,
         experiencia: dto.experiencia ?? undefined,
         especialidad: dto.especialidad ?? undefined,
@@ -383,13 +396,11 @@ export class ResponsablesService {
   async remove(id_usuario: number) {
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // Eliminar relaciones de responsable_area (todas las gestiones)
         await tx.responsables_area.deleteMany({
           where: { id_usuario },
         });
 
         try {
-          // Intentar borrar el usuario físicamente
           await tx.usuarios.delete({
             where: { id_usuario },
           });
@@ -400,7 +411,6 @@ export class ResponsablesService {
             message: 'Responsable eliminado correctamente',
           };
         } catch (e: unknown) {
-          // Si hay FKs (por ejemplo, usado en cierres), baja lógica
           if (isKnownPrismaError(e) && e.code === 'P2003') {
             await tx.usuarios.update({
               where: { id_usuario },
@@ -441,7 +451,7 @@ export class ResponsablesService {
     });
   }
 
-  // --- CHECKERS (TU CÓDIGO RESTAURADO) ---
+  // --- CHECKERS ---
   async checkTelefono(telefono: string) {
     const exists = await this.prisma.usuarios.findFirst({
       where: { telefono },

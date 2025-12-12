@@ -6,10 +6,10 @@ import {
   IsNumber,
   Min,
   Max,
-  IsOptional, // ⬅️ AÑADIDO
-  Matches, // ⬅️ AÑADIDO
+  IsOptional,
+  Matches,
 } from 'class-validator';
-import { Transform } from 'class-transformer'; // ⬅️ AÑADIDO
+import { Transform } from 'class-transformer';
 
 export class CreateResponsableDto {
   @IsNotEmpty()
@@ -28,9 +28,7 @@ export class CreateResponsableDto {
   correo: string;
 
   // ⬇️ Teléfono OPCIONAL: si viene, valida 8 dígitos y que empiece con 6 o 7
-  @Transform(({ value }) =>
-    value === '' || value === null ? undefined : value,
-  )
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
   @IsOptional()
   @IsString()
   @Matches(/^\d{8}$/, {
@@ -39,33 +37,27 @@ export class CreateResponsableDto {
   @Matches(/^[67]/, {
     message: 'el teléfono debe iniciar con 6 o 7',
   })
-  telefono: string;
+  telefono?: string; // ✅ ahora opcional
 
-  // Institución OPCIONAL (si no envías nada, no se valida)
-  @Transform(({ value }) =>
-    value === '' || value === null ? undefined : value,
-  )
+  // Institución OPCIONAL
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
   @IsOptional()
   @IsString()
-  institucion: string;
+  institucion?: string; // ✅ opcional
 
-  // Experiencia OPCIONAL (la lógica de default=1 se hará en el service)
-  @Transform(({ value }) =>
-    value === '' || value === null ? undefined : value,
-  )
+  // Experiencia OPCIONAL (default=1 en el service)
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
   @IsOptional()
   @IsNumber()
   @Min(0)
   @Max(50)
-  experiencia: number;
+  experiencia?: number; // ✅ opcional
 
   // Especialidad OPCIONAL
-  @Transform(({ value }) =>
-    value === '' || value === null ? undefined : value,
-  )
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
   @IsOptional()
   @IsString()
-  especialidad: string;
+  especialidad?: string; // ✅ opcional
 
   @IsNumber()
   id_area: number;
