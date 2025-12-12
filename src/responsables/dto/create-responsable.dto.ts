@@ -27,7 +27,7 @@ export class CreateResponsableDto {
   @IsEmail()
   correo: string;
 
-  // ⬇️ Teléfono OPCIONAL: si viene, valida 8 dígitos y que empiece con 6 o 7
+  // ⬇Teléfono OPCIONAL: si viene, valida 8 dígitos y que empiece con 6 o 7
   @Transform(({ value }) => (value === '' || value === null ? undefined : value))
   @IsOptional()
   @IsString()
@@ -37,13 +37,13 @@ export class CreateResponsableDto {
   @Matches(/^[67]/, {
     message: 'el teléfono debe iniciar con 6 o 7',
   })
-  telefono?: string; // ✅ ahora opcional
+  telefono?: string; // ahora opcional
 
   // Institución OPCIONAL
   @Transform(({ value }) => (value === '' || value === null ? undefined : value))
   @IsOptional()
   @IsString()
-  institucion?: string; // ✅ opcional
+  institucion?: string; // opcional
 
   // Experiencia OPCIONAL (default=1 en el service)
   @Transform(({ value }) => (value === '' || value === null ? undefined : value))
@@ -51,13 +51,13 @@ export class CreateResponsableDto {
   @IsNumber()
   @Min(0)
   @Max(50)
-  experiencia?: number; // ✅ opcional
+  experiencia?: number; // opcional
 
   // Especialidad OPCIONAL
   @Transform(({ value }) => (value === '' || value === null ? undefined : value))
   @IsOptional()
   @IsString()
-  especialidad?: string; // ✅ opcional
+  especialidad?: string; // opcional
 
   @IsNumber()
   id_area: number;
