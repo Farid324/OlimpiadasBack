@@ -344,7 +344,7 @@ export class CertificadosService {
       where: {
         id_area,
         id_nivel,
-        id_gestion: gestion.id_gestion, 
+        id_gestion: gestion.id_gestion,
       },
       orderBy: { id_medallero: 'desc' },
     });

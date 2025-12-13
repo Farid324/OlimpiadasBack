@@ -13,7 +13,7 @@ export interface ReporteCompetidor {
   escuela: string;
   departamento: string;
   anio: number; // Ahora se tomará de la inscripción
-  
+
   puntaje_clasificacion: number | null;
   puntaje_final: number | null;
   puntaje_mostrado: number;
@@ -23,12 +23,12 @@ export interface ReporteCompetidor {
 }
 
 export interface ReporteActualResponse {
-    competidores: ReporteCompetidor[];
-    estadisticas: {
-        total_inscritos: number;
-        medallas_oro: number;
-        medallas_plata: number;
-        medallas_bronce: number;
-        menciones: number;
-    };
+  competidores: ReporteCompetidor[];
+  estadisticas: {
+    total_inscritos: number;
+    medallas_oro: number;
+    medallas_plata: number;
+    medallas_bronce: number;
+    menciones: number;
+  };
 }

@@ -5,8 +5,8 @@ export type CeremoniaRow = {
   area: string;
   nivel: string;
   anio: number;
-  premio: string;            // ORO | PLATA | BRONCE | MENCION
-  ci: string | null;         // (no se usa en el Excel, pero lo mantenemos por compatibilidad)
+  premio: string; // ORO | PLATA | BRONCE | MENCION
+  ci: string | null; // (no se usa en el Excel, pero lo mantenemos por compatibilidad)
   competidor: string;
   departamento?: string;
   unidadEducativa?: string;
@@ -31,7 +31,7 @@ export async function buildCeremoniaExcel(
     'Área',
     'Nivel',
     'Premio',
-    'Olimpista',      // 👈 antes: "Competidor"
+    'Olimpista', // 👈 antes: "Competidor"
     'Departamento',
     'Unidad Educativa',
   ] as const;
@@ -48,7 +48,7 @@ export async function buildCeremoniaExcel(
   };
   const last = colLetter(totalCols);
 
-  ws.addRow([titulo]);    // A1
+  ws.addRow([titulo]); // A1
   ws.addRow([subtitulo]); // A2
   ws.mergeCells(`A1:${last}1`);
   ws.mergeCells(`A2:${last}2`);

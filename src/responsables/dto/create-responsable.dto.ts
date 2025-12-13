@@ -28,7 +28,9 @@ export class CreateResponsableDto {
   correo: string;
 
   // ⬇Teléfono OPCIONAL: si viene, valida 8 dígitos y que empiece con 6 o 7
-  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
   @IsOptional()
   @IsString()
   @Matches(/^\d{8}$/, {
@@ -40,13 +42,17 @@ export class CreateResponsableDto {
   telefono?: string; // ahora opcional
 
   // Institución OPCIONAL
-  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
   @IsOptional()
   @IsString()
   institucion?: string; // opcional
 
   // Experiencia OPCIONAL (default=1 en el service)
-  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
   @IsOptional()
   @IsNumber()
   @Min(0)
@@ -54,7 +60,9 @@ export class CreateResponsableDto {
   experiencia?: number; // opcional
 
   // Especialidad OPCIONAL
-  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
   @IsOptional()
   @IsString()
   especialidad?: string; // opcional

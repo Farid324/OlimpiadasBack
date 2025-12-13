@@ -57,7 +57,7 @@ import { GestionesModule } from './gestiones/gestiones.module';
     MedalleroConfigModule,
     PrincipalModule,
 
-    ControlFasesModule, 
+    ControlFasesModule,
     FasesModule,
     EvaluacionesAdminModule,
     NewPasswordModule,

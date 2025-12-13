@@ -5,9 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailerModule } from '@nestjs-modules/mailer';
 
 @Module({
-  imports: [
-    MailerModule,
-  ],
+  imports: [MailerModule],
   controllers: [PasswordRecoveryController],
   providers: [PasswordRecoveryService, PrismaService],
 })

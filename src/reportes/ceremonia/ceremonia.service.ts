@@ -45,7 +45,7 @@ export class CeremoniaService {
       nivel: p.nivel,
       anio,
       premio: p.estadoPremio, // ORO, PLATA, BRONCE, MENCION
-      ci: null,               // opcional, no se usa en Excel
+      ci: null, // opcional, no se usa en Excel
       competidor: p.nombreCompleto,
       departamento: p.departamento,
       unidadEducativa: p.unidadEducativa,

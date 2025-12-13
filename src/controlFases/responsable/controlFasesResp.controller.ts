@@ -16,7 +16,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { FasesService } from '../../fases/fases.service';
 import { PhaseType } from '../../fases/dto/close-phase.dto';
-import { ADMIN, RESPONSABLE } from '../../auth/constants';
+import { RESPONSABLE } from '../../auth/constants';
 import { Roles } from '../../common/decorators/roles.decorator';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -32,7 +32,7 @@ export class ControlFasesRespController {
   async getMisFases(@Req() req: Request, @Query('type') type?: string) {
     const anyReq = req as any;
     const u = anyReq?.user ?? {};
-    let userId: number | null =
+    const userId: number | null =
       typeof u?.id_usuario === 'number'
         ? u.id_usuario
         : typeof u?.id === 'number'

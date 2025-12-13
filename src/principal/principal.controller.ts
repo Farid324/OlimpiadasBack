@@ -1,5 +1,11 @@
 // src/principal/principal.controller.ts
-import { Controller, Get, Query, ParseIntPipe, BadRequestException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Query,
+  ParseIntPipe,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrincipalService } from './principal.service';
 import { CompetidorListadoDto, MedalleroResumenDto } from './dto';
 import { tipo_premio } from '@prisma/client';
@@ -24,7 +30,9 @@ export class PrincipalController {
   ): Promise<CompetidorListadoDto[]> {
     // valida medallaTipo
     if (medallaTipo && !Object.values(tipo_premio).includes(medallaTipo)) {
-      throw new BadRequestException('El tipo de medalla proporcionado no es válido.');
+      throw new BadRequestException(
+        'El tipo de medalla proporcionado no es válido.',
+      );
     }
     return this.principalService.getCompetidoresFaseFinal(idArea, medallaTipo);
   }
@@ -49,8 +57,14 @@ export class PrincipalController {
     @Query('medallaTipo') medallaTipo?: tipo_premio,
   ): Promise<CompetidorListadoDto[]> {
     if (medallaTipo && !Object.values(tipo_premio).includes(medallaTipo)) {
-      throw new BadRequestException('El tipo de medalla proporcionado no es válido.');
+      throw new BadRequestException(
+        'El tipo de medalla proporcionado no es válido.',
+      );
     }
-    return this.principalService.getCompetidoresHistorico(anio, idArea, medallaTipo);
+    return this.principalService.getCompetidoresHistorico(
+      anio,
+      idArea,
+      medallaTipo,
+    );
   }
 }

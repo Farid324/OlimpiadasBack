@@ -25,8 +25,7 @@ export class PasswordRecoveryService {
   }
 
   private generateTempPassword(length = 10): string {
-    const chars =
-      'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
     let result = '';
     for (let i = 0; i < length; i += 1) {
       const idx = Math.floor(Math.random() * chars.length);
