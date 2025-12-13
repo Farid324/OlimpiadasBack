@@ -35,7 +35,7 @@ export class PrincipalService {
     return gestion ?? { id_gestion: 0, anio: new Date().getFullYear() };
   }
 
-  // --- Obtener ids áreas cerradas
+  // --- Obtener ids áreas cerradas (Se mantiene para Clasificatoria e Histórico)
   private async getIdsAreasCerradas(idGestion: number, idFase: number): Promise<number[]> {
     if (!idGestion) return [];
     const cierresValidados = await this.prisma.cierres_fase.findMany({
@@ -55,16 +55,26 @@ export class PrincipalService {
     inscripcion: InscripcionIncluida,
     faseActual: 'CLASIFICATORIA' | 'FINAL'
   ): CompetidorListadoDto {
-    const puntajeClasificacion = inscripcion.puntaje_clasificacion ? Number(inscripcion.puntaje_clasificacion) : null;
-    const puntajeFinal = inscripcion.puntaje_final ? Number(inscripcion.puntaje_final) : null;
+    // === CORRECCIÓN APLICADA AQUÍ: Se fuerza la conversión a string antes de Number ===
+    const puntajeClasificacion = inscripcion.puntaje_clasificacion 
+      ? Number(inscripcion.puntaje_clasificacion.toString()) 
+      : null;
+      
+    const puntajeFinal = inscripcion.puntaje_final 
+      ? Number(inscripcion.puntaje_final.toString()) 
+      : null;
+    // =================================================================================
 
-    let puntaje: number | null = faseActual === 'CLASIFICATORIA' ? puntajeClasificacion : (puntajeFinal ?? puntajeClasificacion);
+    let puntaje: number | null = faseActual === 'CLASIFICATORIA' 
+                                 ? puntajeClasificacion 
+                                 : (puntajeFinal ?? puntajeClasificacion); // Usa Final, con Clasificatoria como fallback
 
     // Selección de medalla solo en fase FINAL
     let medalla: tipo_premio | null = null;
     if (faseActual === 'FINAL') {
       const premiosFinal = inscripcion.premios.filter(p => p.fuente === 'FINAL');
-      const premio = premiosFinal.length > 0 ? premiosFinal[0] : inscripcion.premios[0] ?? null;
+      // Asegura usar el premio con fuente 'FINAL' si existe, si no, el primer premio
+      const premio = premiosFinal.length > 0 ? premiosFinal[0] : inscripcion.premios[0] ?? null; 
       medalla = premio?.tipo ?? null;
     }
 
@@ -90,6 +100,7 @@ export class PrincipalService {
     const faseClasificatoria = await this.prisma.fases.findFirst({ where: { nombre_fase: 'Clasificatoria' } });
     const idFaseClasif = faseClasificatoria?.id_fase ?? 1;
 
+    // Filtro basado en cierres_fase VALIDADO
     const idAreasCerradas = await this.getIdsAreasCerradas(idGestion, idFaseClasif);
     if (idAreasCerradas.length === 0 && !idArea) return [];
 
@@ -112,27 +123,33 @@ export class PrincipalService {
     return inscripciones.map(i => this.mapInscripcionToDto(i, 'CLASIFICATORIA'));
   }
 
+  /**
+   * ✅ Filtro simplificado: solo requiere CLASIFICADO y puntaje_final IS NOT NULL.
+   * La dependencia de estado_inscripcion se ha comentado en la corrección anterior.
+   */
   async getCompetidoresFaseFinal(
     idArea?: number,
     medallaTipo?: tipo_premio | null
   ): Promise<CompetidorListadoDto[]> {
     const { id_gestion: idGestion } = await this.obtenerGestionActiva();
 
-    const faseFinal = await this.prisma.fases.findFirst({ where: { nombre_fase: 'Final' } });
-    const idFaseFinal = faseFinal?.id_fase ?? 2;
-
-    const idAreasCerradas = await this.getIdsAreasCerradas(idGestion, idFaseFinal);
-    if (idAreasCerradas.length === 0 && !idArea) return [];
-
     const where: Prisma.inscripcionesWhereInput = {
       id_gestion: idGestion,
-      estado_inscripcion: { in: [estado_inscripcion.CLASIFICADO, estado_inscripcion.FINALISTA, estado_inscripcion.PREMIADO] },
-      puntaje_final: { not: null },
+      
+      // Filtros clave para mostrar resultados de la Fase Final:
+      clasificacion: 'CLASIFICADO', 
+      puntaje_final: { not: null }, 
+
+      // Se mantiene comentado el filtro de estado_inscripcion para mayor visibilidad
+      // estado_inscripcion: { 
+      //   in: [estado_inscripcion.CLASIFICADO, estado_inscripcion.FINALISTA, estado_inscripcion.PREMIADO] 
+      // },
     };
 
-    if (idArea) where.id_area = idArea;
-    else where.id_area = { in: idAreasCerradas };
-
+    if (idArea) {
+      where.id_area = idArea;
+    }
+    
     if (medallaTipo) {
       where.premios = {
         some: { tipo: medallaTipo, fuente: 'FINAL', id_gestion: idGestion },
@@ -146,6 +163,10 @@ export class PrincipalService {
       orderBy: { puntaje_final: 'desc' },
       include,
     });
+
+    // Añadimos un log para verificar si la consulta devuelve resultados antes del mapeo
+    console.log(`[PrincipalService] Resultados Fase Final encontrados: ${inscripciones.length}`);
+
 
     return inscripciones.map(i => this.mapInscripcionToDto(i, 'FINAL'));
   }
@@ -202,6 +223,7 @@ export class PrincipalService {
       _count: { tipo: true },
     });
 
+    // Se asume que "clasificando" aquí se refiere a los finalistas que aún no tienen premio
     const countClasificando = await this.prisma.inscripciones.count({
       where: { id_gestion: idGestion, estado_inscripcion: estado_inscripcion.FINALISTA, puntaje_clasificacion: { not: null } },
     });
