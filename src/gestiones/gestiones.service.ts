@@ -1,4 +1,4 @@
-// src/gestiones/gestiones.service.ts
+// /src/gestiones/gestiones.service.ts
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
@@ -45,9 +45,29 @@ type CloseGestionResult = {
   areasArchivadas: number;
 };
 
-// Tipo para gestión con áreas incluidas
 type GestionWithAreas = gestiones & {
   areas_gestion: areas_gestion[];
+};
+
+// ===================== NUEVOS TIPOS =====================
+
+type OlimpistaRowDto = {
+  id: number;
+  nombreCompleto: string;
+  area: string;
+  nivel: string;
+  puntuacion: number | null;
+  unidadEducativa: string;
+  departamento: string;
+};
+
+type OlimpistaFinalistaRowDto = OlimpistaRowDto & {
+  medalla: tipo_premio | null;
+};
+
+type OlimpistasHistorialParams = {
+  area?: string;
+  q?: string;
 };
 
 @Injectable()
@@ -59,7 +79,6 @@ export class GestionesService {
       where: { estado: estado_gestion.ABIERTA },
       orderBy: { created_at: 'desc' },
     });
-
     return gestion ?? null;
   }
 
@@ -69,11 +88,6 @@ export class GestionesService {
     });
   }
 
-  /**
-   * Regla para poder cerrar gestión:
-   * - Debe existir al menos un cierre validado para CLASIFICATORIA y FINAL
-   * - No debe existir ningún cierre en estado distinto de validado
-   */
   async getCloseEligibility(): Promise<{
     canClose: boolean;
     reason: string | null;
@@ -167,24 +181,17 @@ export class GestionesService {
    * ===========================
    * MATERIALIZACIÓN PREMIADOS
    * ===========================
-   * Persiste medallas/premios de la FASE FINAL en `premios_otorgados`
-   * y marca inscripciones ganadoras con `estado_inscripcion = PREMIADO`.
-   *
-   * Se ejecuta al CERRAR GESTIÓN para que `principal` (home)
-   * pueda consultar históricos sin recalcular en runtime.
    */
   private async materializarPremiadosFinal(
     tx: Prisma.TransactionClient,
     idGestion: number,
   ): Promise<void> {
-    // 1) Fase FINAL
     const faseFinal = await tx.fases.findFirst({
       where: { nombre_fase: 'FINAL' },
       select: { id_fase: true },
     });
     if (!faseFinal) return;
 
-    // 2) Config de medallero por área/nivel (OJO: campos en plural)
     const configs = await tx.medallero_config.findMany({
       where: { id_gestion: idGestion },
       select: {
@@ -199,19 +206,17 @@ export class GestionesService {
 
     if (configs.length === 0) return;
 
-    // 3) Idempotencia: borrar premios FINAL de esta gestión y recalcular
+    // Idempotencia: borrar premios FINAL de esta gestión y recalcular
     await tx.premios_otorgados.deleteMany({
       where: { id_gestion: idGestion, fuente: 'FINAL' },
     });
 
-    // (Opcional y seguro) resetear estado PREMIADO a FINALISTA para recalcular
-    // No rompe nada si tu flujo ya usa FINALISTA/CLASIFICADO.
+    // resetear estado PREMIADO a FINALISTA para recalcular
     await tx.inscripciones.updateMany({
       where: { id_gestion: idGestion, estado_inscripcion: 'PREMIADO' },
       data: { estado_inscripcion: 'FINALISTA' },
     });
 
-    // 4) Recalcular por cada (área, nivel)
     for (const cfg of configs) {
       const oros = cfg.oros ?? 0;
       const platas = cfg.platas ?? 0;
@@ -251,41 +256,33 @@ export class GestionesService {
 
       const top = elegibles.slice(0, total);
 
-      const asignaciones: Array<{
-        id_inscripcion: number;
-        tipo: tipo_premio;
-      }> = [];
-
+      const asignaciones: Array<{ id_inscripcion: number; tipo: tipo_premio }> =
+        [];
       let idx = 0;
 
-      for (let i = 0; i < oros && idx < top.length; i++, idx++) {
-        asignaciones.push({
-          id_inscripcion: top[idx].id_inscripcion,
-          tipo: 'ORO',
-        });
-      }
-      for (let i = 0; i < platas && idx < top.length; i++, idx++) {
+      for (let i = 0; i < oros && idx < top.length; i++, idx++)
+        asignaciones.push({ id_inscripcion: top[idx].id_inscripcion, tipo: 'ORO' });
+
+      for (let i = 0; i < platas && idx < top.length; i++, idx++)
         asignaciones.push({
           id_inscripcion: top[idx].id_inscripcion,
           tipo: 'PLATA',
         });
-      }
-      for (let i = 0; i < bronces && idx < top.length; i++, idx++) {
+
+      for (let i = 0; i < bronces && idx < top.length; i++, idx++)
         asignaciones.push({
           id_inscripcion: top[idx].id_inscripcion,
           tipo: 'BRONCE',
         });
-      }
-      for (let i = 0; i < menciones && idx < top.length; i++, idx++) {
+
+      for (let i = 0; i < menciones && idx < top.length; i++, idx++)
         asignaciones.push({
           id_inscripcion: top[idx].id_inscripcion,
           tipo: 'MENCION',
         });
-      }
 
       if (asignaciones.length === 0) continue;
 
-      // 5) Insertar premios otorgados (FINAL) -> incluye id_area e id_nivel (requeridos)
       await tx.premios_otorgados.createMany({
         data: asignaciones.map((a) => ({
           id_gestion: idGestion,
@@ -297,7 +294,6 @@ export class GestionesService {
         })),
       });
 
-      // 6) Marcar ganadores como PREMIADO
       await tx.inscripciones.updateMany({
         where: {
           id_gestion: idGestion,
@@ -311,10 +307,6 @@ export class GestionesService {
     }
   }
 
-  /**
-   * Cierra la gestión actual y archiva las áreas activas.
-   * Además materializa premiados para histórico (principal/home).
-   */
   async closeCurrentGestion(): Promise<CloseGestionResult> {
     const current = await this.getCurrentOpenGestion();
     if (!current) {
@@ -330,10 +322,9 @@ export class GestionesService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      // 0) MATERIALIZAR PREMIADOS (antes de cerrar)
+      // MATERIALIZAR PREMIADOS ANTES DE CERRAR
       await this.materializarPremiadosFinal(tx, current.id_gestion);
 
-      // 1) Obtener todas las áreas activas
       const areasActivas = await tx.areas.findMany({
         where: { activo: true },
         select: {
@@ -344,7 +335,6 @@ export class GestionesService {
         },
       });
 
-      // 2) Archivar las áreas en areas_gestion
       if (areasActivas.length > 0) {
         const areasToArchive = areasActivas.map((area) => ({
           id_gestion: current.id_gestion,
@@ -359,7 +349,6 @@ export class GestionesService {
         });
       }
 
-      // 3) Desactivar todas las áreas activas (soft delete)
       await tx.areas.updateMany({
         where: { activo: true },
         data: {
@@ -368,7 +357,6 @@ export class GestionesService {
         },
       });
 
-      // 4) Cerrar la gestión
       const updatedGestion = await tx.gestiones.update({
         where: { id_gestion: current.id_gestion },
         data: {
@@ -475,6 +463,290 @@ export class GestionesService {
       total_areas: g._count.areas_gestion,
     }));
   }
+
+  // ===================== HISTORIAL OLIMPISTAS =====================
+
+  async getOlimpistasByGestionCerrada(
+    idGestion: number,
+    params: OlimpistasHistorialParams,
+  ): Promise<OlimpistaRowDto[]> {
+    const gestion = await this.prisma.gestiones.findUnique({
+      where: { id_gestion: idGestion },
+      select: { estado: true },
+    });
+
+    if (!gestion || gestion.estado !== estado_gestion.CERRADA) return [];
+
+    const { area, q } = params ?? {};
+
+    const where: Prisma.inscripcionesWhereInput = {
+      id_gestion: idGestion,
+      ...(area
+        ? { area: { nombre_area: { equals: area, mode: 'insensitive' } } }
+        : {}),
+      ...(q
+        ? {
+            OR: [
+              { competidor: { nombres: { contains: q, mode: 'insensitive' } } },
+              { competidor: { apellidos: { contains: q, mode: 'insensitive' } } },
+              { competidor: { escuela: { contains: q, mode: 'insensitive' } } },
+              { competidor: { departamento: { contains: q, mode: 'insensitive' } } },
+              { competidor: { ci: { contains: q, mode: 'insensitive' } } },
+              { area: { nombre_area: { contains: q, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
+
+    const insc = await this.prisma.inscripciones.findMany({
+      where,
+      include: {
+        competidor: true,
+        area: true,
+        nivel: true,
+        evaluaciones: { select: { nota: true } },
+      },
+      orderBy: { id_inscripcion: 'desc' },
+    });
+
+    return insc.map((it) => {
+      const manual =
+        it.puntaje_clasificacion !== null && it.puntaje_clasificacion !== undefined
+          ? Number(it.puntaje_clasificacion)
+          : null;
+
+      const avg =
+        (manual === null || manual === undefined) && it.evaluaciones.length
+          ? it.evaluaciones.reduce((s, e) => s + Number(e.nota), 0) /
+            it.evaluaciones.length
+          : null;
+
+      const puntuacion = manual ?? avg ?? null;
+
+      return {
+        id: it.id_inscripcion,
+        nombreCompleto: `${it.competidor.nombres} ${it.competidor.apellidos}`.trim(),
+        area: it.area.nombre_area,
+        nivel: it.nivel.nombre_nivel,
+        puntuacion,
+        unidadEducativa: it.competidor.escuela ?? '',
+        departamento: it.competidor.departamento ?? '',
+      };
+    });
+  }
+
+  /**
+   * CLASIFICADOS por gestión cerrada (TAB CLASIFICADOS)
+   * - clasificacion = 'CLASIFICADO'
+   * - orden por puntaje_clasificacion desc
+   */
+  async getOlimpistasClasificadosByGestionCerrada(
+    idGestion: number,
+    params: OlimpistasHistorialParams,
+  ): Promise<OlimpistaRowDto[]> {
+    const gestion = await this.prisma.gestiones.findUnique({
+      where: { id_gestion: idGestion },
+      select: { estado: true },
+    });
+
+    if (!gestion || gestion.estado !== estado_gestion.CERRADA) return [];
+
+    const { area, q } = params ?? {};
+
+    const where: Prisma.inscripcionesWhereInput = {
+      id_gestion: idGestion,
+      clasificacion: 'CLASIFICADO',
+      ...(area
+        ? { area: { nombre_area: { equals: area, mode: 'insensitive' } } }
+        : {}),
+      ...(q
+        ? {
+            OR: [
+              { competidor: { nombres: { contains: q, mode: 'insensitive' } } },
+              { competidor: { apellidos: { contains: q, mode: 'insensitive' } } },
+              { competidor: { escuela: { contains: q, mode: 'insensitive' } } },
+              { competidor: { departamento: { contains: q, mode: 'insensitive' } } },
+              { competidor: { ci: { contains: q, mode: 'insensitive' } } },
+              { area: { nombre_area: { contains: q, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
+
+    const insc = await this.prisma.inscripciones.findMany({
+      where,
+      include: {
+        competidor: true,
+        area: true,
+        nivel: true,
+        evaluaciones: { select: { nota: true } },
+      },
+      orderBy: [
+        { puntaje_clasificacion: 'desc' },
+        { id_inscripcion: 'desc' },
+      ],
+    });
+
+    return insc.map((it) => {
+      const manual =
+        it.puntaje_clasificacion !== null && it.puntaje_clasificacion !== undefined
+          ? Number(it.puntaje_clasificacion)
+          : null;
+
+      const avg =
+        (manual === null || manual === undefined) && it.evaluaciones.length
+          ? it.evaluaciones.reduce((s, e) => s + Number(e.nota), 0) /
+            it.evaluaciones.length
+          : null;
+
+      const puntuacion = manual ?? avg ?? null;
+
+      return {
+        id: it.id_inscripcion,
+        nombreCompleto: `${it.competidor.nombres} ${it.competidor.apellidos}`.trim(),
+        area: it.area.nombre_area,
+        nivel: it.nivel.nombre_nivel,
+        puntuacion,
+        unidadEducativa: it.competidor.escuela ?? '',
+        departamento: it.competidor.departamento ?? '',
+      };
+    });
+  }
+
+  /**
+   * FINALISTAS por gestión cerrada (TAB FINALISTAS) + medalla materializada
+   * - incluye quienes tengan evaluación FINAL FIRMADA o estado FINALISTA/PREMIADO
+   * - añade medalla desde premios_otorgados (fuente FINAL)
+   * - orden por puntaje_final desc
+   */
+  async getOlimpistasFinalistasByGestionCerrada(
+    idGestion: number,
+    params: OlimpistasHistorialParams,
+  ): Promise<OlimpistaFinalistaRowDto[]> {
+    const gestion = await this.prisma.gestiones.findUnique({
+      where: { id_gestion: idGestion },
+      select: { estado: true },
+    });
+
+    if (!gestion || gestion.estado !== estado_gestion.CERRADA) return [];
+
+    const { area, q } = params ?? {};
+
+    const faseFinal = await this.prisma.fases.findFirst({
+      where: { nombre_fase: 'FINAL' },
+      select: { id_fase: true },
+    });
+    if (!faseFinal) return [];
+
+    // Premios materializados al cerrar gestión
+    const premios = await this.prisma.premios_otorgados.findMany({
+      where: { id_gestion: idGestion, fuente: 'FINAL' },
+      select: { id_inscripcion: true, tipo: true },
+    });
+
+    const medallaByInsc = new Map<number, tipo_premio>();
+    for (const p of premios) {
+      if (p?.id_inscripcion && p?.tipo) medallaByInsc.set(p.id_inscripcion, p.tipo);
+    }
+
+    const where: Prisma.inscripcionesWhereInput = {
+      id_gestion: idGestion,
+      ...(area
+        ? { area: { nombre_area: { equals: area, mode: 'insensitive' } } }
+        : {}),
+      ...(q
+        ? {
+            OR: [
+              { competidor: { nombres: { contains: q, mode: 'insensitive' } } },
+              { competidor: { apellidos: { contains: q, mode: 'insensitive' } } },
+              { competidor: { escuela: { contains: q, mode: 'insensitive' } } },
+              { competidor: { departamento: { contains: q, mode: 'insensitive' } } },
+              { competidor: { ci: { contains: q, mode: 'insensitive' } } },
+              { area: { nombre_area: { contains: q, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+      OR: [
+        {
+          evaluaciones: {
+            some: {
+              id_fase: faseFinal.id_fase,
+              estado_registro: 'FIRMADA',
+            },
+          },
+        },
+        { estado_inscripcion: 'FINALISTA' },
+        { estado_inscripcion: 'PREMIADO' },
+      ],
+    };
+
+    const insc = await this.prisma.inscripciones.findMany({
+      where,
+      include: {
+        competidor: true,
+        area: true,
+        nivel: true,
+        evaluaciones: { select: { nota: true, id_fase: true } },
+      },
+      orderBy: [
+        { puntaje_final: 'desc' },
+        { puntaje_clasificacion: 'desc' },
+        { id_inscripcion: 'asc' },
+      ],
+    });
+
+    return insc.map((it) => {
+      const pf =
+        it.puntaje_final !== null && it.puntaje_final !== undefined
+          ? Number(it.puntaje_final)
+          : null;
+
+      const pc =
+        it.puntaje_clasificacion !== null && it.puntaje_clasificacion !== undefined
+          ? Number(it.puntaje_clasificacion)
+          : null;
+
+      // si no hay puntaje_final, usamos promedio de evaluaciones como fallback
+      const avg =
+        (pf === null || pf === undefined) && it.evaluaciones.length
+          ? it.evaluaciones.reduce((s, e) => s + Number(e.nota), 0) /
+            it.evaluaciones.length
+          : null;
+
+      const puntuacion = pf ?? pc ?? avg ?? null;
+
+      return {
+        id: it.id_inscripcion,
+        nombreCompleto: `${it.competidor.nombres} ${it.competidor.apellidos}`.trim(),
+        area: it.area.nombre_area,
+        nivel: it.nivel.nombre_nivel,
+        puntuacion,
+        unidadEducativa: it.competidor.escuela ?? '',
+        departamento: it.competidor.departamento ?? '',
+        medalla: medallaByInsc.get(it.id_inscripcion) ?? null,
+      };
+    });
+  }
+
+  async getAreasDisponiblesDeGestionCerrada(idGestion: number): Promise<string[]> {
+    const gestion = await this.prisma.gestiones.findUnique({
+      where: { id_gestion: idGestion },
+      select: { estado: true },
+    });
+
+    if (!gestion || gestion.estado !== estado_gestion.CERRADA) return [];
+
+    const rows = await this.prisma.inscripciones.findMany({
+      where: { id_gestion: idGestion },
+      select: { area: { select: { nombre_area: true } } },
+      distinct: ['id_area'],
+      orderBy: { area: { nombre_area: 'asc' } },
+    });
+
+    return rows.map((r) => r.area.nombre_area);
+  }
+
+  // ===================== TU CÓDIGO EXISTENTE: EQUIPO ACADÉMICO =====================
 
   async getEquipoGestionActual(): Promise<{
     gestion: gestiones | null;

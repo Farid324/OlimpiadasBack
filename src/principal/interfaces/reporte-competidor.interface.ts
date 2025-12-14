@@ -1,4 +1,4 @@
-// src/principal/interfaces/reporte-competidor.interface.ts (Asegúrate de que tus tipos son así)
+// src/principal/interfaces/reporte-competidor.interface.ts
 
 import { tipo_premio, clasificacion_estado } from '@prisma/client';
 
