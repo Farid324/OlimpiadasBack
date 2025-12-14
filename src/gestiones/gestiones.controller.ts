@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Post,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { GestionesService } from './gestiones.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -14,6 +15,7 @@ import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { ADMIN, RESPONSABLE } from '../auth/constants';
 import { OpenGestionDto } from './dto/open-gestion.dto';
+import { EquipoGestionQueryDto } from './dto/equipo-gestion.query';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('gestiones')
@@ -104,5 +106,14 @@ export class GestionesController {
   @Roles(ADMIN)
   async getEquipoActual() {
     return this.gestiones.getEquipoGestionActual();
+  }
+
+  @Get('equipo')
+  @Roles(ADMIN)
+  async getEquipoByGestion(@Query() query: EquipoGestionQueryDto) {
+    if (!query.id_gestion) {
+      return this.gestiones.getEquipoGestionActual();
+    }
+    return this.gestiones.getEquipoByGestionId(query.id_gestion);
   }
 }
