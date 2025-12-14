@@ -27,45 +27,55 @@ export class CreateResponsableDto {
   @IsEmail()
   correo: string;
 
-  // ⬇Teléfono OPCIONAL: si viene, valida 8 dígitos y que empiece con 6 o 7
+  // Teléfono OPCIONAL
   @Transform(({ value }) =>
-    value === '' || value === null ? undefined : value,
+    value === '' || value === null || value === undefined
+      ? undefined
+      : String(value).trim() === ''
+        ? undefined
+        : String(value).trim(),
   )
   @IsOptional()
   @IsString()
-  @Matches(/^\d{8}$/, {
-    message: 'el teléfono debe tener exactamente 8 dígitos',
-  })
-  @Matches(/^[67]/, {
-    message: 'el teléfono debe iniciar con 6 o 7',
-  })
-  telefono?: string; // ahora opcional
+  @Matches(/^\d{8}$/, { message: 'el teléfono debe tener exactamente 8 dígitos' })
+  @Matches(/^[67]/, { message: 'el teléfono debe iniciar con 6 o 7' })
+  telefono?: string;
 
-  // Institución OPCIONAL
   @Transform(({ value }) =>
-    value === '' || value === null ? undefined : value,
+    value === '' || value === null || value === undefined
+      ? undefined
+      : String(value).trim() === ''
+        ? undefined
+        : String(value).trim(),
   )
   @IsOptional()
   @IsString()
-  institucion?: string; // opcional
+  institucion?: string;
 
-  // Experiencia OPCIONAL (default=1 en el service)
-  @Transform(({ value }) =>
-    value === '' || value === null ? undefined : value,
-  )
+  // Experiencia OPCIONAL (si llega string, conviértelo a number)
+  @Transform(({ value }) => {
+    if (value === '' || value === null || value === undefined) return undefined;
+    const v = String(value).trim();
+    if (v === '') return undefined;
+    const n = Number(v);
+    return Number.isNaN(n) ? value : n;
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
   @Max(50)
-  experiencia?: number; // opcional
+  experiencia?: number;
 
-  // Especialidad OPCIONAL
   @Transform(({ value }) =>
-    value === '' || value === null ? undefined : value,
+    value === '' || value === null || value === undefined
+      ? undefined
+      : String(value).trim() === ''
+        ? undefined
+        : String(value).trim(),
   )
   @IsOptional()
   @IsString()
-  especialidad?: string; // opcional
+  especialidad?: string;
 
   @IsNumber()
   id_area: number;
