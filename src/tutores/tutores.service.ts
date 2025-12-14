@@ -1,10 +1,6 @@
 //src/tutores/tutores.service.ts
 
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTutorDto } from './dto';
 import { Prisma } from '@prisma/client';

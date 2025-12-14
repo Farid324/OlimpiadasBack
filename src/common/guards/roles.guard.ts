@@ -1,25 +1,37 @@
 // src/common/guards/roles.guard.ts
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
-import type { JwtPayload } from '../../interfaces/jwt-payload.interface';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(ctx: ExecutionContext): boolean {
-    const required = this.reflector.getAllAndOverride<
-      readonly string[] | undefined
-    >(ROLES_KEY, [ctx.getHandler(), ctx.getClass()]);
-
+    const required = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
+      ctx.getHandler(),
+      ctx.getClass(),
+    ]);
     if (!required || required.length === 0) return true;
 
-    // Tipamos el request para que user NO sea any
-    const request = ctx.switchToHttp().getRequest<{ user?: JwtPayload }>();
-    const user = request.user;
-    if (!user?.roleName) return false;
+    const req = ctx.switchToHttp().getRequest();
+    const user = req.user as { role?: string };
 
-    return required.includes(user.roleName);
+    if (!user?.role) {
+      throw new ForbiddenException('No se pudo determinar el rol del usuario.');
+    }
+
+    const ok = required.includes(user.role);
+    if (!ok) {
+      throw new ForbiddenException(
+        `Acceso denegado. Requiere un: ${required.join(', ')}`,
+      );
+    }
+    return true;
   }
 }

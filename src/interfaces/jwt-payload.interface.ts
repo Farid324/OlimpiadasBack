@@ -1,7 +1,10 @@
 // src/interfaces/jwt-payload.interface.ts
+
+export type RoleName = 'ADMINISTRADOR' | 'EVALUADOR' | 'RESPONSABLE_DE_AREA';
+
 export interface JwtPayload {
-  sub: string; // id_usuario stringificado
+  sub: string;
   email: string;
-  roleId: string;
-  roleName: 'ADMINISTRADOR' | 'EVALUADOR' | 'RESPONSABLE_DE_AREA';
+  role: RoleName;
+  roleId?: string;
 }

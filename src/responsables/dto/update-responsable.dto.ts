@@ -1,27 +1,45 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateResponsableDto } from './create-responsable.dto';
-import { IsOptional, IsString, IsEmail, Matches, IsInt, Min, Max } from 'class-validator';
+//src/responsables/dto/update-responsable.dto.ts
+import {
+  IsEmail,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Length,
+  Matches,
+  Min,
+  Max,
+} from 'class-validator';
+import { Transform } from 'class-transformer'; // AÑADIDO
 
-export class UpdateResponsableDto extends PartialType(CreateResponsableDto) {
+export class UpdateResponsableDto {
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, { message: 'El nombre solo puede contener letras' })
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/)
   nombre?: string;
 
   @IsOptional()
   @IsString()
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]*$/)
   apellido?: string;
 
   @IsOptional()
-  @IsEmail({}, { message: 'Debe ingresar un correo válido' })
+  @IsEmail()
   correo?: string;
 
+  // Teléfono: sólo se valida si NO viene vacío.
   @IsOptional()
+  @Transform(({ value }) =>
+    value === '' || value === null || value === undefined ? undefined : value,
+  )
   @IsString()
+  @Matches(/^\d+$/)
+  @Length(8, 8)
   telefono?: string;
 
   @IsOptional()
   @IsString()
+  @Matches(/^\d+$/)
+  @Length(6, 8)
   ci?: string;
 
   @IsOptional()
@@ -33,12 +51,20 @@ export class UpdateResponsableDto extends PartialType(CreateResponsableDto) {
   especialidad?: string;
 
   @IsOptional()
-  @IsInt()
-  @Min(1, { message: 'La experiencia mínima es 1 año' })
-  @Max(30, { message: 'La experiencia máxima es 30 años' })
+  @Transform(({ value }) => {
+    if (value === '' || value === null || value === undefined) {
+      return undefined; // no actualizar experiencia
+    }
+    const n = Number(value);
+    return Number.isNaN(n) ? value : n;
+  })
+  @IsNumber()
+  @Min(1)
+  @Max(30)
   experiencia?: number;
 
+  // Permitir cambiar el área al editar (ya lo tenías)
   @IsOptional()
-  @IsInt()
+  @IsNumber()
   id_area?: number;
 }

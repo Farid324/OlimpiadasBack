@@ -3,6 +3,7 @@
 import { IsOptional, IsString } from 'class-validator';
 
 export class GetTutoresQueryDto {
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   q?: string; // búsqueda libre: nombre, ci, correo, teléfono, unidad educativa
 }

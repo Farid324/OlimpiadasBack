@@ -1,4 +1,4 @@
-// src/evaluadores/dto/create-evaluador.dto.ts
+//src/evaluadores/dto/create-evaluador.dto.ts
 import {
   IsArray,
   ArrayNotEmpty,
@@ -12,51 +12,83 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 
 export class CreateEvaluadorDto {
   // Opción A: puedes enviar nombre y apellido por separado…
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, { message: 'nombre solo permite letras y espacios' })
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, {
+    message: 'nombre solo permite letras y espacios',
+  })
   nombre?: string;
 
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, { message: 'apellido solo permite letras y espacios' })
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, {
+    message: 'apellido solo permite letras y espacios',
+  })
   apellido?: string;
 
   // …u Opción B: enviar nombreCompleto (lo estás usando en el modal)
   @IsOptional()
   @IsString()
-  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, { message: 'nombreCompleto solo permite letras y espacios' })
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, {
+    message: 'nombreCompleto solo permite letras y espacios',
+  })
   nombreCompleto?: string;
 
   @IsEmail({}, { message: 'correo inválido' })
   correo!: string;
 
-  // Teléfono: exactamente 8 dígitos
+  // Teléfono: exactamente 8 dígitos, pero OPCIONAL
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
+  @IsOptional()
   @IsString()
   @Matches(/^\d{8}$/, { message: 'el teléfono debe tener 8 dígitos' })
-  telefono!: string;
+  telefono?: string;
 
   // 🔹 CI: 6–8 dígitos (ahora permitido)
   @IsOptional()
   @IsString()
-  @Matches(/^\d{6,8}$/, { message: 'el CI debe tener entre 6 y 8 dígitos' })
+  @Matches(/^\d{6,12}$/, { message: 'el CI debe tener entre 6 y 12 dígitos' })
   ci?: string;
 
+  // Institución OPCIONAL
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
+  @IsOptional()
   @IsString()
-  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, { message: 'institución solo permite letras y espacios' })
-  institucion!: string;
+  @Matches(/^[A-Za-zÁÉÍÓÚÑáéíóúñ\s]+$/, {
+    message: 'institución solo permite letras y espacios',
+  })
+  institucion?: string;
 
+  // Especialidad OPCIONAL
+  @Transform(({ value }) =>
+    value === '' || value === null ? undefined : value,
+  )
+  @IsOptional()
   @IsString()
   @IsNotEmpty({ message: 'la especialidad es obligatoria' })
-  especialidad!: string;
+  especialidad?: string;
 
+  // Experiencia: si no se envía, por defecto 1 año
+  @Transform(({ value }) => {
+    if (value === '' || value === null || value === undefined) {
+      return 1; // valor por defecto
+    }
+    const n = Number(value);
+    return Number.isNaN(n) ? value : n;
+  })
+  @IsOptional()
   @IsInt()
   @Min(1, { message: 'experiencia mínima 1 año' })
   @Max(30, { message: 'experiencia máxima 30 años' })
-  experiencia!: number;
+  experiencia?: number;
 
   @IsOptional()
   @IsBoolean()

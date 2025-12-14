@@ -63,3 +63,6 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 olimpistas_mix.csv
 olimpistas_ok.csv
 miembros_grupo.csv
+
+# env files (can opt-in for committing if needed)
+.env

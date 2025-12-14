@@ -1,6 +1,13 @@
+//src/evaluadores/dto/update-evaluador.dto.ts
 import {
-  IsOptional, IsString, IsEmail, IsNumber, Min, Max,
-  IsArray, IsInt
+  IsOptional,
+  IsString,
+  IsEmail,
+  IsNumber,
+  Min,
+  Max,
+  IsArray,
+  IsInt,
 } from 'class-validator';
 
 export class UpdateEvaluadorDto {
@@ -10,8 +17,8 @@ export class UpdateEvaluadorDto {
   @IsOptional() @IsString() apellido?: string;
 
   @IsOptional() @IsEmail() correo?: string;
-  @IsOptional() @IsString() telefono?: string;   // validado en servicio (8 dígitos)
-  @IsOptional() @IsString() ci?: string;         // validado en servicio (6–8 dígitos)
+  @IsOptional() @IsString() telefono?: string; // validado en servicio (8 dígitos)
+  @IsOptional() @IsString() ci?: string; // validado en servicio (6–8 dígitos)
   @IsOptional() @IsString() institucion?: string;
   @IsOptional() @IsString() especialidad?: string;
 

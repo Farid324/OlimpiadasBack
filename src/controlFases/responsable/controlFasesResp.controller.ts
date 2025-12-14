@@ -1,0 +1,76 @@
+//src/controlFases/responsable/controlFasesResp.controller.ts
+
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Req,
+  Param,
+  UseGuards,
+  Post,
+  Query,
+} from '@nestjs/common';
+import type { Request } from 'express';
+import { ControlFasesRespService } from './controlFasesResp.service';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { FasesService } from '../../fases/fases.service';
+import { PhaseType } from '../../fases/dto/close-phase.dto';
+import { RESPONSABLE } from '../../auth/constants';
+import { Roles } from '../../common/decorators/roles.decorator';
+
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Controller('control-fases/responsables')
+export class ControlFasesRespController {
+  constructor(
+    private readonly service: ControlFasesRespService,
+    private readonly fases: FasesService,
+  ) {}
+
+  @Get()
+  @Roles(RESPONSABLE) // deja ADMIN para probar; luego puedes quitarlo
+  async getMisFases(@Req() req: Request, @Query('type') type?: string) {
+    const anyReq = req as any;
+    const u = anyReq?.user ?? {};
+    const userId: number | null =
+      typeof u?.id_usuario === 'number'
+        ? u.id_usuario
+        : typeof u?.id === 'number'
+          ? u.id
+          : null;
+
+    const email: string | null =
+      typeof u?.correo === 'string'
+        ? u.correo
+        : typeof u?.email === 'string'
+          ? u.email
+          : null;
+
+    const phaseType = type === 'FINAL' ? 'FINAL' : 'CLASIFICACION';
+
+    return this.service.getMisFases({ userId, email, type: phaseType });
+  }
+
+  @Post(':id/approve')
+  @Roles(RESPONSABLE)
+  async approveFila(@Param('id') id: string, @Req() req: Request) {
+    // el front te manda algo como "3-2" (area-nivel)
+    const [areaStr, nivelStr] = id.split('-');
+    const id_area = Number(areaStr);
+    const id_nivel = Number(nivelStr);
+
+    if (!id_area || !id_nivel) {
+      throw new BadRequestException('ID de fila inválido.');
+    }
+
+    const user: any = (req as any).user;
+    const actor_id = Number(user?.sub);
+
+    return this.fases.closePhase({
+      id_area,
+      id_nivel,
+      type: PhaseType.CLASIFICACION,
+      actor_id,
+    });
+  }
+}

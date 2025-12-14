@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 // prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
@@ -14,6 +9,32 @@ datasource db {
 }
 
 // ===================== Enums =====================
+// NUEVO
+
+enum estado_gestion {
+  ABIERTA
+  CERRADA
+}
+
+enum tipo_premio {
+  ORO
+  PLATA
+  BRONCE
+  MENCION
+}
+
+enum clasificacion_estado {
+  CLASIFICADO
+  NO_CLASIFICADO
+  DESCALIFICADO
+}
+
+enum aprobacion_estado {
+  APROBADO 
+  NO_APROBADO
+  DESCALIFICADO
+}
+
 enum estado_inscripcion {
   INSCRITO
   CLASIFICADO
@@ -45,20 +66,81 @@ enum fuente_lista {
   FINAL
 }
 
-enum accion_log {
-  CREAR
-  EDITAR
-  BORRAR
-  FIRMAR
-}
-
 enum estado_area {
   EVALUANDO
   CLASIFICANDO
   COMPLETADO
 }
 
+enum tipo_area_config {
+  INDIVIDUAL
+  GRUPAL
+}
+
 // ===================== Tablas =====================
+
+model premios_otorgados {
+  id_premio      Int          @id @default(autoincrement())
+  id_inscripcion Int
+  id_area        Int
+  id_nivel       Int
+  id_gestion     Int
+  tipo           tipo_premio
+  fuente         fuente_lista?
+  generado_desde Int?
+  creado_en      DateTime     @default(now())
+
+  // opcional: redundancia
+  anio           Int?
+
+  inscripcion inscripciones    @relation(fields: [id_inscripcion], references: [id_inscripcion], onDelete: Cascade)
+  area        areas            @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+  nivel       niveles          @relation(fields: [id_nivel], references: [id_nivel], onDelete: Cascade)
+  gestion     gestiones        @relation(fields: [id_gestion], references: [id_gestion])
+  lista       listas_generadas? @relation(fields: [generado_desde], references: [id_lista])
+
+  @@unique([id_inscripcion, id_area, id_nivel, id_gestion], name: "uq_premio_por_insc_area_nivel_gestion")
+  @@index([id_area, id_nivel, id_gestion])
+}
+
+model gestiones {
+  id_gestion Int            @id @default(autoincrement())
+  anio       Int            // puede repetirse (varias gestiones en 2025)
+  nombre     String?        // ej: "Olimpiadas Nacionales 2025 - 1ra edición"
+  estado     estado_gestion @default(ABIERTA)
+  created_at DateTime       @default(now())
+  closed_at  DateTime?
+  // Relaciones
+  inscripciones        inscripciones[]
+  medallero_config     medallero_config[]
+  cierres_fase         cierres_fase[]
+  listas_generadas     listas_generadas[]
+  evaluadores_area     evaluadores_area[]
+  responsables_area    responsables_area[]
+  premios_otorgados    premios_otorgados[]
+
+  areas_gestion        areas_gestion[]
+
+  @@index([anio])
+  @@index([estado])
+  @@index([anio, estado])
+}
+
+model areas_gestion {
+  id_area_gestion Int              @id @default(autoincrement())
+  id_gestion      Int
+  nombre_area     String
+  nota_aprobacion Int?
+  tipo            tipo_area_config @default(INDIVIDUAL)
+  niveles_target  String?
+  archived_at     DateTime         @default(now())
+
+  gestion gestiones @relation(fields: [id_gestion], references: [id_gestion], onDelete: Cascade)
+
+  @@index([id_gestion])
+  @@index([archived_at])
+}
+
 model roles {
   id_rol   Int        @id @default(autoincrement()) @db.Integer
   nombre   String     @unique
@@ -68,6 +150,11 @@ model roles {
 enum ciclo_nivel {
   PRIMARIA
   SECUNDARIA
+}
+
+enum accion_log {
+  REGISTRO
+  MODIFICACION
 }
 
 model usuarios {
@@ -104,12 +191,19 @@ model areas {
   activo      Boolean     @default(true)
   estado      estado_area @default(EVALUANDO)
 
+  // 2. Agrega estos campos nuevos
+  nota_aprobacion Int?              @default(51) // Del 51 al 100
+  nota_aprobacion_final Int?            @default(51)
+  tipo            tipo_area_config? @default(INDIVIDUAL)
+  niveles_target  String? // Guardaremos "Primaria, Secundaria" o uno solo como texto simple por simplicidad
+
   inscripciones     inscripciones[]
   medallero_config  medallero_config[]
   cierres_fase      cierres_fase[]
   evaluadores_area  evaluadores_area[]
   responsables_area responsables_area[]
   listas_generadas  listas_generadas[]
+  premios_otorgados premios_otorgados[]
 
   grupos grupos[] @relation("area_grupos")
 
@@ -124,6 +218,10 @@ model niveles {
   inscripciones    inscripciones[]
   listas_generadas listas_generadas[]
   grupos           grupos[]           @relation("nivel_grupos")
+
+  cierres_fase      cierres_fase[]
+  premios_otorgados premios_otorgados[]
+  medallero_config  medallero_config[]
 
   @@index([nombre_nivel])
 }
@@ -180,7 +278,7 @@ model grupos {
 
   id_tutor Int?
 
-  tutor    tutores? @relation(fields: [id_tutor], references: [id_tutor])
+  tutor    tutores?         @relation(fields: [id_tutor], references: [id_tutor])
   area     areas            @relation("area_grupos", fields: [id_area], references: [id_area])
   nivel    niveles          @relation("nivel_grupos", fields: [id_nivel], references: [id_nivel])
   miembros grupo_miembros[]
@@ -195,7 +293,7 @@ model grupo_miembros {
   id_grupo_miembro Int     @id @default(autoincrement()) @db.Integer
   id_grupo         Int
   id_competidor    Int
-  rol              String? 
+  rol              String?
 
   grupo      grupos       @relation(fields: [id_grupo], references: [id_grupo], onDelete: Cascade)
   competidor competidores @relation("competidor_miembros", fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
@@ -211,22 +309,36 @@ model inscripciones {
   id_competidor      Int
   id_area            Int
   id_nivel           Int
+  id_gestion         Int
+
   estado_inscripcion estado_inscripcion @default(INSCRITO)
   observaciones      String?
   created_at         DateTime           @default(now())
   updated_at         DateTime           @updatedAt
 
+  puntaje_clasificacion Decimal?              @db.Decimal(5, 2)
+  clasificacion         clasificacion_estado? @default(NO_CLASIFICADO)
+  puntaje_final         Decimal?             @db.Decimal(5, 2)
+  estado_final          aprobacion_estado? @default(NO_APROBADO)
+
   competidor competidores @relation(fields: [id_competidor], references: [id_competidor], onDelete: Cascade)
   area       areas        @relation(fields: [id_area], references: [id_area])
   nivel      niveles      @relation(fields: [id_nivel], references: [id_nivel])
+  gestion    gestiones    @relation(fields: [id_gestion], references: [id_gestion])
 
   evaluaciones evaluaciones[]
+  premios      premios_otorgados[]
 
-  @@unique([id_competidor, id_area, id_nivel], name: "uq_insc_unica")
+  @@unique([id_competidor, id_area, id_nivel, id_gestion], name: "uq_insc_unica_por_gestion")
   @@index([id_competidor])
   @@index([id_area])
   @@index([id_nivel])
+  @@index([id_gestion, id_area, id_nivel])
+  @@index([id_area, id_nivel, clasificacion])
+  @@index([id_area, id_nivel, puntaje_clasificacion])
+  @@index([id_gestion, estado_inscripcion])
 }
+
 
 model fases {
   id_fase     Int    @id @default(autoincrement()) @db.Integer
@@ -235,17 +347,20 @@ model fases {
 
   evaluaciones evaluaciones[]
   cierres_fase cierres_fase[]
+
+  asignaciones asignacion_evaluador_fase[]
 }
 
 model evaluaciones {
-  id_evaluacion   Int             @id @default(autoincrement()) @db.Integer
-  id_inscripcion  Int
-  id_fase         Int
-  id_evaluador    Int
-  nota            Decimal         @db.Decimal(5, 2)
-  fecha_registro  DateTime        @default(now())
-  estado_registro estado_registro @default(BORRADOR)
-  comentario      String?
+  id_evaluacion     Int             @id @default(autoincrement()) @db.Integer
+  id_inscripcion    Int
+  id_fase           Int
+  id_evaluador      Int
+  nota              Decimal         @db.Decimal(5, 2)
+  fecha_registro    DateTime        @default(now())
+  estado_registro   estado_registro @default(BORRADOR)
+  descripConceptual String?
+  comentario        String?
 
   inscripcion inscripciones @relation(fields: [id_inscripcion], references: [id_inscripcion], onDelete: Cascade)
   fase        fases         @relation(fields: [id_fase], references: [id_fase])
@@ -257,6 +372,18 @@ model evaluaciones {
   @@index([id_inscripcion])
   @@index([id_fase])
   @@index([id_evaluador])
+}
+
+model asignacion_evaluador_fase {
+  id_asignacion     Int @id @default(autoincrement()) @db.Integer
+  id_evaluador_area Int
+  id_fase           Int
+  cupo              Int @default(0)
+
+  evaluador_area evaluadores_area @relation(fields: [id_evaluador_area], references: [id_evaluador_area], onDelete: Cascade)
+  fase           fases            @relation(fields: [id_fase], references: [id_fase])
+
+  @@unique([id_evaluador_area, id_fase], name: "uq_eval_area_fase")
 }
 
 model log_cambios_nota {
@@ -273,39 +400,51 @@ model log_cambios_nota {
 
   @@index([id_evaluacion])
   @@index([id_usuario])
+  @@index([ts])
 }
 
 model responsables_area {
   id_responsable_area Int     @id @default(autoincrement()) @db.Integer
   id_usuario          Int
   id_area             Int
+  id_gestion          Int
   activo              Boolean @default(true)
 
-  usuario usuarios @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
-  area    areas    @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+  usuario usuarios  @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+  area    areas     @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+  gestion gestiones @relation(fields: [id_gestion], references: [id_gestion])
 
-  @@unique([id_usuario, id_area], name: "uq_resp_area")
+  @@unique([id_usuario, id_area, id_gestion], name: "uq_resp_area_gestion")
   @@index([id_usuario])
   @@index([id_area])
+  @@index([id_gestion])
 }
 
 model evaluadores_area {
   id_evaluador_area Int     @id @default(autoincrement()) @db.Integer
   id_usuario        Int
   id_area           Int
+  id_gestion        Int
   activo            Boolean @default(true)
 
-  usuario usuarios @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
-  area    areas    @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+  usuario usuarios  @relation(fields: [id_usuario], references: [id_usuario], onDelete: Cascade)
+  area    areas     @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+  gestion gestiones @relation(fields: [id_gestion], references: [id_gestion])
 
-  @@unique([id_usuario, id_area], name: "uq_eval_area")
+  @@unique([id_usuario, id_area, id_gestion], name: "uq_eval_area_gestion")
+  asignaciones asignacion_evaluador_fase[]
+  
   @@index([id_usuario])
   @@index([id_area])
+  @@index([id_gestion])
 }
 
 model medallero_config {
   id_medallero  Int       @id @default(autoincrement()) @db.Integer
   id_area       Int
+  id_nivel      Int
+  id_gestion    Int
+
   oros          Int       @default(0)
   platas        Int       @default(0)
   bronces       Int       @default(0)
@@ -313,15 +452,22 @@ model medallero_config {
   vigente_desde DateTime? @db.Date
   vigente_hasta DateTime? @db.Date
 
-  area areas @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+  area    areas     @relation(fields: [id_area], references: [id_area], onDelete: Cascade)
+  nivel   niveles   @relation(fields: [id_nivel], references: [id_nivel])
+  gestion gestiones @relation(fields: [id_gestion], references: [id_gestion])
 
+  @@unique([id_area, id_nivel, id_gestion], name: "uq_medallero_area_nivel_gestion")
   @@index([id_area])
+  @@index([id_nivel])
+  @@index([id_gestion])
 }
 
 model cierres_fase {
   id_cierre         Int               @id @default(autoincrement()) @db.Integer
   id_fase           Int
   id_area           Int
+  id_nivel          Int
+  id_gestion        Int
   cerrado_por       Int
   fecha_cierre      DateTime          @default(now())
   estado_validacion estado_validacion @default(PENDIENTE)
@@ -330,33 +476,42 @@ model cierres_fase {
 
   fase        fases     @relation(fields: [id_fase], references: [id_fase])
   area        areas     @relation(fields: [id_area], references: [id_area])
+  nivel       niveles   @relation(fields: [id_nivel], references: [id_nivel])
+  gestion     gestiones @relation(fields: [id_gestion], references: [id_gestion])
   user_cierra usuarios  @relation("cierre_por", fields: [cerrado_por], references: [id_usuario])
   user_valida usuarios? @relation("validado_por", fields: [validado_por], references: [id_usuario])
 
-  @@unique([id_fase, id_area], name: "uq_cierre_unico")
+  @@unique([id_fase, id_area, id_nivel, id_gestion], name: "uq_cierre_unico_por_gestion")
   @@index([id_area])
+  @@index([id_nivel])
   @@index([id_fase])
+  @@index([id_gestion])
 }
+
 
 model listas_generadas {
   id_lista           Int           @id @default(autoincrement()) @db.Integer
   tipo_lista         tipo_lista
   id_area            Int
   id_nivel           Int?
+  id_gestion         Int
   fuente             fuente_lista?
   criterios_orden    Json?
   contenido_snapshot Json?
   generado_por       Int
   fecha_generacion   DateTime      @default(now())
 
-  area    areas    @relation(fields: [id_area], references: [id_area])
-  nivel   niveles? @relation(fields: [id_nivel], references: [id_nivel])
-  usuario usuarios @relation(fields: [generado_por], references: [id_usuario])
+  area    areas     @relation(fields: [id_area], references: [id_area])
+  nivel   niveles?  @relation(fields: [id_nivel], references: [id_nivel])
+  gestion gestiones @relation(fields: [id_gestion], references: [id_gestion])
+  usuario usuarios  @relation(fields: [generado_por], references: [id_usuario])
 
-  reordenamientos reordenamientos[]
+  reordenamientos   reordenamientos[]
+  premios_otorgados premios_otorgados[]
 
   @@index([id_area])
   @@index([id_nivel])
+  @@index([id_gestion])
   @@index([tipo_lista])
 }
 
