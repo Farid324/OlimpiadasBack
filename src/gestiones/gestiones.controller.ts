@@ -1,4 +1,4 @@
-// src/gestiones/gestiones.controller.ts
+// /src/gestiones/gestiones.controller.ts
 import {
   Body,
   Controller,
@@ -17,10 +17,15 @@ import { ADMIN, RESPONSABLE } from '../auth/constants';
 import { OpenGestionDto } from './dto/open-gestion.dto';
 import { EquipoGestionQueryDto } from './dto/equipo-gestion.query';
 
+// ✅ DTOs de query para histórico
+import { OlimpistasHistorialQueryDto } from './dto/olimpistas-historial.query';
+
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('gestiones')
 export class GestionesController {
   constructor(private readonly gestiones: GestionesService) {}
+
+  // ===================== GESTIÓN ACTUAL =====================
 
   @Get('actual')
   @Roles(ADMIN, RESPONSABLE)
@@ -63,12 +68,8 @@ export class GestionesController {
     return { gestiones };
   }
 
-  // ===================== ENDPOINTS PARA HISTORIAL DE ÁREAS =====================
+  // ===================== HISTORIAL ÁREAS =====================
 
-  /**
-   * Obtener historial completo de áreas por gestiones cerradas
-   * GET /gestiones/historial-areas
-   */
   @Get('historial-areas')
   @Roles(ADMIN, RESPONSABLE)
   async getAreasHistorial() {
@@ -76,10 +77,6 @@ export class GestionesController {
     return { historial };
   }
 
-  /**
-   * Obtener lista de gestiones cerradas (solo metadatos)
-   * GET /gestiones/cerradas
-   */
   @Get('cerradas')
   @Roles(ADMIN, RESPONSABLE)
   async getGestionesCerradas() {
@@ -87,21 +84,6 @@ export class GestionesController {
     return { gestiones };
   }
 
-  /**
-   * Obtener áreas de una gestión específica
-   * GET /gestiones/:id/areas
-   */
-  @Get(':id/areas')
-  @Roles(ADMIN, RESPONSABLE)
-  async getAreasByGestion(@Param('id', ParseIntPipe) id: number) {
-    const areas = await this.gestiones.getAreasByGestion(id);
-    return { areas };
-  }
-
-  /**
-   * Equipo académico (responsables y evaluadores) de la gestión abierta.
-   * GET /gestiones/equipo-actual
-   */
   @Get('equipo-actual')
   @Roles(ADMIN)
   async getEquipoActual() {
@@ -115,5 +97,78 @@ export class GestionesController {
       return this.gestiones.getEquipoGestionActual();
     }
     return this.gestiones.getEquipoByGestionId(query.id_gestion);
+  }
+
+  // ===================== HISTORIAL (RUTAS CON :id AL FINAL) =====================
+
+  @Get(':id/areas')
+  @Roles(ADMIN, RESPONSABLE)
+  async getAreasByGestion(@Param('id', ParseIntPipe) id: number) {
+    const areas = await this.gestiones.getAreasByGestion(id);
+    return { areas };
+  }
+
+  /**
+   * Obtener olimpistas (genérico) de una gestión SOLO si está CERRADA
+   * GET /gestiones/:id/olimpistas
+   */
+  @Get(':id/olimpistas')
+  @Roles(ADMIN, RESPONSABLE)
+  async getOlimpistasByGestion(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: OlimpistasHistorialQueryDto,
+  ) {
+    const olimpistas = await this.gestiones.getOlimpistasByGestionCerrada(id, {
+      area: query.area,
+      q: query.q,
+    });
+    return { olimpistas };
+  }
+
+  /**
+   * ✅ CLASIFICADOS (Tab "CLASIFICADOS") por gestión cerrada
+   * GET /gestiones/:id/olimpistas-clasificados
+   */
+  @Get(':id/olimpistas-clasificados')
+  @Roles(ADMIN, RESPONSABLE)
+  async getOlimpistasClasificadosByGestion(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: OlimpistasHistorialQueryDto,
+  ) {
+    const olimpistas =
+      await this.gestiones.getOlimpistasClasificadosByGestionCerrada(id, {
+        area: query.area,
+        q: query.q,
+      });
+    return { olimpistas };
+  }
+
+  /**
+   * ✅ FINALISTAS (Tab "FINALISTAS") por gestión cerrada + medalla materializada
+   * GET /gestiones/:id/olimpistas-finalistas
+   */
+  @Get(':id/olimpistas-finalistas')
+  @Roles(ADMIN, RESPONSABLE)
+  async getOlimpistasFinalistasByGestion(
+    @Param('id', ParseIntPipe) id: number,
+    @Query() query: OlimpistasHistorialQueryDto,
+  ) {
+    const olimpistas =
+      await this.gestiones.getOlimpistasFinalistasByGestionCerrada(id, {
+        area: query.area,
+        q: query.q,
+      });
+    return { olimpistas };
+  }
+
+  /**
+   * Áreas disponibles dentro del histórico de olimpistas (para filtro del tab)
+   * GET /gestiones/:id/olimpistas-areas
+   */
+  @Get(':id/olimpistas-areas')
+  @Roles(ADMIN, RESPONSABLE)
+  async getOlimpistasAreasByGestion(@Param('id', ParseIntPipe) id: number) {
+    const areas = await this.gestiones.getAreasDisponiblesDeGestionCerrada(id);
+    return { areas };
   }
 }
